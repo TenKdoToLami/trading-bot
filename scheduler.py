@@ -2,46 +2,60 @@ import os
 import time
 import datetime
 import subprocess
+import logging
+import sys
 from dotenv import load_dotenv
 
+# Setup Logger to match main.py
+script_dir = os.path.dirname(os.path.abspath(__file__))
+log_dir = os.path.join(script_dir, "logs")
+os.makedirs(log_dir, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(log_dir, "sync.log")),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("scheduler")
+
 def get_scheduled_time():
-    load_dotenv(override=True) # Always reload to catch .env changes
+    load_dotenv(override=True)
     return os.getenv('SCHEDULED_TIME', '18:00')
 
 def run_bot():
-    print(f"[{datetime.datetime.now()}] Launching Tactical Bot Sync...")
+    logger.info("Launching Tactical Bot Sync Subprocess...")
     try:
         # Run main.py as a subprocess
-        subprocess.run(["python", "main.py"], check=True)
-        print(f"[{datetime.datetime.now()}] Sync completed successfully.")
+        subprocess.run(["python3", "main.py"], check=True)
     except Exception as e:
-        print(f"[{datetime.datetime.now()}] Error during bot execution: {e}")
+        logger.error(f"Error during bot execution: {e}")
 
 def main():
-    print("--- TACTICAL BOT SCHEDULER STARTED ---")
+    logger.info("--- TACTICAL BOT SCHEDULER STARTED ---")
     
     while True:
         target_time_str = get_scheduled_time()
         now = datetime.datetime.now()
         
-        # Parse target time (e.g., "18:00")
-        target_h, target_m = map(int, target_time_str.split(':'))
-        target_time = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+        try:
+            target_h, target_m = map(int, target_time_str.split(':'))
+            target_time = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+        except:
+            logger.error(f"Invalid SCHEDULED_TIME format: {target_time_str}. Defaulting to 18:00")
+            target_time = now.replace(hour=18, minute=0, second=0, microsecond=0)
         
-        # If the time has already passed today, target tomorrow
         if target_time <= now:
             target_time += datetime.timedelta(days=1)
             
         wait_seconds = (target_time - now).total_seconds()
+        logger.info(f"Next Sync Scheduled: {target_time} (Waiting {wait_seconds/3600:.2f} hours)")
         
-        print(f"Next Sync Scheduled: {target_time} (Waiting {wait_seconds/3600:.2f} hours)")
-        
-        # Sleep until target time
-        # We sleep in 60s chunks so the process remains responsive to interrupts
         while datetime.datetime.now() < target_time:
             time.sleep(60)
             
-        # Time to run!
         run_bot()
 
 if __name__ == "__main__":
