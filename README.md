@@ -30,11 +30,24 @@ Execute the bot once a day after market close (e.g., 4:15 PM EST).
 python main.py
 ```
 
-### 5. Dry Run (Safety Mode)
-Preview the logic and calculated trades without executing any orders.
-```bash
 python main.py --dry-run
 ```
+
+## 🐧 Linux Server Deployment
+To run the bot 24/7 on a Linux server:
+
+1. **Make the manager executable**:
+   ```bash
+   chmod +x manage.sh
+   ```
+
+2. **Management Commands**:
+   ```bash
+   sudo ./manage.sh install    # Setup and start background service
+   sudo ./manage.sh status     # Check if bot is alive
+   sudo ./manage.sh logs       # Stream the live sync logs
+   sudo ./manage.sh uninstall  # Completely remove the service
+   ```
 
 ### 6. Quick CLI (Account Status)
 ```bash
