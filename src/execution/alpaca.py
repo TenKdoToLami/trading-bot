@@ -1,7 +1,11 @@
 import os
 import time
+import logging
 import alpaca_trade_api as tradeapi
 from dotenv import load_dotenv
+
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
 
 # Ensure .env is loaded from the config directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +48,7 @@ class AlpacaClient:
     def sell_all(self, ticker):
         try:
             self.api.close_position(ticker)
+            logger.info(f"Closed position for {ticker}")
             return True
         except:
             return False
@@ -51,12 +56,13 @@ class AlpacaClient:
     def buy_dollars(self, ticker, dollar_amount):
         min_order = float(os.getenv('MIN_ORDER_VALUE', 20))
         if dollar_amount < min_order:
+            logger.warning(f"Order for {ticker} (${dollar_amount:.2f}) is below minimum (${min_order}). Skipping.")
             return False
             
         price = self.get_price(ticker)
         qty = int(dollar_amount / price)
         if qty > 0:
-            print(f"  > Buying {qty} shares of {ticker} (~${dollar_amount:.2f})")
+            logger.info(f"Submitting order: BUY {qty} {ticker} (~${dollar_amount:.2f})")
             self.api.submit_order(
                 symbol=ticker, qty=qty, side='buy',
                 type='market', time_in_force='day'
@@ -65,50 +71,42 @@ class AlpacaClient:
         return False
 
     def liquidate_managed_assets(self):
-        print("Liquidating managed assets...")
+        logger.info("Executing tactical liquidation of managed assets...")
         for ticker in self.tickers:
             self.sell_all(ticker)
-        time.sleep(5) # Wait for orders to clear
+        time.sleep(5)
 
     def verify_rebalance(self):
-        """Waits 60s and verifies positions exist."""
-        print("Waiting 60s for order verification...")
+        logger.info("Waiting 60s for order settlement verification...")
         time.sleep(60)
         pos = self.get_positions()
         if pos:
-            print(f"Verification Success. Current Managed Holdings: {pos}")
+            logger.info(f"Verification Success. Current Managed Holdings: {pos}")
         else:
-            print("Verification Warning: No managed positions detected after rebalance.")
+            logger.warning("Verification Warning: No managed positions detected after rebalance.")
 
     def rebalance(self, target_weights):
-        """Full rebalance (Liquify -> Log -> Buy)."""
-        # 1. Liquify
         self.liquidate_managed_assets()
-        
-        # 2. Log post-liquidation state
         equity = self.get_equity()
-        print(f"Liquidation complete. Final Deployable Equity: ${equity:.2f}")
+        logger.info(f"Managed liquidation complete. Final Deployable Equity: ${equity:.2f}")
         
-        # 3. Buy according to weights
         for i, weight in enumerate(target_weights):
             if weight <= 0: continue
             ticker = self.tickers[i]
-            amount = (equity * weight) * 0.98 # 2% buffer
+            amount = (equity * weight) * 0.98
             self.buy_dollars(ticker, amount)
 
     def invest_excess_cash(self, target_weights):
-        """Buys more of current state using available cash."""
         cash = self.get_cash()
         min_bal = float(os.getenv('MIN_REMAINING_BALANCE', 20))
         investable = cash - min_bal
         
         if investable > float(os.getenv('MIN_ORDER_VALUE', 20)):
-            print(f"Excess Cash Detected: ${investable:.2f}. Scaling into current state...")
+            logger.info(f"Excess Cash Detected: ${investable:.2f}. Sweeping into current strategy state...")
             for i, weight in enumerate(target_weights):
                 if weight <= 0: continue
                 ticker = self.tickers[i]
-                # Proportionally allocate the excess cash
                 amount = (investable * weight)
                 self.buy_dollars(ticker, amount)
         else:
-            print("Cash balance within threshold. No excess cash to invest.")
+            logger.info("Cash balance within nominal range. No excess sweep required.")
