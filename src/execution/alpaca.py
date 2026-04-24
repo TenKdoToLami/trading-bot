@@ -13,8 +13,12 @@ class AlpacaClient:
             os.getenv('ALPACA_BASE_URL'),
             api_version='v2'
         )
-        # Mapping assets: [2x, 3x, Cash]
-        self.tickers = ['SSO', 'SPXL', 'SGOV']
+        # Mapping assets from environment
+        self.tickers = [
+            os.getenv('TICKER_2X', 'SSO'),
+            os.getenv('TICKER_3X', 'SPXL'),
+            os.getenv('TICKER_CASH', 'SGOV')
+        ]
 
     def get_equity(self):
         account = self.api.get_account()
@@ -38,6 +42,8 @@ class AlpacaClient:
         time.sleep(5)
         
         # 2. Get fresh prices and Buy
+        min_order = float(os.getenv('MIN_ORDER_VALUE', 100))
+        
         for i, weight in enumerate(target_weights):
             if weight <= 0: continue
             
@@ -46,8 +52,12 @@ class AlpacaClient:
             
             # Use 98% of target to allow for slippage/price movement
             dollar_amount = (equity * weight) * 0.98
-            qty = int(dollar_amount / price)
             
+            if dollar_amount < min_order:
+                print(f"Skipping {ticker}: Amount ${dollar_amount:.2f} is below minimum ${min_order}")
+                continue
+                
+            qty = int(dollar_amount / price)
             if qty > 0:
                 print(f"Buying {qty} shares of {ticker} (${dollar_amount:.2f})")
                 self.api.submit_order(
