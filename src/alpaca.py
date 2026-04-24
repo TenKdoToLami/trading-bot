@@ -13,8 +13,8 @@ class AlpacaClient:
             os.getenv('ALPACA_BASE_URL'),
             api_version='v2'
         )
-        # Mapping assets based on your request
-        self.tickers = ['SPY', 'SSO', 'SPXL', 'SGOV']
+        # Mapping assets: [2x, 3x, Cash]
+        self.tickers = ['SSO', 'SPXL', 'SGOV']
 
     def get_equity(self):
         account = self.api.get_account()
