@@ -2,16 +2,20 @@ import os
 import sys
 import datetime
 import yfinance as yf
-from src.db_manager import BotDB
-from src.engine import StrategyEngine
-from src.manager import BotManager
-from src.alpaca import AlpacaClient
+from src.utils.db import BotDB
+from src.core.engine import StrategyEngine
+from src.core.manager import BotManager
+from src.execution.alpaca import AlpacaClient
 
 def run_daily_sync():
     print(f"\n--- BOT SYNC: {datetime.date.today()} ---")
     
+    # Paths
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dna_path = os.path.join(script_dir, "config", "strategy.json")
+    
     db = BotDB()
-    engine = StrategyEngine()
+    engine = StrategyEngine(dna_path=dna_path)
     manager = BotManager(db, engine)
     
     # 1. Fetch Latest Data

@@ -37,8 +37,9 @@ python main.py
 
 ## 📂 Project Structure
 - `main.py`: Daily entry point.
-- `src/engine.py`: Core strategy calculations.
-- `src/manager.py`: Stateful filters and timers.
-- `src/alpaca.py`: API client and rebalancing logic.
-- `src/db_manager.py`: Database operations.
-- `data/`: Local storage for the SQLite database.
+- `config/`: Strategy DNA (`strategy.json`) and `.env.example`.
+- `src/core/`: Decision engine and regime management.
+- `src/execution/`: Alpaca API integration.
+- `src/utils/`: Database and persistence utilities.
+- `tests/`: Long-term theory and resilience tests.
+- `data/`: Local SQLite storage.
