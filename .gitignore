@@ -1,5 +1,10 @@
-data/
-.env
+config/.env
+logs/*.log
+visualizer/data.js
+visualizer/config.js
 __pycache__/
-*.db
-.vscode/
+*.pyc
+data/*.db
+data/*.json
+node_modules/
+.DS_Store

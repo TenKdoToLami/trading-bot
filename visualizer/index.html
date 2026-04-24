@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactical Bot | Command Center</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="config.js"></script>
+    <script src="data.js"></script>
+    <style>
+        :root {
+            --bg: #030406;
+            --panel: #0a0c10;
+            --panel-brdr: rgba(255,255,255,0.08);
+            --accent: #00f2ff;
+            --text: #e0e0e0;
+            --text-dim: #606060;
+            --success: #00e676;
+            --danger: #ff1744;
+            --warning: #ffea00;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 13px;
+        }
+
+        header { padding: 10px 25px; display: flex; justify-content: space-between; align-items: center; background: #000; border-bottom: 1px solid var(--panel-brdr); }
+        .header-controls { display: flex; align-items: center; gap: 20px; }
+        
+        .lookback-ctrl { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 800; color: var(--text-dim); }
+        .lookback-ctrl input { width: 45px; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-brdr); color: white; padding: 4px; border-radius: 4px; outline: none; text-align: center; }
+
+        .time-travel { display: flex; align-items: center; gap: 10px; }
+        input[type="date"] { background: rgba(255,255,255,0.05); border: 1px solid var(--panel-brdr); color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        #curr-date { font-family: monospace; font-weight: 800; font-size: 18px; color: var(--accent); }
+
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            padding: 12px;
+            gap: 12px;
+            overflow: hidden;
+        }
+
+        .box { background: var(--panel); border-radius: 8px; padding: 12px; border: 1px solid var(--panel-brdr); display: flex; flex-direction: column; position: relative; }
+        .box-label { font-size: 10px; font-weight: 900; opacity: 0.5; margin-bottom: 8px; text-transform: uppercase; display: flex; justify-content: space-between; }
+        .canvas-wrap { flex: 1; position: relative; min-height: 0; }
+
+        .execution-hud { display: grid; grid-template-columns: 200px 1fr 120px; background: #000; padding: 12px 25px; border-top: 1px solid var(--panel-brdr); align-items: center; }
+        .hud-left { display: flex; flex-direction: column; gap: 4px; }
+        .dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .dd-label { font-size: 8px; opacity: 0.4; text-transform: uppercase; }
+        .dd-val { font-family: monospace; font-weight: 900; font-size: 16px; color: var(--danger); }
+        
+        .scoreboard { flex: 1; display: flex; justify-content: center; gap: 15px; }
+        .score-col { display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.05); padding-left: 15px; }
+        .score-label { font-size: 8px; opacity: 0.4; text-transform: uppercase; font-weight: 900; margin-bottom: 2px; }
+        .score-val { font-family: monospace; font-weight: 900; font-size: 13px; }
+
+        .status-pill { padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 900; text-align: center; }
+        .pill-base { background: rgba(0, 230, 118, 0.15); color: var(--success); }
+        .pill-panic { background: rgba(255, 23, 68, 0.15); color: var(--danger); }
+
+        .bottom-section { display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border-top: 1px solid var(--panel-brdr); padding: 10px; height: 100px; gap: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        td { border: 1px solid rgba(255,255,255,0.03); padding: 5px; text-align: left; vertical-align: top; }
+        .active-cell { background: rgba(0, 242, 255, 0.1); border: 1px solid var(--accent); }
+        .tier-label { font-weight: 900; color: var(--accent); margin-bottom: 3px; display: block; }
+
+        footer { padding: 10px 25px; background: #000; display: flex; gap: 20px; align-items: center; border-top: 1px solid var(--panel-brdr); }
+        button { background: var(--accent); color: #000; border: none; padding: 6px 15px; border-radius: 4px; font-weight: 800; cursor: pointer; min-width: 80px; }
+        .slider-wrap { flex: 1; display: flex; align-items: center; gap: 15px; }
+        input[type=range] { flex: 1; cursor: pointer; accent-color: var(--accent); }
+
+        .leg { display: flex; gap: 10px; }
+        .leg-item { display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 800; }
+        .dot { width: 6px; height: 6px; border-radius: 1px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span style="font-weight: 900; color: var(--accent); letter-spacing: 2px;">BEAST COMMAND CENTER</span>
+            <span style="font-size: 10px; opacity: 0.4;">| PRODUCTION AUDIT</span>
+        </div>
+        <div class="header-controls">
+            <div class="lookback-ctrl">
+                <span>ZOOM WINDOW</span>
+                <input type="number" id="lookback-days" value="250">
+                <span>DAYS</span>
+            </div>
+            <div class="time-travel">
+                <input type="date" id="date-jump">
+                <span id="curr-date">---- -- --</span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="box">
+            <div class="box-label">
+                Macro Performance
+                <div class="leg">
+                    <div class="leg-item"><div class="dot" style="background:var(--accent)"></div>BOT</div>
+                    <div class="leg-item"><div class="dot" style="background:#ff1744"></div>3x</div>
+                    <div class="leg-item"><div class="dot" style="background:#ffea00"></div>2x</div>
+                    <div class="leg-item"><div class="dot" style="background:#888"></div>1x</div>
+                </div>
+            </div>
+            <div class="canvas-wrap"><canvas id="macroChart"></canvas></div>
+        </div>
+        <div class="box">
+            <div class="box-label">Window Relative Performance</div>
+            <div class="canvas-wrap"><canvas id="normChart"></canvas></div>
+        </div>
+        <div class="box">
+            <div class="box-label">Log Equity Growth (Window)</div>
+            <div class="canvas-wrap"><canvas id="zoomChart"></canvas></div>
+        </div>
+        <div class="box">
+            <div class="box-label">Indicators (Price vs SMA)</div>
+            <div class="canvas-wrap"><canvas id="techChart"></canvas></div>
+        </div>
+    </main>
+
+    <div class="execution-hud">
+        <div class="hud-left">
+            <span id="cp-reg" class="status-pill pill-base">BASE</span>
+            <div class="dd-grid">
+                <div class="dd-item"><span class="dd-label">Drawdown</span><span id="cp-ath-dd" class="dd-val">0.0%</span></div>
+                <div class="dd-item"><span class="dd-label">VIX</span><span id="cp-vix" class="dd-val" style="color:var(--warning)">0.0</span></div>
+            </div>
+        </div>
+        <div class="scoreboard">
+            <div class="score-col" style="border:none;"><span class="score-label" style="color:var(--accent)">THE BOT</span><span id="curr-b" class="score-val">1.00x</span></div>
+            <div class="score-col"><span class="score-label">1x VOO</span><span id="curr-s1" class="score-val">1.00x</span></div>
+            <div class="score-col"><span class="score-label">2x SSO</span><span id="curr-s2" class="score-val">1.00x</span></div>
+            <div class="score-col"><span class="score-label">3x UPRO</span><span id="curr-s3" class="score-val">1.00x</span></div>
+            <div class="score-col"><span class="score-label">SGOV</span><span id="curr-k" class="score-val">1.00x</span></div>
+        </div>
+        <div class="hud-right">
+            <div class="dd-label">TIER</div>
+            <div id="cp-tier" style="font-family:monospace; font-weight:900; font-size:24px; color:var(--accent)">0</div>
+        </div>
+    </div>
+
+    <div class="bottom-section">
+        <div style="flex:1;">
+            <table>
+                <tr id="tier-row">
+                    <td id="t-b0"><span class="tier-label">BULL</span><div id="w-b0" style="opacity:0.6">3x UPRO 100%</div></td>
+                    <td id="t-p0"><span class="tier-label">PANIC T0</span><div id="w-p0" style="opacity:0.6">--</div></td>
+                    <td id="t-p1"><span class="tier-label">PANIC T1</span><div id="w-p1" style="opacity:0.6">--</div></td>
+                    <td id="t-p2"><span class="tier-label">PANIC T2</span><div id="w-p2" style="opacity:0.6">--</div></td>
+                    <td id="t-p3"><span class="tier-label">PANIC T3</span><div id="w-p3" style="opacity:0.6">--</div></td>
+                </tr>
+            </table>
+        </div>
+        <div style="width: 300px; display: flex; flex-direction: column;">
+            <div class="box-label">Tier Movement (Last 100d)</div>
+            <div style="height: 60px;"><canvas id="tierChart"></canvas></div>
+        </div>
+    </div>
+
+    <footer>
+        <button id="btn-play">PLAY</button>
+        <div class="slider-wrap"><input type="range" id="sim-progress" min="0" value="0"></div>
+        <div style="font-size:9px; opacity:0.4; font-weight:900;">SPEED</div>
+        <input type="range" id="sim-speed" min="1" max="100" value="75" style="width:80px;">
+    </footer>
+
+    <script>
+        let charts = {};
+        let currentIndex = 0, isPlaying = false, lookbackPeriod = 250;
+        
+        const vertLinePlugin = {
+            id: 'vertLine',
+            afterDraw: (chart) => {
+                if (chart.vertX !== undefined) {
+                    const ctx = chart.ctx; const x = chart.vertX; const top = chart.scales.y.top, bottom = chart.scales.y.bottom;
+                    ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; ctx.lineWidth = 1; ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); ctx.restore();
+                }
+            }
+        };
+
+        function init() {
+            document.getElementById('sim-progress').max = MARKET_DATA.length - 1;
+            document.getElementById('lookback-days').onchange = (e) => { lookbackPeriod = parseInt(e.target.value) || 250; renderStep(); };
+            
+            const dateJump = document.getElementById('date-jump');
+            dateJump.onchange = (e) => {
+                const target = e.target.value;
+                const idx = MARKET_DATA.findIndex(d => d.Date >= target);
+                if (idx !== -1) { 
+                    epochIndex = idx;
+                    currentIndex = idx; 
+                    recalculateMacro();
+                    renderStep(); 
+                }
+            };
+
+            populateTactical();
+            setupCharts();
+            recalculateMacro();
+            renderStep();
+        }
+
+        let epochIndex = 0;
+        let peaks = { b: 1, s1: 1, s2: 1, s3: 1, k: 1 };
+
+        function recalculateMacro() {
+            peaks = { b: 1, s1: 1, s2: 1, s3: 1, k: 1 };
+            const start = MARKET_DATA[epochIndex];
+            
+            const prog = document.getElementById('sim-progress');
+            prog.min = epochIndex;
+            prog.value = epochIndex;
+
+            charts.macro.data.labels = MARKET_DATA.slice(epochIndex).map(d => d.Date);
+            charts.macro.data.datasets[0].data = MARKET_DATA.slice(epochIndex).map(d => d.bE / start.bE);
+            charts.macro.data.datasets[1].data = MARKET_DATA.slice(epochIndex).map(d => d.s3E / start.s3E);
+            charts.macro.data.datasets[2].data = MARKET_DATA.slice(epochIndex).map(d => d.s2E / start.s2E);
+            charts.macro.data.datasets[3].data = MARKET_DATA.slice(epochIndex).map(d => d.s1E / start.s1E);
+            charts.macro.update('none');
+        }
+
+        function populateTactical() {
+            const assets = ["SSO", "UPRO", "SGOV"];
+            STRATEGY_CONFIG.weights_panic.forEach((w, i) => {
+                const div = document.getElementById(`w-p${i}`);
+                if (div) {
+                    const text = w.map((val, idx) => val > 0 ? `${(val*100).toFixed(0)}% ${assets[idx]}` : null).filter(x => x).join(", ");
+                    div.innerText = text;
+                }
+            });
+        }
+
+        function setupCharts() {
+            const common = { 
+                animation: false, responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#444' } } }
+            };
+            
+            charts.macro = new Chart(document.getElementById('macroChart'), { type: 'line', plugins: [vertLinePlugin], data: { labels: MARKET_DATA.map(d => d.Date), datasets: [{ label: 'Bot', data: MARKET_DATA.map(d => d.bE), borderColor: '#00f2ff', borderWidth: 2, pointRadius: 0 }, { label: '3x', data: MARKET_DATA.map(d => d.s3E), borderColor: '#ff1744', borderWidth: 1, pointRadius: 0 }, { label: '2x', data: MARKET_DATA.map(d => d.s2E), borderColor: '#ffea00', borderWidth: 1, pointRadius: 0 }, { label: '1x', data: MARKET_DATA.map(d => d.s1E), borderColor: '#888', borderWidth: 1, pointRadius: 0 }]}, options: { ...common, scales: { ...common.scales, y: { ...common.scales.y, type: 'logarithmic' } } } });
+            charts.norm = new Chart(document.getElementById('normChart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Bot', data: [], borderColor: '#00f2ff', borderWidth: 2, pointRadius: 0 }, { label: '3x', data: [], borderColor: '#ff1744', borderWidth: 1, pointRadius: 0 }, { label: '2x', data: [], borderColor: '#ffea00', borderWidth: 1, pointRadius: 0 }, { label: '1x', data: [], borderColor: '#888', borderWidth: 1, pointRadius: 0 }]}, options: common });
+            charts.zoom = new Chart(document.getElementById('zoomChart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Bot', data: [], borderColor: '#00f2ff', borderWidth: 2, pointRadius: 0 }, { label: '3x', data: [], borderColor: '#ff1744', borderWidth: 1, pointRadius: 0 }, { label: '2x', data: [], borderColor: '#ffea00', borderWidth: 1, pointRadius: 0 }, { label: '1x', data: [], borderColor: '#888', borderWidth: 1, pointRadius: 0 }]}, options: { ...common, scales: { ...common.scales, y: { ...common.scales.y, type: 'logarithmic' } } } });
+            charts.tech = new Chart(document.getElementById('techChart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Price', data: [], borderColor: 'white', borderWidth: 1.5, pointRadius: 0 }, { label: 'SMA', data: [], borderColor: '#00e676', borderWidth: 1, borderDash: [5,5], pointRadius: 0 }]}, options: common });
+            charts.tier = new Chart(document.getElementById('tierChart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Tier', data: [], borderColor: '#00f2ff', borderWidth: 2, pointRadius: 0, stepped: true }]}, options: { ...common, scales: { x: { display: false }, y: { min: 0, max: 4, ticks: { stepSize: 1 } } } } });
+        }
+
+        function renderStep() {
+            const day = MARKET_DATA[currentIndex];
+            const slice = MARKET_DATA.slice(Math.max(0, currentIndex - lookbackPeriod), currentIndex + 1);
+            const startDay = slice[0];
+
+            document.getElementById('curr-date').textContent = day.Date;
+            document.getElementById('cp-reg').textContent = day.R === 'B' ? 'BULL MODE' : 'PANIC MODE';
+            document.getElementById('cp-reg').className = `status-pill ${day.R === 'B' ? 'pill-base' : 'pill-panic'}`;
+            document.getElementById('cp-ath-dd').textContent = (day.DD * 100).toFixed(1) + '%';
+            document.getElementById('cp-vix').textContent = day.VIX.toFixed(1);
+            document.getElementById('cp-tier').textContent = day.T;
+
+            const start = MARKET_DATA[epochIndex];
+            const keys = ['b', 's1', 's2', 's3', 'k'];
+            keys.forEach(k => {
+                const val = day[k + 'E'] / start[k + 'E'];
+                if (val > peaks[k]) peaks[k] = val;
+                document.getElementById(`curr-${k}`).innerHTML = `${val.toFixed(2)}x <span style="font-size:8px; opacity:0.3; margin-left:4px;">PK: ${peaks[k].toFixed(2)}x</span>`;
+            });
+
+            // Vertical line logic
+            charts.macro.vertX = charts.macro.scales.x.getPixelForValue(day.Date);
+            charts.macro.update('none');
+
+            const labs = slice.map(d => d.Date);
+            charts.norm.data.labels = labs;
+            charts.norm.data.datasets[0].data = slice.map(d => d.bE / startDay.bE);
+            charts.norm.data.datasets[1].data = slice.map(d => d.s3E / startDay.s3E);
+            charts.norm.data.datasets[2].data = slice.map(d => d.s2E / startDay.s2E);
+            charts.norm.data.datasets[3].data = slice.map(d => d.sE / startDay.sE);
+            charts.norm.update('none');
+
+            charts.zoom.data.labels = labs;
+            charts.zoom.data.datasets[0].data = slice.map(d => d.bE);
+            charts.zoom.data.datasets[1].data = slice.map(d => d.s3E);
+            charts.zoom.data.datasets[2].data = slice.map(d => d.s2E);
+            charts.zoom.data.datasets[3].data = slice.map(d => d.s1E);
+            charts.zoom.update('none');
+
+            charts.tech.data.labels = labs;
+            charts.tech.data.datasets[0].data = slice.map(d => d.Price);
+            charts.tech.data.datasets[1].data = slice.map(d => d.SMA);
+            charts.tech.update('none');
+
+            charts.tier.data.labels = labs;
+            charts.tier.data.datasets[0].data = slice.map(d => d.T);
+            charts.tier.update('none');
+
+            // Tactical Grid highlighting
+            document.querySelectorAll('td').forEach(td => td.classList.remove('active-cell'));
+            const cellId = day.R === 'B' ? 't-b0' : `t-p${day.T}`;
+            if (document.getElementById(cellId)) document.getElementById(cellId).classList.add('active-cell');
+
+            document.getElementById('sim-progress').value = currentIndex;
+        }
+
+        async function playLoop() { 
+            if (!isPlaying) return; 
+            if (currentIndex < MARKET_DATA.length - 1) { 
+                currentIndex++; renderStep(); 
+                setTimeout(playLoop, 110 - document.getElementById('sim-speed').value); 
+            } else { isPlaying = false; document.getElementById('btn-play').textContent = 'PLAY'; } 
+        }
+        document.getElementById('btn-play').onclick = () => { isPlaying = !isPlaying; document.getElementById('btn-play').textContent = isPlaying ? 'PAUSE' : 'PLAY'; if (isPlaying) playLoop(); };
+        document.getElementById('sim-progress').oninput = (e) => { currentIndex = parseInt(e.target.value); renderStep(); };
+        
+        init();
+    </script>
+</body>
+</html>

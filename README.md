@@ -59,6 +59,26 @@ python cli.py vix        # Check signal price
 python cli.py liquidate  # Emergency exit (Confirm req)
 ```
 
+## 📊 Analytics & Visualization
+
+### 1. Institutional Performance Audit
+Run a high-fidelity 30-year backtest (1993-Present) with 1-day execution lag to see institutional metrics (CAGR, Max Drawdown, Sharpe Ratio).
+```bash
+python tests/performance_audit.py
+```
+
+### 2. Interactive Command Center
+Watch the bot navigate through the last three decades in real-time.
+1. **Generate the latest data**:
+   ```bash
+   python tests/generate_viz_data.py
+   ```
+2. **Open the Dashboard**:
+   Open `visualizer/index.html` in any web browser.
+   - **Time Travel**: Jump to any specific date (e.g., 2008 or 2020).
+   - **Live Telemetry**: Watch drawdowns and VIX tiers shift during playback.
+   - **Multi-Leverage Comparison**: Compare the Bot against 1x, 2x, and 3x benchmarks.
+
 ## ⚙️ Logic Components
 - **SMA Climate Control**: Only takes aggressive leverage when SPY is above its SMA.
 - **VIX Gearbox**: Dynamically shifts between 1x, 2x, and 3x leverage based on volatility levels.
