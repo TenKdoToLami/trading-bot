@@ -60,12 +60,17 @@ class AlpacaClient:
             return False
             
         price = self.get_price(ticker)
-        qty = int(dollar_amount / price)
+        # Use 4 decimal places for fractional shares
+        qty = round(dollar_amount / price, 4)
+        
         if qty > 0:
             logger.info(f"Submitting order: BUY {qty} {ticker} (~${dollar_amount:.2f})")
             self.api.submit_order(
-                symbol=ticker, qty=qty, side='buy',
-                type='market', time_in_force='day'
+                symbol=ticker, 
+                qty=qty, 
+                side='buy',
+                type='market', 
+                time_in_force='day'
             )
             return True
         return False
