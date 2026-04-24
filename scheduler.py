@@ -28,8 +28,8 @@ def get_scheduled_time():
 def run_bot():
     logger.info("Launching Tactical Bot Sync Subprocess...")
     try:
-        # Run main.py as a subprocess
-        subprocess.run(["python3", "main.py"], check=True)
+        # Run main.py using the same interpreter as the scheduler (venv)
+        subprocess.run([sys.executable, "main.py"], check=True)
     except Exception as e:
         logger.error(f"Error during bot execution: {e}")
 

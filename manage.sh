@@ -4,7 +4,7 @@
 SERVICE_NAME="tactical-bot"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 WORKING_DIR=$(pwd)
-PYTHON_PATH=$(which python3)
+PYTHON_PATH="${WORKING_DIR}/venv/bin/python3"
 USER=$(whoami)
 
 install() {
