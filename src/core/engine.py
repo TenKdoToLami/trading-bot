@@ -31,7 +31,8 @@ class StrategyEngine:
     def get_allocation(self, regime, tier):
         """Returns [2x, 3x, Cash] weights"""
         if regime == "panic":
-            return self.dna['weights_p'][min(tier, 4)]
+            weights = self.dna['weights_p']
+            return weights[min(tier, len(weights) - 1)]
         else:
             # Bull Mode is always 100% 3x Leverage
             return [0.0, 1.0, 0.0]
