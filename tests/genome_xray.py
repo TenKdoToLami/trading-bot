@@ -42,14 +42,21 @@ def run_xray(genome_path: str):
     genome_name = os.path.basename(genome_path)
 
     # ── Load Data & Run Simulation ──
+    from strategies._genome_strategy import GenomeStrategy
+    from strategies.genome_v2_strategy import GenomeV2Strategy
+
+    # Simple version detection
+    is_v2 = "panic" in genome and "3x" in genome
+    strat_type = GenomeV2Strategy if is_v2 else GenomeStrategy
+
     print("Loading market data...")
     data = load_spy_data("1993-01-01", force_refresh=False)
-    price_data_list = data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+    price_data_list = data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
     dates = data.index
 
-    print(f"Running simulation on {len(data)} trading days...")
+    print(f"Running simulation on {len(data)} trading days using {strat_type.NAME}...")
     res = _execute_simulation(
-        strategy_type=GenomeStrategy,
+        strategy_type=strat_type,
         price_data_list=price_data_list,
         dates=dates,
         strategy_kwargs={'genome': genome}
@@ -154,12 +161,6 @@ def run_xray(genome_path: str):
         bar = "█" * int(pct / 2)
         print(f"  {bucket:<15} {days:>8,} {pct:>9.1f}%  {bar}")
 
-    # Leverage Statistics
-    print(f"\n  {'LEVERAGE STATISTICS':─<{W-4}}")
-    print(f"  {'Average':<25} {np.mean(lev_array):>12.2f}x")
-    print(f"  {'Median':<25} {np.median(lev_array):>12.2f}x")
-    print(f"  {'Std Dev':<25} {np.std(lev_array):>12.2f}x")
-
     # Switching Behavior
     print(f"\n  {'SWITCHING BEHAVIOR':─<{W-4}}")
     print(f"  {'Total Rebalances':<25} {num_switches:>12,}")
@@ -175,20 +176,28 @@ def run_xray(genome_path: str):
 
     # Genome DNA Summary
     print(f"\n  {'GENOME DNA':─<{W-4}}")
-    print(f"  Panic Threshold: {genome['panic_threshold']:.4f}")
+    print(f"  Version:         {'Genome V2 (Multi-Brain)' if is_v2 else 'Genome V1 (Single Score)'}")
     print(f"  Lock Days:       {genome['lock_days']:.1f}")
-    t = genome['base_thresholds']
-    print(f"  Base Tiers:      3x > {t['tier_3x']:.4f} | 2x > {t['tier_2x']:.4f} | 1x > {t['tier_1x']:.4f}")
-
-    # Active indicators
-    for group in ['panic', 'base']:
-        active_key = f'{group}_active'
-        weight_key = f'{group}_weights'
-        if active_key in genome:
-            active = [k for k, v in genome[active_key].items() if v]
-            weights = {k: f"{genome[weight_key][k]:+.3f}" for k in active}
-            print(f"  {group.capitalize()} Active:   {', '.join(active)}")
-            print(f"  {group.capitalize()} Weights:  {weights}")
+    
+    if is_v2:
+        for brain in ['panic', '3x', '2x', '1x']:
+            data = genome[brain]
+            active = [k for k, v in data['a'].items() if v]
+            weights = {k: f"{data['w'][k]:+.3f}" for k in active}
+            print(f"  Brain [{brain:<5}]: Threshold {data['t']:>7.3f} | Active: {len(active)}")
+            print(f"    Weights: {weights}")
+    else:
+        print(f"  Panic Threshold: {genome['panic_threshold']:.4f}")
+        t = genome['base_thresholds']
+        print(f"  Base Tiers:      3x > {t['tier_3x']:.4f} | 2x > {t['tier_2x']:.4f} | 1x > {t['tier_1x']:.4f}")
+        for group in ['panic', 'base']:
+            active_key = f'{group}_active'
+            weight_key = f'{group}_weights'
+            if active_key in genome:
+                active = [k for k, v in genome[active_key].items() if v]
+                weights = {k: f"{genome[weight_key][k]:+.3f}" for k in active}
+                print(f"  {group.capitalize()} Active:   {', '.join(active)}")
+                print(f"  {group.capitalize()} Weights:  {weights}")
 
     print(f"\n{'=' * W}\n")
 

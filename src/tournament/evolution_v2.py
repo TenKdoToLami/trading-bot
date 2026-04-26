@@ -16,12 +16,15 @@ from src.helpers.data_provider import load_spy_data
 _worker_price_data = None
 _worker_dates = None
 
-def _init_worker(cache_file):
-    global _worker_price_data, _worker_dates
+_worker_push_mid = False
+
+def _init_worker(cache_file, push_mid=False):
+    global _worker_price_data, _worker_dates, _worker_push_mid
     import pandas as pd
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-    _worker_price_data = df[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+    _worker_price_data = df.to_dict('records')
     _worker_dates = df.index
+    _worker_push_mid = push_mid
 
 
 def _evaluate_genome_worker(genome):
@@ -32,8 +35,26 @@ def _evaluate_genome_worker(genome):
         strategy_kwargs={'genome': genome}
     )
     metrics = res['metrics']
-    # Fitness = CAGR, penalize blowouts
-    fitness = metrics['cagr'] * 100 if metrics['max_dd'] > -0.98 else -9999
+    cagr = metrics['cagr']
+    max_dd = abs(metrics['max_dd'])
+    
+    # ── Maximum Alpha Focus ──
+    fitness = (cagr * 100) - (max_dd * 10)
+    
+    # ── Mid-Tier Residency Bonus ──
+    if _worker_push_mid:
+        # res['portfolio'].holdings_log contains [(date, {asset: weight}), ...]
+        # We want to reward days where asset is 'SPY' or '2xSPY'
+        holdings = [h[1] for h in res['portfolio'].holdings_log]
+        mid_tier_days = sum(1 for h in holdings if 'SPY' in h or '2xSPY' in h)
+        total_days = len(holdings)
+        residency_pct = mid_tier_days / total_days
+        # Add up to 5 points of fitness for high mid-tier residency
+        fitness += (residency_pct * 5.0)
+
+    # Absolute floor: avoid total liquidation (-95%)
+    if metrics['max_dd'] < -0.95: fitness = -9999
+    
     return fitness, genome, metrics
 
 
@@ -41,29 +62,63 @@ class EvolutionEngineV2:
     """
     Genetic Algorithm Engine for Genome V2 (Multi-Brain Architecture).
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True, push_mid_tiers=False):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
+        self.use_ablation = use_ablation
+        self.push_mid_tiers = push_mid_tiers
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', '3x', '2x', '1x']
         
-        print("Loading master data (SPY + Macro) for evolution v2...")
+        print(f"Loading master data (SPY + Macro) for evolution v2 (Push Mid: {self.push_mid_tiers})...")
         self.data = load_spy_data("1993-01-01", force_refresh=False)
         from src.helpers.data_provider import CACHE_FILE
         self.cache_file = CACHE_FILE
         
-        self.population = [self._random_genome() for _ in range(self.population_size)]
+        self.population = []
+        
+        # ── Seed Injection ──
+        if seed_vault and os.path.exists(seed_vault):
+            print(f"Injecting seeds from: {seed_vault}...")
+            seeds = []
+            for f in os.listdir(seed_vault):
+                if f.endswith(".json"):
+                    with open(os.path.join(seed_vault, f), "r") as jf:
+                        try:
+                            genome = json.load(jf)
+                            # Upgrade V1 to V2 if necessary
+                            if 'panic' not in genome:
+                                print(f"  Upgrading V1 seed to V2: {f}")
+                                v2_seed = {'lock_days': genome.get('lock_days', 3.0)}
+                                for b in self.brains:
+                                    v2_seed[b] = {
+                                        'w': genome['base_weights'].copy() if 'base' in b else genome['panic_weights'].copy(),
+                                        'a': {k: True for k in self.indicators},
+                                        't': 0.0
+                                    }
+                                genome = v2_seed
+                            seeds.append(genome)
+                        except: continue
+            
+            # Fill population with seeds first
+            self.population.extend(seeds[:self.population_size])
+            print(f"  Successfully injected {len(seeds)} seeds.")
+
+        # Fill the rest with random genomes
+        while len(self.population) < self.population_size:
+            self.population.append(self._random_genome())
 
     def _random_genome(self):
         genome = {}
         for b in self.brains:
+            # Start with higher variance weights to encourage aggression
             genome[b] = {
-                'w': {k: random.uniform(-2, 2) for k in self.indicators},
-                'a': {k: random.random() > 0.3 for k in self.indicators},
-                't': random.uniform(-1.0, 1.0)
+                'w': {k: random.uniform(-4, 4) for k in self.indicators},
+                'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators},
+                't': random.uniform(-1.5, 1.5)
             }
-        genome['lock_days'] = random.uniform(0, 15)
+        genome['lock_days'] = random.uniform(0, 10)
         return genome
 
     def _crossover(self, p1, p2):
@@ -96,10 +151,10 @@ class EvolutionEngineV2:
                 
                 # Mutate active status
                 a = genome[b]['a'][k]
-                if random.random() < 0.05: # 5% ablation flip
+                if self.use_ablation and random.random() < 0.05: # 5% ablation flip
                     mutated[b]['a'][k] = not a
                 else:
-                    mutated[b]['a'][k] = a
+                    mutated[b]['a'][k] = True if not self.use_ablation else a
                     
         mutated['lock_days'] = genome['lock_days']
         if random.random() < self.mutation_rate:
@@ -112,9 +167,15 @@ class EvolutionEngineV2:
         best_overall_metrics = None
         best_overall_genome = None
 
-        print(f"Starting Evolution V2: {self.generations} generations, pop {self.population_size}")
+        # Leave 4 cores free for system responsiveness
+        max_workers = max(1, os.cpu_count() - 4)
+        print(f"Starting Evolution V2: {self.generations} generations, pop {self.population_size} (using {max_workers} cores)")
         
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(self.cache_file,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=max_workers,
+            initializer=_init_worker, 
+            initargs=(self.cache_file, self.push_mid_tiers)
+        ) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 

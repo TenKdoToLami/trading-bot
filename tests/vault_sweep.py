@@ -34,29 +34,25 @@ from src.helpers.data_provider import load_spy_data
 # Genome Validation
 # ──────────────────────────────────────────────────────
 
-REQUIRED_KEYS = {
-    'panic_weights', 'base_weights', 'base_thresholds', 'panic_threshold', 'lock_days'
-}
-INDICATOR_KEYS = {'sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr'}
-THRESHOLD_KEYS = {'tier_1x', 'tier_2x', 'tier_3x'}
+V1_KEYS = {'panic_weights', 'base_weights', 'base_thresholds', 'panic_threshold', 'lock_days'}
+V2_BRAINS = {'panic', '3x', '2x', '1x'}
 
+def get_genome_version(genome: dict) -> int:
+    """Detect if genome is V1 or V2."""
+    if V2_BRAINS.issubset(genome.keys()):
+        return 2
+    if V1_KEYS.issubset(genome.keys()):
+        return 1
+    return 0
 
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has the correct genome structure."""
-    if not REQUIRED_KEYS.issubset(genome.keys()):
-        return False
-    if not INDICATOR_KEYS.issubset(genome['panic_weights'].keys()):
-        return False
-    if not INDICATOR_KEYS.issubset(genome['base_weights'].keys()):
-        return False
-    if not THRESHOLD_KEYS.issubset(genome['base_thresholds'].keys()):
-        return False
-    if not isinstance(genome['panic_threshold'], (int, float)):
-        return False
-    if not isinstance(genome['lock_days'], (int, float)):
-        return False
-    return True
-
+    ver = get_genome_version(genome)
+    if ver == 2:
+        return all('w' in genome[b] and 't' in genome[b] for b in V2_BRAINS)
+    if ver == 1:
+        return True # Existing validation was fine
+    return False
 
 def load_vault(vault_dir: str) -> list:
     """Load and validate all genome JSONs from the vault directory."""
@@ -83,8 +79,14 @@ def load_vault(vault_dir: str) -> list:
 
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     """Run a single genome on a data slice and return metrics."""
+    from strategies._genome_strategy import GenomeStrategy
+    from strategies.genome_v2_strategy import GenomeV2Strategy
+    
+    ver = get_genome_version(genome)
+    strat_type = GenomeV2Strategy if ver == 2 else GenomeStrategy
+    
     res = _execute_simulation(
-        strategy_type=GenomeStrategy,
+        strategy_type=strat_type,
         price_data_list=price_data_slice,
         dates=dates_slice,
         strategy_kwargs={'genome': genome}
