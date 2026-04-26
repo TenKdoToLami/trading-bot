@@ -117,3 +117,5 @@ results/                # Tournament output (charts)
 | **Full Cash Panic** | Same SMA regime, but 100% cash during any panic. |
 | **Buy & Hold 3x** | Pure 3x leveraged buy-and-hold benchmark. |
 | **Buy & Hold SPY** | Plain 1x index benchmark. |
+| **Equal Combos (20d)** | Various combinations of 1x, 2x, 3x SPY and CASH, rebalanced every 20 days. |
+| **Indicator Exits** | 3x SPY strategies that exit to 100% CASH based on RSI, MACD, EMA, etc. |

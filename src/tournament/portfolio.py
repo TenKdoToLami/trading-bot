@@ -86,7 +86,9 @@ class Portfolio:
             return {
                 "cagr": 0.0, "sharpe": 0.0, "max_dd": 0.0,
                 "total_return": 0.0, "volatility": 0.0,
-                "num_rebalances": 0,
+                "num_rebalances": 0, "trades_per_year": 0.0,
+                "avg_leverage": 0.0,
+                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH")},
             }
 
         equities = np.array([e for _, e in self.equity_curve])
@@ -120,6 +122,26 @@ class Portfolio:
         num_rebalances = len(self.rebalance_log)
         trades_per_year = num_rebalances / years if years > 0 else 0.0
 
+        # Average leverage and per-asset allocation from holdings log
+        leverage_map = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
+        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH")
+        asset_weight_sums = {a: 0.0 for a in all_assets}
+        leverage_sum = 0.0
+        n_days = len(self.holdings_log)
+
+        for _, holdings in self.holdings_log:
+            for asset in all_assets:
+                w = holdings.get(asset, 0.0)
+                asset_weight_sums[asset] += w
+                leverage_sum += w * leverage_map[asset]
+
+        if n_days > 0:
+            avg_leverage = leverage_sum / n_days
+            allocation_pct = {a: asset_weight_sums[a] / n_days for a in all_assets}
+        else:
+            avg_leverage = 0.0
+            allocation_pct = {a: 0.0 for a in all_assets}
+
         return {
             "cagr": cagr,
             "sharpe": sharpe,
@@ -128,4 +150,7 @@ class Portfolio:
             "volatility": ann_vol,
             "num_rebalances": num_rebalances,
             "trades_per_year": trades_per_year,
+            "avg_leverage": avg_leverage,
+            "allocation_pct": allocation_pct,
         }
+

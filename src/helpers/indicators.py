@@ -77,3 +77,138 @@ def drawdown_from_peak(prices: list):
         if p > peak:
             peak = p
     return (prices[-1] - peak) / peak if peak > 0 else 0.0
+
+
+def ema(prices: list, period: int):
+    """
+    Exponential Moving Average.
+    Formula: EMA = Price(today) * k + EMA(yesterday) * (1 - k)
+    where k = 2 / (period + 1)
+    """
+    if len(prices) < period:
+        return None
+
+    k = 2 / (period + 1)
+    # Seed EMA with SMA of the first window
+    current_ema = sum(prices[:period]) / period
+
+    for i in range(period, len(prices)):
+        current_ema = (prices[i] * k) + (current_ema * (1 - k))
+
+    return current_ema
+
+
+def rsi(prices: list, period: int = 14):
+    """
+    Relative Strength Index (RSI).
+    Uses Wilder's smoothing method.
+    """
+    if len(prices) < period + 1:
+        return None
+
+    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+    
+    # Initial averages
+    gains = [d if d > 0 else 0 for d in deltas[:period]]
+    losses = [-d if d < 0 else 0 for d in deltas[:period]]
+    
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
+
+    # Smoothed averages
+    for i in range(period, len(deltas)):
+        gain = deltas[i] if deltas[i] > 0 else 0
+        loss = -deltas[i] if deltas[i] < 0 else 0
+        
+        avg_gain = (avg_gain * (period - 1) + gain) / period
+        avg_loss = (avg_loss * (period - 1) + loss) / period
+
+    if avg_loss == 0:
+        return 100
+    
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def macd(prices: list, fast: int = 12, slow: int = 26, signal: int = 9):
+    """
+    Moving Average Convergence Divergence.
+    Returns (macd_line, signal_line, histogram).
+    """
+    if len(prices) < slow + signal:
+        return None, None, None
+
+    # We need a series of MACD values to calculate the Signal line (which is an EMA of MACD)
+    macd_values = []
+    # To be efficient and accurate, we'd ideally calculate EMAs incrementally.
+    # For this helper, we'll calculate the window of MACD values needed for the signal.
+    
+    # Note: This is O(N*M) where M is signal period. Acceptable for daily data.
+    for i in range(len(prices) - signal, len(prices)):
+        p_slice = prices[:i+1]
+        fast_ema = ema(p_slice, fast)
+        slow_ema = ema(p_slice, slow)
+        macd_values.append(fast_ema - slow_ema)
+    
+    macd_line = macd_values[-1]
+    # Signal line is EMA of MACD values
+    signal_line = ema(macd_values, signal)
+    histogram = macd_line - signal_line
+    
+    return macd_line, signal_line, histogram
+
+
+def standard_deviation(prices: list, period: int):
+    """Rolling standard deviation."""
+    if len(prices) < period:
+        return None
+    
+    subset = prices[-period:]
+    mean = sum(subset) / period
+    variance = sum((x - mean) ** 2 for x in subset) / period
+    return math.sqrt(variance)
+
+
+def bollinger_bands(prices: list, period: int = 20, std_dev: float = 2.0):
+    """
+    Bollinger Bands.
+    Returns (upper, middle, lower).
+    """
+    mid = sma(prices, period)
+    if mid is None:
+        return None, None, None
+    
+    sd = standard_deviation(prices, period)
+    upper = mid + (std_dev * sd)
+    lower = mid - (std_dev * sd)
+    
+    return upper, mid, lower
+
+
+def momentum(prices: list, period: int = 10):
+    """Rate of Change (ROC) / Momentum."""
+    if len(prices) < period + 1:
+        return None
+    return (prices[-1] / prices[-period-1]) - 1.0
+
+
+def crossed_above(series1: list, series2: list):
+    """
+    Returns True if series1 just crossed above series2.
+    
+    Args:
+        series1: List of values (e.g. Price or Fast SMA)
+        series2: List of values (e.g. Slow SMA)
+    """
+    if len(series1) < 2 or len(series2) < 2:
+        return False
+    return series1[-2] <= series2[-2] and series1[-1] > series2[-1]
+
+
+def crossed_below(series1: list, series2: list):
+    """
+    Returns True if series1 just crossed below series2.
+    """
+    if len(series1) < 2 or len(series2) < 2:
+        return False
+    return series1[-2] >= series2[-2] and series1[-1] < series2[-1]

@@ -12,6 +12,7 @@ Usage:
     runner.generate_chart()
 """
 
+import concurrent.futures
 import importlib
 import os
 import random
@@ -22,6 +23,36 @@ import numpy as np
 from strategies.base import BaseStrategy
 from src.tournament.portfolio import Portfolio
 from src.helpers.data_provider import load_spy_data
+
+
+def _execute_simulation(strategy_type, prices, dates):
+    """
+    Standalone simulation function that can be picked for parallel execution.
+    """
+    strategy = strategy_type()
+    strategy.reset()
+    portfolio = Portfolio()
+
+    for i in range(len(prices)):
+        date_str = str(dates[i].date())
+        spy_price = float(prices[i])
+
+        if i > 0:
+            daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
+            portfolio.apply_daily_return(date_str, daily_ret)
+
+        result = strategy.on_data(date_str, spy_price)
+        if result is not None:
+            # Basic weight validation
+            if abs(sum(result.values()) - 1.0) > 0.001:
+                raise ValueError(f"[{strategy.NAME}] Invalid weights: {result}")
+            portfolio.rebalance(date_str, result)
+
+    return {
+        "strategy": strategy.NAME,
+        "portfolio": portfolio,
+        "metrics": portfolio.get_metrics(),
+    }
 
 
 class TournamentRunner:
@@ -81,6 +112,7 @@ class TournamentRunner:
                     isinstance(attr, type)
                     and issubclass(attr, BaseStrategy)
                     and attr is not BaseStrategy
+                    and not attr.__name__.startswith("_")
                 ):
                     strategies.append(attr())
 
@@ -91,65 +123,37 @@ class TournamentRunner:
     # ------------------------------------------------------------------
 
     def run_strategy(self, strategy: BaseStrategy) -> dict:
-        """
-        Run a single strategy through the full dataset.
-
-        Timeline per day i:
-          1. Apply return from day i-1 → day i on current holdings.
-          2. Feed day i's SPY close to the strategy.
-          3. If strategy rebalances, validate and record new holdings.
-
-        Returns:
-            dict with keys: strategy (name), portfolio (Portfolio obj),
-                            metrics (dict).
-        """
-        strategy.reset()
-        portfolio = Portfolio()
-
+        """Run a single strategy through the full dataset."""
         prices = self.data["spy_close"].values
         dates = self.data.index
-
-        for i in range(len(prices)):
-            date_str = str(dates[i].date())
-            spy_price = float(prices[i])
-
-            # 1. Apply today's return using yesterday's holdings
-            if i > 0:
-                daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
-                portfolio.apply_daily_return(date_str, daily_ret)
-
-            # 2. Feed price to strategy
-            result = strategy.on_data(date_str, spy_price)
-
-            # 3. Validate and apply rebalance
-            if result is not None:
-                self._validate_holdings(result, strategy.NAME, date_str)
-                portfolio.rebalance(date_str, result)
-
-        return {
-            "strategy": strategy.NAME,
-            "portfolio": portfolio,
-            "metrics": portfolio.get_metrics(),
-        }
+        return _execute_simulation(type(strategy), prices, dates)
 
     def run_all(self) -> dict:
-        """Run every discovered strategy and collect results."""
+        """Run every discovered strategy and collect results (Parallel)."""
         if self.data is None:
             self.load_data()
 
         strategies = self.discover_strategies()
-        print(f"\nDiscovered {len(strategies)} strategies:")
-        for s in strategies:
-            print(f"  • {s.NAME}")
-        print()
+        print(f"\nDiscovered {len(strategies)} strategies. Running in parallel...")
+
+        prices = self.data["spy_close"].values
+        dates = self.data.index
 
         results = {}
-        for strategy in strategies:
-            print(f"  Running: {strategy.NAME}...", end="", flush=True)
-            res = self.run_strategy(strategy)
-            results[strategy.NAME] = res
-            cagr = res["metrics"]["cagr"] * 100
-            print(f"  CAGR: {cagr:.2f}%")
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            future_to_strat = {
+                executor.submit(_execute_simulation, type(s), prices, dates): s.NAME
+                for s in strategies
+            }
+            for future in concurrent.futures.as_completed(future_to_strat):
+                name = future_to_strat[future]
+                try:
+                    res = future.result()
+                    results[name] = res
+                    cagr = res["metrics"]["cagr"] * 100
+                    print(f"  Completed: {name:<35} | CAGR: {cagr:.2f}%")
+                except Exception as e:
+                    print(f"  Error running {name}: {e}")
 
         self.results = results
         return results
@@ -174,36 +178,10 @@ class TournamentRunner:
 
     def run_strategy_on_slice(self, strategy: BaseStrategy,
                               start_idx: int, end_idx: int) -> dict:
-        """
-        Run a strategy on a sub-range of the loaded data [start_idx:end_idx].
-
-        Same simulation logic as run_strategy() but over a slice.
-        Used by the resilience test for random period sampling.
-        """
-        strategy.reset()
-        portfolio = Portfolio()
-
+        """Run a strategy on a sub-range of the loaded data."""
         prices = self.data["spy_close"].values[start_idx:end_idx]
         dates = self.data.index[start_idx:end_idx]
-
-        for i in range(len(prices)):
-            date_str = str(dates[i].date())
-            spy_price = float(prices[i])
-
-            if i > 0:
-                daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
-                portfolio.apply_daily_return(date_str, daily_ret)
-
-            result = strategy.on_data(date_str, spy_price)
-            if result is not None:
-                self._validate_holdings(result, strategy.NAME, date_str)
-                portfolio.rebalance(date_str, result)
-
-        return {
-            "strategy": strategy.NAME,
-            "portfolio": portfolio,
-            "metrics": portfolio.get_metrics(),
-        }
+        return _execute_simulation(type(strategy), prices, dates)
 
     def run_resilience(self, samples_per_bucket: int = 10):
         """
@@ -268,16 +246,28 @@ class TournamentRunner:
 
         for (lo_yr, hi_yr), periods in bucket_periods.items():
             label = f"{lo_yr}-{hi_yr} Years"
-            print(f"\n  Bucket: {label} ({len(periods)} periods)...", flush=True)
+            print(f"\n  Bucket: {label} ({len(periods)} periods)...", end="", flush=True)
 
             bucket_data = {s.NAME: [] for s in strategies}
-
+            
+            # Prepare all tasks for this bucket: (strategy_type, prices_slice, dates_slice)
+            tasks = []
             for start_idx, end_idx in periods:
-                for strategy in strategies:
-                    res = self.run_strategy_on_slice(strategy, start_idx, end_idx)
-                    bucket_data[strategy.NAME].append(res["metrics"])
-                    overall_results[strategy.NAME].append(res["metrics"])
+                prices_slice = self.data["spy_close"].values[start_idx:end_idx]
+                dates_slice = self.data.index[start_idx:end_idx]
+                for s in strategies:
+                    tasks.append((type(s), prices_slice, dates_slice))
 
+            # Run in parallel
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                # We submit all tasks and collect as they complete
+                futures = [executor.submit(_execute_simulation, *t) for t in tasks]
+                for f in concurrent.futures.as_completed(futures):
+                    res = f.result()
+                    bucket_data[res["strategy"]].append(res["metrics"])
+                    overall_results[res["strategy"]].append(res["metrics"])
+
+            print(" Done.")
             all_bucket_results[(lo_yr, hi_yr)] = bucket_data
             self._print_resilience_table(label, bucket_data)
 
@@ -314,57 +304,54 @@ class TournamentRunner:
     def _print_resilience_table(self, title: str, strategy_metrics: dict):
         """
         Print an aggregated resilience table for one bucket or overall.
-
-        Args:
-            title:            Label for the table (e.g. "5-10 Years").
-            strategy_metrics: {strategy_name: [metrics_dict, ...]}
+        Strategies are displayed as rows, metrics as columns.
         """
-        metrics_keys = ["cagr", "sharpe", "max_dd", "trades_per_year"]
+        metrics_keys = ["cagr", "sharpe", "max_dd", "trades_per_year", "avg_leverage"]
         metric_labels = {
             "cagr": "CAGR",
             "sharpe": "Sharpe",
             "max_dd": "Max DD",
-            "trades_per_year": "Trades/Yr",
+            "trades_per_year": "Trd/Yr",
+            "avg_leverage": "Lev",
         }
 
-        # Determine column width from strategy names
         names = sorted(strategy_metrics.keys())
-        col_w = max(12, max(len(n) for n in names) + 2)
+        
+        # Calculate total width
+        col_width = 11  # Width for each Mean/Med column
+        strat_width = 38
+        total_width = strat_width + (len(metrics_keys) * 2 * (col_width + 3))
 
         # Header
-        print(f"\n  {'=' * (20 + col_w * len(names))}")
+        print(f"\n  {'=' * total_width}")
         print(f"  {title}")
-        print(f"  {'=' * (20 + col_w * len(names))}")
+        print(f"  {'=' * total_width}")
 
-        header = f"  {'Metric':<18}"
-        for name in names:
-            header += f" | {name:>{col_w}}"
-        print(header)
-        print(f"  {'-' * (18 + (col_w + 3) * len(names))}")
-
-        # Rows: Mean and Median for each metric
+        header = f"  {'Strategy':<{strat_width}}"
         for key in metrics_keys:
-            for stat_name, stat_fn in [("Mean", np.mean), ("Median", np.median)]:
-                label = f"{stat_name} {metric_labels[key]}"
-                row = f"  {label:<18}"
+            label = metric_labels[key]
+            header += f" | {label+'(Mn)':>{col_width}} | {label+'(Md)':>{col_width}}"
+        print(header)
+        print(f"  {'-' * total_width}")
 
-                for name in names:
-                    values = [m[key] for m in strategy_metrics[name]]
-                    val = stat_fn(values)
+        for name in names:
+            row = f"  {name:<{strat_width}}"
+            for key in metrics_keys:
+                values = [m[key] for m in strategy_metrics[name]]
+                mn = np.mean(values)
+                md = np.median(values)
 
+                for val in [mn, md]:
                     if key in ("cagr", "max_dd"):
-                        row += f" | {val * 100:>{col_w - 1}.2f}%"
+                        row += f" | {val * 100:>{col_width - 1}.2f}%"
                     elif key == "trades_per_year":
-                        row += f" | {val:>{col_w}.1f}"
+                        row += f" | {val:>{col_width}.1f}"
+                    elif key == "avg_leverage":
+                        row += f" | {val:>{col_width - 1}.2f}x"
                     else:
-                        row += f" | {val:>{col_w}.2f}"
-                print(row)
-
-            # Separator between metric groups (except after last)
-            if key != metrics_keys[-1]:
-                print(f"  {'-' * (18 + (col_w + 3) * len(names))}")
-
-        print(f"  {'=' * (20 + col_w * len(names))}")
+                        row += f" | {val:>{col_width}.2f}"
+            print(row)
+        print(f"  {'=' * total_width}")
 
 
     def print_results(self):
@@ -396,6 +383,28 @@ class TournamentRunner:
                 f"  {name:<30} | {m['cagr']*100:>7.2f}% | "
                 f"{m['sharpe']:>8.2f} | {m['max_dd']*100:>8.1f}% | "
                 f"{m['volatility']*100:>7.1f}% | {m['num_rebalances']:>7}"
+            )
+
+        print("=" * 95)
+
+        # Allocation breakdown table
+        print("\n" + "=" * 95)
+        print("  ALLOCATION BREAKDOWN (Average Weight %)")
+        print("=" * 95)
+        header = (
+            f"  {'Strategy':<30} | {'Avg Lev':>8} | "
+            f"{'SPY':>8} | {'2xSPY':>8} | {'3xSPY':>8} | {'CASH':>8}"
+        )
+        print(header)
+        print("-" * 95)
+
+        for name, res in sorted_results:
+            m = res["metrics"]
+            a = m["allocation_pct"]
+            print(
+                f"  {name:<30} | {m['avg_leverage']:>7.2f}x | "
+                f"{a['SPY']*100:>7.1f}% | {a['2xSPY']*100:>7.1f}% | "
+                f"{a['3xSPY']*100:>7.1f}% | {a['CASH']*100:>7.1f}%"
             )
 
         print("=" * 95)
