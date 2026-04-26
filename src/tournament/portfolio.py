@@ -116,11 +116,16 @@ class Portfolio:
         dd = (equities - peak) / peak
         max_dd = float(np.min(dd))
 
+        # Trades per year
+        num_rebalances = len(self.rebalance_log)
+        trades_per_year = num_rebalances / years if years > 0 else 0.0
+
         return {
             "cagr": cagr,
             "sharpe": sharpe,
             "max_dd": max_dd,
             "total_return": total_return,
             "volatility": ann_vol,
-            "num_rebalances": len(self.rebalance_log),
+            "num_rebalances": num_rebalances,
+            "trades_per_year": trades_per_year,
         }

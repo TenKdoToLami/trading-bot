@@ -38,6 +38,12 @@ python tests/run_tournament.py --refresh
 
 # Skip chart generation
 python tests/run_tournament.py --no-chart
+
+# Resilience stress test — random periods across duration buckets
+python tests/run_tournament.py --resilience
+
+# Resilience with more samples per bucket (default: 10)
+python tests/run_tournament.py --resilience --samples 20
 ```
 
 ### 3. Output

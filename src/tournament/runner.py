@@ -14,7 +14,10 @@ Usage:
 
 import importlib
 import os
+import random
 import sys
+
+import numpy as np
 
 from strategies.base import BaseStrategy
 from src.tournament.portfolio import Portfolio
@@ -169,6 +172,121 @@ class TournamentRunner:
             f"Strategy '{strategy_name}' not found. Available: {available}"
         )
 
+    def run_strategy_on_slice(self, strategy: BaseStrategy,
+                              start_idx: int, end_idx: int) -> dict:
+        """
+        Run a strategy on a sub-range of the loaded data [start_idx:end_idx].
+
+        Same simulation logic as run_strategy() but over a slice.
+        Used by the resilience test for random period sampling.
+        """
+        strategy.reset()
+        portfolio = Portfolio()
+
+        prices = self.data["spy_close"].values[start_idx:end_idx]
+        dates = self.data.index[start_idx:end_idx]
+
+        for i in range(len(prices)):
+            date_str = str(dates[i].date())
+            spy_price = float(prices[i])
+
+            if i > 0:
+                daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
+                portfolio.apply_daily_return(date_str, daily_ret)
+
+            result = strategy.on_data(date_str, spy_price)
+            if result is not None:
+                self._validate_holdings(result, strategy.NAME, date_str)
+                portfolio.rebalance(date_str, result)
+
+        return {
+            "strategy": strategy.NAME,
+            "portfolio": portfolio,
+            "metrics": portfolio.get_metrics(),
+        }
+
+    def run_resilience(self, samples_per_bucket: int = 10):
+        """
+        Resilience stress test — run all strategies on random periods
+        across multiple duration buckets.
+
+        Buckets (in years): 0-5, 5-10, 10-15, 15-20, 20-25, 25-30.
+        For each bucket, N random start points are sampled and a random
+        duration within that bucket's range is selected.
+
+        Prints a per-bucket table and a final overall aggregate table.
+
+        Args:
+            samples_per_bucket: Number of random periods per bucket (default 10).
+        """
+        if self.data is None:
+            self.load_data()
+
+        strategies = self.discover_strategies()
+        total_days = len(self.data)
+
+        print(f"\n{'#' * 70}")
+        print(f"  RESILIENCE TEST — {samples_per_bucket} samples per bucket")
+        print(f"  Strategies: {[s.NAME for s in strategies]}")
+        print(f"  Data span: {total_days} trading days")
+        print(f"{'#' * 70}")
+
+        # Duration buckets in years
+        buckets = [
+            (0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30),
+        ]
+
+        # Generate random periods for each bucket
+        bucket_periods = {}
+        for lo_yr, hi_yr in buckets:
+            lo_days = lo_yr * 252
+            hi_days = hi_yr * 252
+
+            # Skip buckets that exceed available data
+            if lo_days >= total_days - 50:
+                continue
+
+            periods = []
+            for _ in range(samples_per_bucket):
+                # Clamp duration to what's available
+                actual_hi = min(hi_days, total_days - 50)
+                actual_lo = max(lo_days, 252)  # Minimum 1 year
+                if actual_lo >= actual_hi:
+                    actual_lo = actual_hi - 1
+
+                duration = random.randint(actual_lo, actual_hi)
+                max_start = total_days - duration - 1
+                start = random.randint(0, max(0, max_start))
+                periods.append((start, start + duration))
+
+            bucket_periods[(lo_yr, hi_yr)] = periods
+
+        # Run all strategies on all periods, collecting metrics per bucket
+        # Structure: {bucket: {strategy_name: [metrics_dict, ...]}}
+        all_bucket_results = {}
+        overall_results = {s.NAME: [] for s in strategies}
+
+        for (lo_yr, hi_yr), periods in bucket_periods.items():
+            label = f"{lo_yr}-{hi_yr} Years"
+            print(f"\n  Bucket: {label} ({len(periods)} periods)...", flush=True)
+
+            bucket_data = {s.NAME: [] for s in strategies}
+
+            for start_idx, end_idx in periods:
+                for strategy in strategies:
+                    res = self.run_strategy_on_slice(strategy, start_idx, end_idx)
+                    bucket_data[strategy.NAME].append(res["metrics"])
+                    overall_results[strategy.NAME].append(res["metrics"])
+
+            all_bucket_results[(lo_yr, hi_yr)] = bucket_data
+            self._print_resilience_table(label, bucket_data)
+
+        # Overall aggregate
+        self._print_resilience_table(
+            f"OVERALL ({sum(len(p) for p in bucket_periods.values())} periods)",
+            overall_results,
+        )
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
@@ -192,6 +310,62 @@ class TournamentRunner:
     # ------------------------------------------------------------------
     # Output
     # ------------------------------------------------------------------
+
+    def _print_resilience_table(self, title: str, strategy_metrics: dict):
+        """
+        Print an aggregated resilience table for one bucket or overall.
+
+        Args:
+            title:            Label for the table (e.g. "5-10 Years").
+            strategy_metrics: {strategy_name: [metrics_dict, ...]}
+        """
+        metrics_keys = ["cagr", "sharpe", "max_dd", "trades_per_year"]
+        metric_labels = {
+            "cagr": "CAGR",
+            "sharpe": "Sharpe",
+            "max_dd": "Max DD",
+            "trades_per_year": "Trades/Yr",
+        }
+
+        # Determine column width from strategy names
+        names = sorted(strategy_metrics.keys())
+        col_w = max(12, max(len(n) for n in names) + 2)
+
+        # Header
+        print(f"\n  {'=' * (20 + col_w * len(names))}")
+        print(f"  {title}")
+        print(f"  {'=' * (20 + col_w * len(names))}")
+
+        header = f"  {'Metric':<18}"
+        for name in names:
+            header += f" | {name:>{col_w}}"
+        print(header)
+        print(f"  {'-' * (18 + (col_w + 3) * len(names))}")
+
+        # Rows: Mean and Median for each metric
+        for key in metrics_keys:
+            for stat_name, stat_fn in [("Mean", np.mean), ("Median", np.median)]:
+                label = f"{stat_name} {metric_labels[key]}"
+                row = f"  {label:<18}"
+
+                for name in names:
+                    values = [m[key] for m in strategy_metrics[name]]
+                    val = stat_fn(values)
+
+                    if key in ("cagr", "max_dd"):
+                        row += f" | {val * 100:>{col_w - 1}.2f}%"
+                    elif key == "trades_per_year":
+                        row += f" | {val:>{col_w}.1f}"
+                    else:
+                        row += f" | {val:>{col_w}.2f}"
+                print(row)
+
+            # Separator between metric groups (except after last)
+            if key != metrics_keys[-1]:
+                print(f"  {'-' * (18 + (col_w + 3) * len(names))}")
+
+        print(f"  {'=' * (20 + col_w * len(names))}")
+
 
     def print_results(self):
         """Print a formatted comparison table sorted by CAGR."""
