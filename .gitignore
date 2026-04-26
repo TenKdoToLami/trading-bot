@@ -10,3 +10,5 @@ data/*.csv
 results/
 node_modules/
 .DS_Store
+vault/
+best_genome.json

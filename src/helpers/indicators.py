@@ -380,18 +380,21 @@ def trix(prices: list, period: int = 15, state: dict = None):
     if state is None: state = {}
     
     ema1 = ema(prices, period, prev_ema=state.get("ema1"))
+    if ema1 is None: return None
     state["ema1"] = ema1
     
     if "ema1_history" not in state: state["ema1_history"] = []
     state["ema1_history"].append(ema1)
     
     ema2 = ema(state["ema1_history"], period, prev_ema=state.get("ema2"))
+    if ema2 is None: return None
     state["ema2"] = ema2
     
     if "ema2_history" not in state: state["ema2_history"] = []
     state["ema2_history"].append(ema2)
     
     ema3 = ema(state["ema2_history"], period, prev_ema=state.get("ema3"))
+    if ema3 is None: return None
     state["ema3"] = ema3
     
     if "prev_ema3" in state and state["prev_ema3"] != 0 and state["prev_ema3"] is not None:

@@ -25,11 +25,12 @@ from src.tournament.portfolio import Portfolio
 from src.helpers.data_provider import load_spy_data
 
 
-def _execute_simulation(strategy_type, price_data_list, dates):
+def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None):
     """
     Standalone simulation function that can be picked for parallel execution.
     """
-    strategy = strategy_type()
+    kwargs = strategy_kwargs or {}
+    strategy = strategy_type(**kwargs)
     strategy.reset()
     portfolio = Portfolio()
     pending_holdings = None

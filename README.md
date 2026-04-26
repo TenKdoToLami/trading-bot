@@ -42,13 +42,26 @@ python tests/run_tournament.py --no-chart
 # Resilience stress test — random periods across duration buckets
 python tests/run_tournament.py --resilience
 
-# Resilience with more samples per bucket (default: 10)
-python tests/run_tournament.py --resilience --samples 20
+# python tests/run_tournament.py --resilience --samples 20
 ```
 
-### 3. Output
+### 3. Evolutionary Strategy Breeding
+The framework now includes a Genetic Algorithm engine to autonomously discover optimal indicator combinations.
+```bash
+# Run the evolution engine
+python tests/run_evolution.py --pop 100 --gen 50
+
+# Parameters
+--pop   Population size (default 30)
+--gen   Number of generations (default 10)
+--mut   Mutation rate (default 0.15)
+```
+Record-breaking genomes are automatically saved to the `vault/` directory.
+
+### 4. Output
 - **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
 - **Equity chart**: Saved to `results/tournament_chart.png`.
+- **Vault**: Optimal DNA matrices saved to `vault/genome_cagr_X_dd_Y.json`.
 
 ## 🧩 Writing a New Strategy
 
@@ -67,17 +80,19 @@ class MyStrategy(BaseStrategy):
         self.prices = []
         # ... reset any internal state
 
-    def on_data(self, date, spy_price):
+    def on_data(self, date, price_data, prev_data):
+        spy_price = price_data['close']
         self.prices.append(spy_price)
         # ... your logic here ...
 
         # Return None to hold, or a dict to rebalance:
-        return {"3xSPY": 0.5, "CASH": 0.5}
+        return {"3xSPY": 1.0}
 ```
 
 **Rules:**
-- You only receive `(date, spy_price)` — no other market data.
-- If you need indicators (SMA, volatility), compute them from your accumulated prices using `src.helpers.indicators`.
+- **Execution:** All trades execute at the Average price (`(Open + Close) / 2`) of the **next day** (T+1) to ensure zero look-ahead bias.
+- **Data:** `price_data` contains the full finalized OHLCV for the current day.
+- **History:** `prev_data` contains the finalized data for the previous day.
 - Allowed assets: `SPY`, `2xSPY`, `3xSPY`, `CASH`.
 - Holdings weights must sum to `1.0`.
 - Return `None` if no rebalance is needed.
@@ -96,14 +111,17 @@ src/
     indicators.py       #   SMA, realized vol, drawdown
     data_provider.py    #   Local-first SPY data caching
   tournament/           # Control unit
-    runner.py           #   Simulation orchestrator
+    runner.py           #   Simulation orchestrator (T+1 lag model)
     portfolio.py        #   Holdings & return tracking
+    evolution.py        #   Genetic Algorithm engine
   execution/            # Alpaca live trading (future)
   utils/                # Database utilities
 
 tests/
   run_tournament.py     # CLI entry point
+  run_evolution.py      # AI training entry point
 
+vault/                  # Record-breaking genomes (auto-generated)
 config/                 # API keys, strategy DNA
 data/                   # Cached market data (auto-generated)
 results/                # Tournament output (charts)
@@ -114,8 +132,10 @@ results/                # Tournament output (charts)
 | Strategy | Description |
 |---|---|
 | **BEAST (SMA + RealVol)** | SMA regime detection + realized volatility tiers. 3x in bull, tiered allocation in panic. |
+| **Genome Strategy** | AI-bred strategy using **Dual-State** (Panic/Base) logic, Ablation (Feature Selection), and Rebalance Lockouts. |
 | **Full Cash Panic** | Same SMA regime, but 100% cash during any panic. |
 | **Buy & Hold 3x** | Pure 3x leveraged buy-and-hold benchmark. |
 | **Buy & Hold SPY** | Plain 1x index benchmark. |
 | **Equal Combos (20d)** | Various combinations of 1x, 2x, 3x SPY and CASH, rebalanced every 20 days. |
 | **Indicator Exits** | 3x SPY strategies that exit to 100% CASH based on RSI, MACD, EMA, etc. |
+
