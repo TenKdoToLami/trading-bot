@@ -14,7 +14,8 @@ class BuyAndHoldSpy(BaseStrategy):
     def __init__(self):
         self._first_day = True
 
-    def on_data(self, date, spy_price):
+    def on_data(self, date, price_data, prev_data):
+        spy_price = price_data['close']
         if self._first_day:
             self._first_day = False
             return {"SPY": 1.0}

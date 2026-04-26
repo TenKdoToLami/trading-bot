@@ -24,24 +24,18 @@ class BaseStrategy(ABC):
     ALLOWED_ASSETS = ("SPY", "2xSPY", "3xSPY", "CASH")
 
     @abstractmethod
-    def on_data(self, date: str, spy_price: float) -> Optional[Dict[str, float]]:
+    def on_data(self, date: str, price_data: dict, prev_data: Optional[dict]) -> Optional[Dict[str, float]]:
         """
-        Called once per trading day with today's SPY closing price.
-
-        The strategy should update its internal state and decide whether
-        to rebalance.
+        Called once per trading day with today's price data and yesterday's finalized data.
 
         Args:
-            date:      ISO date string "YYYY-MM-DD".
-            spy_price: SPY closing price for this trading day.
+            date:       ISO date string "YYYY-MM-DD".
+            price_data: Today's OHLCV dict.
+            prev_data:  Yesterday's OHLCV dict (None on the first day).
 
         Returns:
             None  — hold current allocation (no rebalance).
-            dict  — new target allocation.
-                    Keys must be from ALLOWED_ASSETS.
-                    Values are portfolio weight fractions that sum to 1.0.
-                    Omitted assets are treated as 0.0.
-                    Example: {"3xSPY": 0.7, "CASH": 0.3}
+            dict  — new target allocation (e.g. {"3xSPY": 1.0}).
         """
         pass
 

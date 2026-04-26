@@ -25,28 +25,42 @@ from src.tournament.portfolio import Portfolio
 from src.helpers.data_provider import load_spy_data
 
 
-def _execute_simulation(strategy_type, prices, dates):
+def _execute_simulation(strategy_type, price_data_list, dates):
     """
     Standalone simulation function that can be picked for parallel execution.
     """
     strategy = strategy_type()
     strategy.reset()
     portfolio = Portfolio()
+    pending_holdings = None
 
-    for i in range(len(prices)):
+    for i in range(len(price_data_list)):
         date_str = str(dates[i].date())
-        spy_price = float(prices[i])
+        row = price_data_list[i]
+        
+        # Realistic Price: Avg of Open and Close
+        spy_price = (float(row['open']) + float(row['close'])) / 2
+        prev_row = price_data_list[i-1] if i > 0 else None
 
+        # 1. Apply today's return using CURRENT holdings
         if i > 0:
-            daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
+            prev_price = (float(prev_row['open']) + float(prev_row['close'])) / 2
+            daily_ret = (spy_price - prev_price) / prev_price
             portfolio.apply_daily_return(date_str, daily_ret)
 
-        result = strategy.on_data(date_str, spy_price)
+        # 2. Execute yesterday's signal at today's execution price
+        if pending_holdings is not None:
+            portfolio.rebalance(date_str, pending_holdings)
+            pending_holdings = None
+
+        # 3. Feed TODAY'S full finalized data to strategy to generate TOMORROW'S signal
+        result = strategy.on_data(date_str, row, prev_row)
+
         if result is not None:
-            # Basic weight validation
+            # Simple sum check
             if abs(sum(result.values()) - 1.0) > 0.001:
                 raise ValueError(f"[{strategy.NAME}] Invalid weights: {result}")
-            portfolio.rebalance(date_str, result)
+            pending_holdings = result
 
     return {
         "strategy": strategy.NAME,
@@ -124,9 +138,9 @@ class TournamentRunner:
 
     def run_strategy(self, strategy: BaseStrategy) -> dict:
         """Run a single strategy through the full dataset."""
-        prices = self.data["spy_close"].values
+        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
         dates = self.data.index
-        return _execute_simulation(type(strategy), prices, dates)
+        return _execute_simulation(type(strategy), price_data_list, dates)
 
     def run_all(self) -> dict:
         """Run every discovered strategy and collect results (Parallel)."""
@@ -136,13 +150,13 @@ class TournamentRunner:
         strategies = self.discover_strategies()
         print(f"\nDiscovered {len(strategies)} strategies. Running in parallel...")
 
-        prices = self.data["spy_close"].values
+        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
         dates = self.data.index
 
         results = {}
         with concurrent.futures.ProcessPoolExecutor() as executor:
             future_to_strat = {
-                executor.submit(_execute_simulation, type(s), prices, dates): s.NAME
+                executor.submit(_execute_simulation, type(s), price_data_list, dates): s.NAME
                 for s in strategies
             }
             for future in concurrent.futures.as_completed(future_to_strat):
@@ -179,9 +193,9 @@ class TournamentRunner:
     def run_strategy_on_slice(self, strategy: BaseStrategy,
                               start_idx: int, end_idx: int) -> dict:
         """Run a strategy on a sub-range of the loaded data."""
-        prices = self.data["spy_close"].values[start_idx:end_idx]
+        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].iloc[start_idx:end_idx].to_dict('records')
         dates = self.data.index[start_idx:end_idx]
-        return _execute_simulation(type(strategy), prices, dates)
+        return _execute_simulation(type(strategy), price_data_list, dates)
 
     def run_resilience(self, samples_per_bucket: int = 10):
         """
@@ -253,10 +267,10 @@ class TournamentRunner:
             # Prepare all tasks for this bucket: (strategy_type, prices_slice, dates_slice)
             tasks = []
             for start_idx, end_idx in periods:
-                prices_slice = self.data["spy_close"].values[start_idx:end_idx]
+                price_data_slice = self.data[['open', 'high', 'low', 'close', 'volume']].iloc[start_idx:end_idx].to_dict('records')
                 dates_slice = self.data.index[start_idx:end_idx]
                 for s in strategies:
-                    tasks.append((type(s), prices_slice, dates_slice))
+                    tasks.append((type(s), price_data_slice, dates_slice))
 
             # Run in parallel
             with concurrent.futures.ProcessPoolExecutor() as executor:

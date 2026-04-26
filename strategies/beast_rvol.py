@@ -54,7 +54,8 @@ class BeastRealVol(BaseStrategy):
         self.base_lockout = 0
         self.last_holdings = None
 
-    def on_data(self, date, spy_price):
+    def on_data(self, date, price_data, prev_data):
+        spy_price = price_data['close']
         self.prices.append(spy_price)
 
         # ---- SMA trend filter ----

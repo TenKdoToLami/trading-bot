@@ -18,7 +18,8 @@ class _RebalancedEqualWeight(BaseStrategy):
         self.days_since_rebalance = 0
         self.first_day = True
 
-    def on_data(self, date, spy_price):
+    def on_data(self, date, price_data, prev_data):
+        spy_price = price_data['close']
         if self.first_day or self.days_since_rebalance >= self.REBALANCE_PERIOD:
             self.first_day = False
             self.days_since_rebalance = 1

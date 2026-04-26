@@ -44,7 +44,15 @@ def load_spy_data(start_date: str = "1993-01-01", force_refresh: bool = False) -
     if isinstance(spy_df.columns, pd.MultiIndex):
         spy_df.columns = spy_df.columns.get_level_values(0)
 
-    df = pd.DataFrame({"spy_close": spy_df["Close"]})
+    df = pd.DataFrame({
+        "open": spy_df["Open"],
+        "high": spy_df["High"],
+        "low": spy_df["Low"],
+        "close": spy_df["Close"],
+        "volume": spy_df["Volume"]
+    })
+    # Keep alias for backward compatibility if needed, but we'll update runner
+    df["spy_close"] = df["close"]
     df.index.name = "date"
 
     # Cache locally

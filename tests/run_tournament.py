@@ -74,7 +74,30 @@ def main():
         # Resilience mode — random period stress test
         runner.run_resilience(samples_per_bucket=args.samples)
     elif args.strategy:
-        runner.run_single(args.strategy)
+        # Run specific strategies (comma-separated support)
+        target_names = [s.strip() for s in args.strategy.split(",")]
+        
+        # If multiple strategies, we use run_all logic but filtered
+        if len(target_names) > 1:
+            all_strats = runner.discover_strategies()
+            to_run = []
+            for t in target_names:
+                match = next((s for s in all_strats if s.NAME.lower() == t.lower()), None)
+                if match: to_run.append(match)
+            
+            # Run the filtered set
+            runner.data = runner.data if runner.data is not None else runner.load_data()
+            results = {}
+            for s in to_run:
+                print(f"  Running: {s.NAME}...", end="", flush=True)
+                res = runner.run_strategy(s)
+                results[s.NAME] = res
+                print(f" CAGR: {res['metrics']['cagr']*100:.2f}%")
+            runner.results = results
+        else:
+            # Single strategy (existing logic)
+            runner.run_single(target_names[0])
+            
         runner.print_results()
         if not args.no_chart:
             runner.generate_chart()
