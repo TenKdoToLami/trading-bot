@@ -8,22 +8,107 @@ from strategies._genome_strategy import GenomeStrategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
+
+# ──────────────────────────────────────────────────────
+# Worker-Local Data (loaded once per process, not serialized)
+# ──────────────────────────────────────────────────────
+
+_worker_price_data = None
+_worker_dates = None
+
+
+def _init_worker(cache_file):
+    """Called once per worker process to load data into process-local memory."""
+    global _worker_price_data, _worker_dates
+    import pandas as pd
+    df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+    _worker_price_data = df[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+    _worker_dates = df.index
+
+
+def _evaluate_genome_worker(genome):
+    """Runs a full simulation using worker-local data. Only the genome is serialized."""
+    res = _execute_simulation(
+        strategy_type=GenomeStrategy,
+        price_data_list=_worker_price_data,
+        dates=_worker_dates,
+        strategy_kwargs={'genome': genome}
+    )
+    
+    metrics = res['metrics']
+    cagr = metrics['cagr'] * 100
+    max_dd = abs(metrics['max_dd']) * 100
+    
+    # Fitness: Pure returns, penalize total blowouts
+    if max_dd >= 98.0:
+        fitness = -9999
+    else:
+        fitness = cagr
+
+    return fitness, genome, metrics
+
+
 class EvolutionEngine:
     """
     Genetic Algorithm Engine to breed the optimal GenomeStrategy.
+    
+    Optimized for speed:
+    - Worker processes load data once via initializer (no cross-process serialization of price data).
+    - Persistent process pool across all generations (no respawning overhead).
+    - Only the tiny genome dict (~1KB) is sent to each worker.
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         
-        # Load data once for all evaluations
+        # Load data once to ensure cache exists
         print("Loading data for evolution...")
         self.data = load_spy_data("1993-01-01", force_refresh=False)
-        self.price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
-        self.dates = self.data.index
         
-        self.population = [self._random_genome() for _ in range(self.population_size)]
+        # Resolve the cache file path for workers
+        from src.helpers.data_provider import CACHE_FILE
+        self.cache_file = CACHE_FILE
+        
+        # Build initial population (with optional vault seeding)
+        seeds = []
+        if seed_vault and os.path.isdir(seed_vault):
+            seeds = self._load_vault_seeds(seed_vault)
+        
+        # Cap seeds at 20% of population to preserve diversity
+        max_seeds = int(self.population_size * 0.2)
+        seeds = seeds[:max_seeds]
+        
+        if seeds:
+            print(f"Seeded {len(seeds)} genomes from vault (max {max_seeds})")
+        
+        # Fill remaining slots with random genomes
+        random_count = self.population_size - len(seeds)
+        self.population = seeds + [self._random_genome() for _ in range(random_count)]
+
+    def _load_vault_seeds(self, vault_dir):
+        """Load genomes from vault, sorted by CAGR (best first)."""
+        import re
+        seeds = []
+        for filename in os.listdir(vault_dir):
+            if not filename.endswith('.json'):
+                continue
+            filepath = os.path.join(vault_dir, filename)
+            try:
+                with open(filepath, 'r') as f:
+                    genome = json.load(f)
+                # Validate minimum structure
+                if 'panic_weights' in genome and 'base_weights' in genome:
+                    # Extract CAGR from filename for sorting
+                    match = re.search(r'cagr_([\d.]+)', filename)
+                    cagr = float(match.group(1)) if match else 0.0
+                    seeds.append((cagr, genome))
+            except Exception:
+                continue
+        
+        # Sort by CAGR descending, return just the genomes
+        seeds.sort(key=lambda x: x[0], reverse=True)
+        return [g for _, g in seeds]
 
     def _random_genome(self):
         def _rand_weights():
@@ -64,29 +149,6 @@ class EvolutionEngine:
             },
             'lock_days': random.uniform(0, 20)
         }
-
-    def _evaluate_genome(self, genome):
-        """Runs a full simulation for a single genome."""
-        res = _execute_simulation(
-            strategy_type=GenomeStrategy,
-            price_data_list=self.price_data_list,
-            dates=self.dates,
-            strategy_kwargs={'genome': genome}
-        )
-        
-        metrics = res['metrics']
-        cagr = metrics['cagr'] * 100
-        max_dd = abs(metrics['max_dd']) * 100
-        trades = metrics.get('num_rebalances', 0)
-        
-        # Fitness Function: Pure Returns
-        # We penalize absolute blowouts (-100% DD) to ensure survivability
-        if max_dd >= 98.0:
-            fitness = -9999
-        else:
-            fitness = cagr
-
-        return fitness, genome, res
 
     def _crossover(self, p1, p2):
         """Uniform crossover."""
@@ -180,59 +242,63 @@ class EvolutionEngine:
 
         print(f"Starting evolution: {self.generations} generations, pop size {self.population_size}")
         
-        for gen in range(self.generations):
-            start_time = time.time()
+        # Create a PERSISTENT process pool with worker-local data
+        with concurrent.futures.ProcessPoolExecutor(
+            initializer=_init_worker,
+            initargs=(self.cache_file,)
+        ) as executor:
             
-            # Evaluate population in parallel
-            scored_population = []
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                futures = [executor.submit(self._evaluate_genome, g) for g in self.population]
+            for gen in range(self.generations):
+                start_time = time.time()
+                
+                # Evaluate population in parallel (only genome is serialized, not price data)
+                scored_population = []
+                futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
                 for future in concurrent.futures.as_completed(futures):
                     scored_population.append(future.result())
-            
-            # Sort by fitness descending
-            scored_population.sort(key=lambda x: x[0], reverse=True)
-            
-            best_fitness, best_genome, best_res = scored_population[0]
-            if best_fitness > best_overall_fitness:
-                best_overall_fitness = best_fitness
-                best_overall_genome = best_genome
-                best_overall_metrics = best_res['metrics']
                 
-                # Save to vault when a new record is found
-                cagr_pct = best_overall_metrics['cagr'] * 100
-                dd_pct = best_overall_metrics['max_dd'] * 100
-                vault_dir = "vault"
-                if not os.path.exists(vault_dir):
-                    os.makedirs(vault_dir)
-                filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
-                with open(filename, "w") as f:
-                    json.dump(best_genome, f, indent=2)
+                # Sort by fitness descending
+                scored_population.sort(key=lambda x: x[0], reverse=True)
+                
+                best_fitness, best_genome, best_metrics = scored_population[0]
+                if best_fitness > best_overall_fitness:
+                    best_overall_fitness = best_fitness
+                    best_overall_genome = best_genome
+                    best_overall_metrics = best_metrics
+                    
+                    # Save to vault when a new record is found
+                    cagr_pct = best_overall_metrics['cagr'] * 100
+                    dd_pct = best_overall_metrics['max_dd'] * 100
+                    vault_dir = "vault"
+                    if not os.path.exists(vault_dir):
+                        os.makedirs(vault_dir)
+                    filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
+                    with open(filename, "w") as f:
+                        json.dump(best_genome, f, indent=2)
 
-            cagr = best_res['metrics']['cagr'] * 100
-            dd = best_res['metrics']['max_dd'] * 100
-            trades = best_res['metrics']['num_rebalances']
-
-            
-            elapsed = time.time() - start_time
-            print(f"Gen {gen+1:02d} | Best Fitness: {best_fitness:6.2f} | CAGR: {cagr:6.2f}% | MaxDD: {dd:6.2f}% | Trades: {trades} | Time: {elapsed:.1f}s")
-            
-            # Selection: keep top 20%
-            elites = [x[1] for x in scored_population[: max(2, int(self.population_size * 0.2))]]
-            
-            # Breed new generation
-            new_population = list(elites) # Carry over elites (Elitism)
-            
-            while len(new_population) < self.population_size:
-                # Tournament selection for parents
-                p1 = random.choice(elites)
-                p2 = random.choice(elites)
+                cagr = best_metrics['cagr'] * 100
+                dd = best_metrics['max_dd'] * 100
+                trades = best_metrics['num_rebalances']
                 
-                child = self._crossover(p1, p2)
-                child = self._mutate(child)
-                new_population.append(child)
+                elapsed = time.time() - start_time
+                print(f"Gen {gen+1:02d} | Best Fitness: {best_fitness:6.2f} | CAGR: {cagr:6.2f}% | MaxDD: {dd:6.2f}% | Trades: {trades} | Time: {elapsed:.1f}s")
                 
-            self.population = new_population
+                # Selection: keep top 20%
+                elites = [x[1] for x in scored_population[: max(2, int(self.population_size * 0.2))]]
+                
+                # Breed new generation
+                new_population = list(elites) # Carry over elites (Elitism)
+                
+                while len(new_population) < self.population_size:
+                    # Tournament selection for parents
+                    p1 = random.choice(elites)
+                    p2 = random.choice(elites)
+                    
+                    child = self._crossover(p1, p2)
+                    child = self._mutate(child)
+                    new_population.append(child)
+                    
+                self.population = new_population
 
         print("\nEvolution Complete.")
         print(f"Best Overall CAGR: {best_overall_metrics['cagr']*100:.2f}%")

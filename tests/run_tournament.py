@@ -72,7 +72,16 @@ def main():
 
     if args.resilience:
         # Resilience mode — random period stress test
-        runner.run_resilience(samples_per_bucket=args.samples)
+        target_strats = None
+        if args.strategy:
+            target_names = [s.strip() for s in args.strategy.split(",")]
+            all_strats = runner.discover_strategies()
+            target_strats = []
+            for t in target_names:
+                match = next((s for s in all_strats if s.NAME.lower() == t.lower()), None)
+                if match: target_strats.append(match)
+        
+        runner.run_resilience(samples_per_bucket=args.samples, target_strategies=target_strats)
     elif args.strategy:
         # Run specific strategies (comma-separated support)
         target_names = [s.strip() for s in args.strategy.split(",")]

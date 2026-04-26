@@ -46,19 +46,75 @@ python tests/run_tournament.py --resilience
 ```
 
 ### 3. Evolutionary Strategy Breeding
-The framework now includes a Genetic Algorithm engine to autonomously discover optimal indicator combinations.
+The framework includes a Genetic Algorithm engine to autonomously discover optimal indicator combinations.
 ```bash
-# Run the evolution engine
-python tests/run_evolution.py --pop 100 --gen 50
+# Cold start: pure random population
+python tests/run_evolution.py --pop 200 --gen 100
 
-# Parameters
---pop   Population size (default 30)
---gen   Number of generations (default 10)
---mut   Mutation rate (default 0.15)
+# Warm seeded: inject top vault performers into the initial population
+python tests/run_evolution.py --pop 500 --gen 100 --seed vault
+
+# Fine-tuning with higher mutation (recommended when seeding)
+python tests/run_evolution.py --pop 500 --gen 100 --seed vault --mut 0.25
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 30 | Population size |
+| `--gen` | 10 | Number of generations |
+| `--mut` | 0.15 | Mutation rate (0.25 recommended with `--seed`) |
+| `--seed` | None | Path to vault directory to seed with top performers |
+
 Record-breaking genomes are automatically saved to the `vault/` directory.
 
-### 4. Output
+**Seeding Strategy:**
+- Seeds are capped at **20% of population** to preserve genetic diversity.
+- Remaining 80% are fresh random genomes for exploration.
+- The best vault genomes (sorted by CAGR) are injected first.
+
+### 4. Vault Sweep — Cross-Regime Stress Test
+Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
+```bash
+# Default: 10 random periods per 5-year bucket
+python tests/vault_sweep.py
+
+# More thorough sweep
+python tests/vault_sweep.py --samples 15
+
+# Show top 5 instead of top 3
+python tests/vault_sweep.py --top 5
+```
+
+### 5. Genome X-Ray — Deep Behavioral Audit
+Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior.
+```bash
+python tests/genome_xray.py vault/genome_cagr_41.15_dd_-73.82.json
+python tests/genome_xray.py best_genome.json
+```
+Reports include:
+- **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths
+- **Leverage Distribution**: Visual histogram of daily leverage levels
+- **Switching Behavior**: Total rebalances, switches per year
+- **Transition Matrix**: Most frequent From→To allocation changes
+- **Genome DNA**: Active indicators, weights, and thresholds
+
+### 6. Interactive Command Center
+A browser-based dashboard for visual backtesting with time-travel capabilities.
+```bash
+# Generate the latest simulation data
+python tests/generate_viz_data.py
+
+# Open in browser
+start visualizer/index.html
+```
+Features:
+- **4-Chart Grid**: Macro (log), Relative, Zoomed Equity, and Price vs SMA
+- **Multi-Benchmark**: Bot vs 1x VOO, 2x SSO, 3x UPRO
+- **Time Travel**: Pick any start date to re-index all curves to 1.00x
+- **Live Simulation**: Press PLAY to watch the bot navigate 30 years of history
+- **Risk Telemetry**: Real-time drawdown, VIX, tier tracking, and tactical grid
+
+### 7. Output
 - **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
 - **Equity chart**: Saved to `results/tournament_chart.png`.
 - **Vault**: Optimal DNA matrices saved to `vault/genome_cagr_X_dd_Y.json`.
@@ -118,10 +174,17 @@ src/
   utils/                # Database utilities
 
 tests/
-  run_tournament.py     # CLI entry point
-  run_evolution.py      # AI training entry point
+  run_tournament.py     # CLI: full tournament
+  run_evolution.py      # CLI: genetic algorithm
+  vault_sweep.py        # CLI: cross-regime stress test
+  genome_xray.py        # CLI: deep genome behavioral audit
+  generate_viz_data.py  # CLI: generate visualizer data
 
 vault/                  # Record-breaking genomes (auto-generated)
+visualizer/             # Interactive Command Center dashboard
+  index.html            #   Browser-based UI
+  data.js               #   Generated simulation data (gitignored)
+  config.js             #   Generated strategy config (gitignored)
 config/                 # API keys, strategy DNA
 data/                   # Cached market data (auto-generated)
 results/                # Tournament output (charts)

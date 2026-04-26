@@ -198,9 +198,9 @@ class TournamentRunner:
         dates = self.data.index[start_idx:end_idx]
         return _execute_simulation(type(strategy), price_data_list, dates)
 
-    def run_resilience(self, samples_per_bucket: int = 10):
+    def run_resilience(self, samples_per_bucket: int = 10, target_strategies: list = None):
         """
-        Resilience stress test — run all strategies on random periods
+        Resilience stress test — run selected (or all) strategies on random periods
         across multiple duration buckets.
 
         Buckets (in years): 0-5, 5-10, 10-15, 15-20, 20-25, 25-30.
@@ -215,7 +215,11 @@ class TournamentRunner:
         if self.data is None:
             self.load_data()
 
-        strategies = self.discover_strategies()
+        if target_strategies:
+            strategies = target_strategies
+        else:
+            strategies = self.discover_strategies()
+            
         total_days = len(self.data)
 
         print(f"\n{'#' * 70}")
