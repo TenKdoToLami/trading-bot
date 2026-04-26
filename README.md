@@ -67,12 +67,24 @@ python tests/run_evolution.py --pop 500 --gen 100 --seed vault --mut 0.25
 
 Record-breaking genomes are automatically saved to the `vault/` directory.
 
-**Seeding Strategy:**
-- Seeds are capped at **20% of population** to preserve genetic diversity.
-- Remaining 80% are fresh random genomes for exploration.
 - The best vault genomes (sorted by CAGR) are injected first.
 
-### 4. Vault Sweep — Cross-Regime Stress Test
+### 4. Genome V2 — Multi-Brain Evolution (Experimental)
+V2 introduces "Tier-Specific Brains," where each leverage decision (3x, 2x, 1x) has its own independent weights and thresholds.
+```bash
+# Run the V2 evolution engine
+python tests/run_evolution_v2.py --pop 300 --gen 100 --mut 0.2
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 30 | Population size |
+| `--gen` | 10 | Number of generations |
+| `--mut` | 0.15 | Mutation rate |
+
+V2 results are stored in `vault_v2/` and saved as `best_genome_v2.json`.
+
+### 5. Vault Sweep — Cross-Regime Stress Test
 Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
 ```bash
 # Default: 10 random periods per 5-year bucket

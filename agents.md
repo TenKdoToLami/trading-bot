@@ -19,5 +19,14 @@
 
 ---
 
-## 🧠 4. Cognitive Handoff
+## 📝 4. Documentation
+- **CLI ↔ README Sync**: Whenever a CLI command is **introduced or modified** (new flags, changed defaults, removed parameters), the corresponding entry in `README.md` **must** be updated in the same change. Include:
+    1.  The full command with example usage.
+    2.  A table or list of all current parameters with defaults and descriptions.
+    3.  A brief explanation of what the command does.
+- **No Stale Docs**: If a command is removed, its README entry must also be removed.
+
+---
+
+## 🧠 5. Cognitive Handoff
 - **Source of Truth**: Refer to this file at the start of every session to ensure compliance with the USER's preferred workflow.
