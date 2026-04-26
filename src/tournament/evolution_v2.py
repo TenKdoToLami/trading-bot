@@ -45,10 +45,10 @@ class EvolutionEngineV2:
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
-        self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']
+        self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', '3x', '2x', '1x']
         
-        print("Loading data for evolution v2...")
+        print("Loading master data (SPY + Macro) for evolution v2...")
         self.data = load_spy_data("1993-01-01", force_refresh=False)
         from src.helpers.data_provider import CACHE_FILE
         self.cache_file = CACHE_FILE

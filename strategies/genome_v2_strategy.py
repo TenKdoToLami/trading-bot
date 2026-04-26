@@ -20,8 +20,8 @@ class GenomeV2Strategy(BaseStrategy):
         # Every tier gets its own set of weights
         def _brain():
             return {
-                'w': {k: 0.0 for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']},
-                'a': {k: True for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']},
+                'w': {k: 0.0 for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']},
+                'a': {k: True for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']},
                 't': 0.0
             }
         
@@ -42,6 +42,7 @@ class GenomeV2Strategy(BaseStrategy):
         self.indicator_state = {}
         self.last_holdings = None
         self.lock_counter = 0
+        self.prev_macro = {'vix': 15.0, 'yc': 0.0}
 
     def on_data(self, date, price_data, prev_data):
         spy_price = price_data['close']
@@ -67,6 +68,11 @@ class GenomeV2Strategy(BaseStrategy):
         self.prev_atr = val_atr
 
         # 2. Normalize
+        # We use today's finalized macro data to generate a signal for tomorrow (T+1 execution).
+        # This is 100% lookahead-free.
+        macro_vix = float(price_data.get('vix', 15.0))
+        macro_yc = float(price_data.get('yield_curve', 0.0))
+        
         inputs = {
             'sma': ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0,
             'ema': ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0,
@@ -76,7 +82,9 @@ class GenomeV2Strategy(BaseStrategy):
             'trix': val_trix or 0.0,
             'slope': (val_slope or 0.0) / spy_price * 1000,
             'vol': (val_vol or 0.15) * 5,
-            'atr': ((val_atr or 0.0) / spy_price) * 50
+            'atr': ((val_atr or 0.0) / spy_price) * 50,
+            'vix': (macro_vix - 20) / 10.0,
+            'yc': macro_yc
         }
 
         # 3. Decision Pipeline (Each tier has its own weighted score and threshold)
