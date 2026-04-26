@@ -1,0 +1,270 @@
+"""
+Tournament runner — the central control unit.
+
+Loads SPY data, discovers strategy plugins, feeds each strategy
+one day at a time, and collects results for comparison.
+
+Usage:
+    runner = TournamentRunner()
+    runner.load_data()
+    results = runner.run_all()
+    runner.print_results()
+    runner.generate_chart()
+"""
+
+import importlib
+import os
+import sys
+
+from strategies.base import BaseStrategy
+from src.tournament.portfolio import Portfolio
+from src.helpers.data_provider import load_spy_data
+
+
+class TournamentRunner:
+    """
+    Control unit that orchestrates strategy simulations.
+
+    For each trading day it:
+      1. Applies yesterday-to-today return using current holdings.
+      2. Feeds today's SPY close to the strategy.
+      3. If the strategy returns new holdings, validates and applies them.
+    """
+
+    def __init__(self, start_date: str = "1993-01-01", end_date: str = None):
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = None
+        self.results = {}
+
+    def load_data(self, force_refresh: bool = False):
+        """Load SPY data (from cache or yfinance)."""
+        self.data = load_spy_data(
+            start_date=self.start_date,
+            force_refresh=force_refresh,
+        )
+        if self.end_date:
+            self.data = self.data[:self.end_date]
+
+    def discover_strategies(self) -> list:
+        """
+        Auto-discover all BaseStrategy subclasses in the strategies/ package.
+
+        Scans every .py file in strategies/ (except base.py and __init__.py),
+        imports it, and collects any class that subclasses BaseStrategy.
+        """
+        strategies_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "strategies"
+        )
+        strategies_dir = os.path.abspath(strategies_dir)
+        strategies = []
+
+        for filename in sorted(os.listdir(strategies_dir)):
+            if filename.startswith("_") or filename == "base.py":
+                continue
+            if not filename.endswith(".py"):
+                continue
+
+            module_name = f"strategies.{filename[:-3]}"
+            try:
+                module = importlib.import_module(module_name)
+            except Exception as e:
+                print(f"  Warning: could not import {module_name}: {e}")
+                continue
+
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, BaseStrategy)
+                    and attr is not BaseStrategy
+                ):
+                    strategies.append(attr())
+
+        return strategies
+
+    # ------------------------------------------------------------------
+    # Simulation
+    # ------------------------------------------------------------------
+
+    def run_strategy(self, strategy: BaseStrategy) -> dict:
+        """
+        Run a single strategy through the full dataset.
+
+        Timeline per day i:
+          1. Apply return from day i-1 → day i on current holdings.
+          2. Feed day i's SPY close to the strategy.
+          3. If strategy rebalances, validate and record new holdings.
+
+        Returns:
+            dict with keys: strategy (name), portfolio (Portfolio obj),
+                            metrics (dict).
+        """
+        strategy.reset()
+        portfolio = Portfolio()
+
+        prices = self.data["spy_close"].values
+        dates = self.data.index
+
+        for i in range(len(prices)):
+            date_str = str(dates[i].date())
+            spy_price = float(prices[i])
+
+            # 1. Apply today's return using yesterday's holdings
+            if i > 0:
+                daily_ret = (prices[i] - prices[i - 1]) / prices[i - 1]
+                portfolio.apply_daily_return(date_str, daily_ret)
+
+            # 2. Feed price to strategy
+            result = strategy.on_data(date_str, spy_price)
+
+            # 3. Validate and apply rebalance
+            if result is not None:
+                self._validate_holdings(result, strategy.NAME, date_str)
+                portfolio.rebalance(date_str, result)
+
+        return {
+            "strategy": strategy.NAME,
+            "portfolio": portfolio,
+            "metrics": portfolio.get_metrics(),
+        }
+
+    def run_all(self) -> dict:
+        """Run every discovered strategy and collect results."""
+        if self.data is None:
+            self.load_data()
+
+        strategies = self.discover_strategies()
+        print(f"\nDiscovered {len(strategies)} strategies:")
+        for s in strategies:
+            print(f"  • {s.NAME}")
+        print()
+
+        results = {}
+        for strategy in strategies:
+            print(f"  Running: {strategy.NAME}...", end="", flush=True)
+            res = self.run_strategy(strategy)
+            results[strategy.NAME] = res
+            cagr = res["metrics"]["cagr"] * 100
+            print(f"  CAGR: {cagr:.2f}%")
+
+        self.results = results
+        return results
+
+    def run_single(self, strategy_name: str) -> dict:
+        """Run a single strategy by name."""
+        if self.data is None:
+            self.load_data()
+
+        strategies = self.discover_strategies()
+        for s in strategies:
+            if s.NAME.lower() == strategy_name.lower():
+                print(f"  Running: {s.NAME}...")
+                result = self.run_strategy(s)
+                self.results = {s.NAME: result}
+                return result
+
+        available = [s.NAME for s in strategies]
+        raise ValueError(
+            f"Strategy '{strategy_name}' not found. Available: {available}"
+        )
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def _validate_holdings(self, holdings: dict, strategy_name: str, date: str):
+        """Ensure returned holdings obey tournament rules."""
+        for asset in holdings:
+            if asset not in BaseStrategy.ALLOWED_ASSETS:
+                raise ValueError(
+                    f"[{strategy_name} @ {date}] Invalid asset: '{asset}'. "
+                    f"Allowed: {BaseStrategy.ALLOWED_ASSETS}"
+                )
+
+        total = sum(holdings.values())
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(
+                f"[{strategy_name} @ {date}] Holdings must sum to 1.0, "
+                f"got {total:.4f}: {holdings}"
+            )
+
+    # ------------------------------------------------------------------
+    # Output
+    # ------------------------------------------------------------------
+
+    def print_results(self):
+        """Print a formatted comparison table sorted by CAGR."""
+        if not self.results:
+            print("No results. Run a tournament first.")
+            return
+
+        # Header
+        print("\n" + "=" * 95)
+        print("  STRATEGY TOURNAMENT RESULTS")
+        print("=" * 95)
+        header = (
+            f"  {'Strategy':<30} | {'CAGR':>8} | {'Sharpe':>8} | "
+            f"{'Max DD':>9} | {'Vol':>8} | {'Trades':>7}"
+        )
+        print(header)
+        print("-" * 95)
+
+        # Rows sorted by CAGR descending
+        sorted_results = sorted(
+            self.results.items(),
+            key=lambda x: x[1]["metrics"]["cagr"],
+            reverse=True,
+        )
+        for name, res in sorted_results:
+            m = res["metrics"]
+            print(
+                f"  {name:<30} | {m['cagr']*100:>7.2f}% | "
+                f"{m['sharpe']:>8.2f} | {m['max_dd']*100:>8.1f}% | "
+                f"{m['volatility']*100:>7.1f}% | {m['num_rebalances']:>7}"
+            )
+
+        print("=" * 95)
+
+    def generate_chart(self, output_path: str = "results/tournament_chart.png"):
+        """Generate an equity curve comparison chart (log scale)."""
+        import matplotlib.pyplot as plt
+
+        if not self.results:
+            print("No results. Run a tournament first.")
+            return
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        plt.style.use("dark_background")
+        plt.rcParams["font.family"] = "sans-serif"
+        plt.rcParams["axes.facecolor"] = "#121212"
+        plt.rcParams["figure.facecolor"] = "#121212"
+
+        fig, ax = plt.subplots(figsize=(16, 9))
+
+        colors = [
+            "#ff4757", "#2ecc71", "#3498db", "#f39c12",
+            "#9b59b6", "#1abc9c", "#e74c3c", "#00cec9",
+        ]
+
+        for i, (name, res) in enumerate(self.results.items()):
+            portfolio = res["portfolio"]
+            dates = [d for d, _ in portfolio.equity_curve]
+            equities = [e for _, e in portfolio.equity_curve]
+
+            color = colors[i % len(colors)]
+            ax.plot(dates, equities, label=name, color=color, linewidth=2)
+
+        ax.set_yscale("log")
+        ax.set_title(
+            "Strategy Tournament — Equity Curves (Log Scale)",
+            fontsize=18, fontweight="bold", pad=20,
+        )
+        ax.set_ylabel("Growth of $1", fontsize=14)
+        ax.grid(True, which="both", ls="-", alpha=0.1)
+        ax.legend(loc="upper left", fontsize=11)
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        print(f"\nChart saved to {output_path}")

@@ -1,12 +1,19 @@
-# Tactical Leverage Paper Trading Bot
+# Tactical Bot — Strategy Tournament & Trading Framework
 
-A standalone execution engine for the BEAST/SHIELD tactical strategies. This bot syncs with Alpaca Paper Trading to automate multi-tier leverage management based on volatility regimes.
+A dual-purpose framework for backtesting leverage strategies against SPY and (eventually) executing the winning strategy via Alpaca paper trading.
 
 ## 🏗 Architecture
-- **Stateless Engine**: Translates market data (SPY/VIX) into target leverage tiers.
-- **Stateful Manager**: Handles SMA delays, sticky tier timers, and the **Base Lockout** logic.
-- **Executioner**: Automates liquidation and rebalancing on Alpaca.
-- **Persistence**: SQLite database tracks historical prices and internal timers.
+
+The framework is split into two halves:
+
+### Tournament (Backtesting)
+- **Strategy Plugins** (`strategies/`): Each strategy is an independent file that receives one day of SPY data at a time and returns holding decisions.
+- **Control Unit** (`src/tournament/`): Feeds data, tracks portfolio state, enforces rules, and computes performance metrics.
+- **Helpers** (`src/helpers/`): Shared indicator functions (SMA, realized volatility) and local-first data loading.
+
+### Live Trading (Future)
+- **Executioner** (`src/execution/`): Alpaca API integration for automated rebalancing.
+- **Persistence** (`src/utils/`): SQLite for state tracking.
 
 ## 🚀 Getting Started
 
@@ -15,111 +22,92 @@ A standalone execution engine for the BEAST/SHIELD tactical strategies. This bot
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
-Copy `.env.example` to `.env` and fill in your Alpaca API credentials.
+### 2. Run the Tournament
 ```bash
-cp .env.example .env
+# Run all strategies (full backtest since 1993)
+python tests/run_tournament.py
+
+# Run a single strategy
+python tests/run_tournament.py --strategy "BEAST (SMA + RealVol)"
+
+# Custom date range
+python tests/run_tournament.py --start 2008-01-01 --end 2012-12-31
+
+# Force refresh cached SPY data
+python tests/run_tournament.py --refresh
+
+# Skip chart generation
+python tests/run_tournament.py --no-chart
 ```
 
-### 3. Strategy DNA
-Place your optimized DNA file in the root directory as `strategy.json`.
+### 3. Output
+- **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
+- **Equity chart**: Saved to `results/tournament_chart.png`.
 
-### 4. Run Daily
-Execute the bot once a day after market close (e.g., 4:15 PM EST).
-```bash
-python main.py
+## 🧩 Writing a New Strategy
+
+Create a new `.py` file in `strategies/` that subclasses `BaseStrategy`:
+
+```python
+from strategies.base import BaseStrategy
+
+class MyStrategy(BaseStrategy):
+    NAME = "My Custom Strategy"
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.prices = []
+        # ... reset any internal state
+
+    def on_data(self, date, spy_price):
+        self.prices.append(spy_price)
+        # ... your logic here ...
+
+        # Return None to hold, or a dict to rebalance:
+        return {"3xSPY": 0.5, "CASH": 0.5}
 ```
 
-python main.py --dry-run
-```
-
-## 🐧 Linux Server Deployment
-To run the bot 24/7 on a Linux server:
-
-1. **Make the manager executable**:
-   ```bash
-   chmod +x manage.sh
-   ```
-
-2. **Management Commands**:
-   ```bash
-   sudo ./manage.sh install    # Setup and start background service
-   sudo ./manage.sh status     # Check if bot is alive
-   sudo ./manage.sh logs       # Stream the live sync logs
-   sudo ./manage.sh uninstall  # Completely remove the service
-   ```
-
-### 6. Quick CLI (Account Status)
-```bash
-python cli.py cash       # Check buying power
-python cli.py bal        # Check total value (Balance)
-python cli.py open       # Check market status
-python cli.py pos        # Check current holdings (Positions)
-python cli.py vix        # Check signal price
-python cli.py liquidate  # Emergency exit (Confirm req)
-```
-
-## 📊 Analytics & Visualization
-
-### 1. Institutional Performance Audit
-Run a high-fidelity 30-year backtest (1993-Present) with 1-day execution lag to see institutional metrics (CAGR, Max Drawdown, Sharpe Ratio).
-```bash
-python tests/performance_audit.py
-```
-
-### 2. Interactive Command Center
-Watch the bot navigate through the last three decades in real-time.
-1. **Generate the latest data**:
-   ```bash
-   python tests/generate_viz_data.py
-   ```
-2. **Open the Dashboard**:
-   Open `visualizer/index.html` in any web browser.
-   - **Time Travel**: Jump to any specific date (e.g., 2008 or 2020).
-   - **Live Telemetry**: Watch drawdowns and VIX tiers shift during playback.
-   - **Multi-Leverage Comparison**: Compare the Bot against 1x, 2x, and 3x benchmarks.
-
-## ⚙️ Logic Components
-- **SMA Climate Control**: Only takes aggressive leverage when SPY is above its SMA.
-- **VIX Gearbox**: Dynamically shifts between 1x, 2x, and 3x leverage based on volatility levels.
-- **Base Lockout**: When entering the most aggressive Bull Tier (0), the bot locks into that state for a set period to avoid whipsaw.
+**Rules:**
+- You only receive `(date, spy_price)` — no other market data.
+- If you need indicators (SMA, volatility), compute them from your accumulated prices using `src.helpers.indicators`.
+- Allowed assets: `SPY`, `2xSPY`, `3xSPY`, `CASH`.
+- Holdings weights must sum to `1.0`.
+- Return `None` if no rebalance is needed.
 
 ## 📂 Project Structure
-- `main.py`: Daily entry point.
-- `config/`: Strategy DNA (`strategy.json`) and `.env.example`.
-- `src/core/`: Decision engine and regime management.
-- `src/execution/`: Alpaca API integration.
-- `src/utils/`: Database and persistence utilities.
-- `tests/`: Long-term theory and resilience tests.
-- `data/`: Local SQLite storage.
+```
+strategies/             # Strategy plugins (one file per strategy)
+  base.py               #   Abstract interface
+  beast_rvol.py         #   SMA + realized volatility tiers
+  buy_and_hold_3x.py    #   Benchmark: always 3x
+  buy_and_hold_spy.py   #   Benchmark: always 1x
+  full_cash_panic.py    #   Binary: 3x bull / 100% cash panic
 
-## 🛠 Manual Execution & SDK
-You can use the `AlpacaClient` as a standalone SDK for manual operations or testing.
+src/
+  helpers/              # Shared utilities
+    indicators.py       #   SMA, realized vol, drawdown
+    data_provider.py    #   Local-first SPY data caching
+  tournament/           # Control unit
+    runner.py           #   Simulation orchestrator
+    portfolio.py        #   Holdings & return tracking
+  execution/            # Alpaca live trading (future)
+  utils/                # Database utilities
 
-### 1. Initialize Client
-```python
-from src.execution.alpaca import AlpacaClient
-alpaca = AlpacaClient()
+tests/
+  run_tournament.py     # CLI entry point
+
+config/                 # API keys, strategy DNA
+data/                   # Cached market data (auto-generated)
+results/                # Tournament output (charts)
 ```
 
-### 2. Market Data & Account
-```python
-equity = alpaca.get_equity()      # Get total account value
-cash = alpaca.get_cash()          # Get available buying power
-open = alpaca.is_market_open()    # Returns True if NYSE is open
-price = alpaca.get_price("VOO")   # Get latest signal price
-pos = alpaca.get_positions()      # Get current managed holdings
-```
+## ⚙️ Included Strategies
 
-### 3. Manual Trading
-```python
-# Buy $1000 worth of SPXL
-alpaca.buy_dollars("SPXL", 1000)
-
-# Emergency Liquidation of a specific ticker
-alpaca.sell_all("SSO")
-
-# Liquidate all managed assets (2x/3x/Cash)
-alpaca.liquidate_managed_assets()
-
-```
+| Strategy | Description |
+|---|---|
+| **BEAST (SMA + RealVol)** | SMA regime detection + realized volatility tiers. 3x in bull, tiered allocation in panic. |
+| **Full Cash Panic** | Same SMA regime, but 100% cash during any panic. |
+| **Buy & Hold 3x** | Pure 3x leveraged buy-and-hold benchmark. |
+| **Buy & Hold SPY** | Plain 1x index benchmark. |
