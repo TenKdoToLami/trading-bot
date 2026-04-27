@@ -44,10 +44,15 @@ def run_xray(genome_path: str):
     # ── Load Data & Run Simulation ──
     from strategies._genome_strategy import GenomeStrategy
     from strategies.genome_v2_strategy import GenomeV2Strategy
+    from strategies.genome_v3_strategy import GenomeV3Strategy
 
     # Simple version detection
+    is_v3 = "panic" in genome and "bull" in genome and "lookbacks" in genome['panic']
     is_v2 = "panic" in genome and "3x" in genome
-    strat_type = GenomeV2Strategy if is_v2 else GenomeStrategy
+    
+    if is_v3: strat_type = GenomeV3Strategy
+    elif is_v2: strat_type = GenomeV2Strategy
+    else: strat_type = GenomeStrategy
 
     print("Loading market data...")
     data = load_spy_data("1993-01-01", force_refresh=False)
@@ -176,10 +181,22 @@ def run_xray(genome_path: str):
 
     # Genome DNA Summary
     print(f"\n  {'GENOME DNA':─<{W-4}}")
-    print(f"  Version:         {'Genome V2 (Multi-Brain)' if is_v2 else 'Genome V1 (Single Score)'}")
+    version_str = "Genome V1 (Single Score)"
+    if is_v3: version_str = "Genome V3 (Precision Binary)"
+    elif is_v2: version_str = "Genome V2 (Multi-Brain)"
+    print(f"  Version:         {version_str}")
     print(f"  Lock Days:       {genome['lock_days']:.1f}")
     
-    if is_v2:
+    if is_v3:
+        for brain in ['panic', 'bull']:
+            b_data = genome[brain]
+            active = [k for k, v in b_data['a'].items() if v]
+            weights = {k: f"{b_data['w'][k]:+.3f}" for k in active}
+            lb = b_data['lookbacks']
+            print(f"  Brain [{brain:<5}]: Threshold {b_data['t']:>7.3f} | Active: {len(active)}")
+            print(f"    Lookbacks: {lb}")
+            print(f"    Weights:   {weights}")
+    elif is_v2:
         for brain in ['panic', '3x', '2x', '1x']:
             data = genome[brain]
             active = [k for k, v in data['a'].items() if v]

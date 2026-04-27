@@ -18,11 +18,21 @@ from strategies.genome_v2_strategy import GenomeV2Strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-def run_audit(genome_path: str, is_v2: bool):
+def run_audit(genome_path: str):
     with open(genome_path, 'r') as f:
         genome = json.load(f)
 
-    strat_type = GenomeV2Strategy if is_v2 else GenomeStrategy
+    from strategies._genome_strategy import GenomeStrategy
+    from strategies.genome_v2_strategy import GenomeV2Strategy
+    from strategies.genome_v3_strategy import GenomeV3Strategy
+
+    # Auto-detect version
+    if "panic" in genome and "bull" in genome and "lookbacks" in genome['panic']:
+        strat_type = GenomeV3Strategy
+    elif "panic" in genome and "3x" in genome:
+        strat_type = GenomeV2Strategy
+    else:
+        strat_type = GenomeStrategy
     
     print(f"Loading market data...")
     data = load_spy_data("1993-01-01")
@@ -104,8 +114,7 @@ def run_audit(genome_path: str, is_v2: bool):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("genome", type=str, help="Path to genome JSON")
-    parser.add_argument("--v2", action="store_true", help="Use Genome V2")
     args = parser.parse_args()
 
     genome_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', args.genome))
-    run_audit(genome_path, args.v2)
+    run_audit(genome_path)

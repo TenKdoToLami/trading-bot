@@ -103,47 +103,69 @@ python tests/run_evolution_v2.py --pop 500 --gen 100 --push-mid
 V2 results are also saved as `best_genome_v2.json` in the root directory.
 
 
-### 5. Vault Sweep — Cross-Regime Stress Test
-Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience. This tool automatically detects if a genome is V1 or V2.
+### 5. Genome V3 — Precision Binary Evolution (Experimental)
+V3 focuses entirely on the 3xSPY vs CASH decision, abandoning mid-tier scaling. Instead of using hardcoded indicator timeframes, V3 evolves the **Lookback Periods** for every indicator independently for its two specialized brains (Panic vs Bull).
 
 ```bash
-# Sweep V2 vault (recommended)
-python tests/vault_sweep.py --vault vault_v2
+# Cold start (random population)
+python tests/run_evolution_v3.py --pop 1000 --gen 200
 
-# More thorough sweep with 15 samples per bucket
+# Seeding from previous V3 champions
+python tests/run_evolution_v3.py --pop 1000 --gen 200 --seed vault_v3 --mut 0.3
+```
+
+#### How it Works: Binary Architecture & Dynamic Lookbacks
+- **Dual Brains**: `panic` (evaluates first, forces CASH) and `bull` (evaluates second, votes for 3xSPY).
+- **Per-Brain Lookbacks**: The GA mutates the lookback ranges (e.g., SMA 20-300, RSI 5-50) uniquely for each brain, allowing the `panic` brain to be highly reactive while the `bull` brain remains macro-focused.
+- **Pure Alpha Focus**: Fitness is simply `(CAGR * 100) - (MaxDD * 25)`.
+- **Persistence**: Record-breaking genomes are saved to `vault_v3/`.
+
+
+## 🛠️ Diagnostics & Strategy Audit
+These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect if a genome is **V1, V2, or V3**.
+
+### 6. Vault Sweep — Cross-Regime Stress Test
+Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
+
+```bash
+# Sweep V3 vault (recommended)
+python tests/vault_sweep.py --vault vault_v3
+
+# Sweep the V2 vault
 python tests/vault_sweep.py --vault vault_v2 --samples 15
 ```
 
-### 6. Genome X-Ray — Deep Behavioral Audit
-Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior. Supports both V1 and V2 genomes.
+### 7. Genome X-Ray — Deep Behavioral Audit
+Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior, including transition matrices and DNA visualization.
 
 ```bash
-# X-Ray a V2 champion
-python tests/genome_xray.py vault_v2/v2_cagr_46.86_dd_-48.27.json
+# X-Ray a V3 champion
+python tests/genome_xray.py vault_v3/v3_cagr_52.12_dd_-42.15.json
 ```
 Reports include:
 - **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths.
 - **Leverage Distribution**: Visual histogram of daily leverage levels.
 - **Switching Behavior**: Total rebalances, switches per year.
-- **Genome DNA**: Active indicators, weights, and thresholds per brain.
+- **Genome DNA**: Active indicators, weights, and **Lookback Periods** (for V3).
 
-### 7. Performance Audit — Institutional Report
-Produces a bit-perfect terminal table of monthly/yearly returns and core risk metrics for a specific genome.
-
-```bash
-# Audit a V2 genome
-python tests/performance_audit.py vault_v2/v2_cagr_46.86_dd_-48.27.json --v2
-```
-
-### 8. Resilience Showdown — V1 vs V2 Battle
-Runs 100+ random historical periods (1–10 years) and counts how often each champion wins. This is the ultimate test of V2's "specialization" against the established V1 champions.
+### 8. Performance Audit — Institutional Report
+Produces a bit-perfect terminal table of monthly/yearly returns and core risk metrics.
 
 ```bash
-# Compare a V1 champ against a V2 champ
-python tests/sweep_showdown.py vault/genome_cagr_43.79_dd_-52.86.json vault_v2/v2_cagr_46.86_dd_-48.27.json --matches 100
+# Audit a genome (auto-detects version)
+python tests/performance_audit.py vault_v3/v3_cagr_52.12_dd_-42.15.json
 ```
 
-### 9. Interactive Command Center
+### 9. Resilience Showdown — The Champion Battle
+Runs 100+ random historical periods (1–10 years) and counts how often each champion wins.
+
+```bash
+# Compare a V2 champ against a V3 champ
+python tests/sweep_showdown.py vault_v2/v2_best.json vault_v3/v3_best.json --matches 100
+```
+
+
+### 10. Interactive Command Center
 A browser-based dashboard for visual backtesting with time-travel capabilities.
 ```bash
 # Generate the latest simulation data
@@ -162,7 +184,7 @@ Features:
 - **Live Simulation**: Press PLAY to watch the bot navigate 30 years of history
 - **Risk Telemetry**: Real-time drawdown, VIX, tier tracking, and tactical grid
 
-### 7. Output
+### 11. Output
 - **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
 - **Equity chart**: Saved to `results/tournament_chart.png`.
 - **Vault**: Optimal DNA matrices saved to `vault/genome_cagr_X_dd_Y.json`.
@@ -209,6 +231,8 @@ strategies/             # Strategy plugins (one file per strategy)
   buy_and_hold_3x.py    #   Benchmark: always 3x
   buy_and_hold_spy.py   #   Benchmark: always 1x
   full_cash_panic.py    #   Binary: 3x bull / 100% cash panic
+  genome_v2_strategy.py #   AI: Multi-Brain (3x/2x/1x/Cash)
+  genome_v3_strategy.py #   AI: Precision Binary with Genetic Lookbacks
 
 src/
   helpers/              # Shared utilities
@@ -223,12 +247,18 @@ src/
 
 tests/
   run_tournament.py     # CLI: full tournament
-  run_evolution.py      # CLI: genetic algorithm
+  run_evolution.py      # CLI: genetic algorithm V1
+  run_evolution_v2.py   # CLI: genetic algorithm V2
+  run_evolution_v3.py   # CLI: genetic algorithm V3
   vault_sweep.py        # CLI: cross-regime stress test
+  sweep_showdown.py     # CLI: V1 vs V2 resilience showdown
+  performance_audit.py  # CLI: institutional performance report
   genome_xray.py        # CLI: deep genome behavioral audit
   generate_viz_data.py  # CLI: generate visualizer data
 
-vault/                  # Record-breaking genomes (auto-generated)
+vault/                  # V1 Genomes
+vault_v2/               # V2 Genomes
+vault_v3/               # V3 Genomes
 visualizer/             # Interactive Command Center dashboard
   index.html            #   Browser-based UI
   data.js               #   Generated simulation data (gitignored)

@@ -36,9 +36,12 @@ from src.helpers.data_provider import load_spy_data
 
 V1_KEYS = {'panic_weights', 'base_weights', 'base_thresholds', 'panic_threshold', 'lock_days'}
 V2_BRAINS = {'panic', '3x', '2x', '1x'}
+V3_BRAINS = {'panic', 'bull'}
 
 def get_genome_version(genome: dict) -> int:
-    """Detect if genome is V1 or V2."""
+    """Detect if genome is V1, V2, or V3."""
+    if V3_BRAINS.issubset(genome.keys()) and all('lookbacks' in genome[b] for b in V3_BRAINS):
+        return 3
     if V2_BRAINS.issubset(genome.keys()):
         return 2
     if V1_KEYS.issubset(genome.keys()):
@@ -48,6 +51,8 @@ def get_genome_version(genome: dict) -> int:
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has the correct genome structure."""
     ver = get_genome_version(genome)
+    if ver == 3:
+        return all('w' in genome[b] and 't' in genome[b] and 'lookbacks' in genome[b] for b in V3_BRAINS)
     if ver == 2:
         return all('w' in genome[b] and 't' in genome[b] for b in V2_BRAINS)
     if ver == 1:
@@ -81,9 +86,12 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     """Run a single genome on a data slice and return metrics."""
     from strategies._genome_strategy import GenomeStrategy
     from strategies.genome_v2_strategy import GenomeV2Strategy
+    from strategies.genome_v3_strategy import GenomeV3Strategy
     
     ver = get_genome_version(genome)
-    strat_type = GenomeV2Strategy if ver == 2 else GenomeStrategy
+    if ver == 3: strat_type = GenomeV3Strategy
+    elif ver == 2: strat_type = GenomeV2Strategy
+    else: strat_type = GenomeStrategy
     
     res = _execute_simulation(
         strategy_type=strat_type,
