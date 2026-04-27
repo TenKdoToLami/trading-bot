@@ -38,10 +38,11 @@ def _evaluate_genome_worker(genome):
     cagr = metrics['cagr']
     max_dd = abs(metrics['max_dd'])
     
-    # ── Maximum Alpha Focus ──
-    fitness = (cagr * 100) - (max_dd * 10)
+    # ── Maximum Alpha Focus (Balanced Risk Penalty) ──
+    # Penalty of 25.0 means a 50% DD costs 12.5 points.
+    fitness = (cagr * 100) - (max_dd * 25)
     
-    # ── Mid-Tier Residency Bonus ──
+    # ── Balanced Mid-Tier Residency Bonus ──
     if _worker_push_mid:
         # res['portfolio'].holdings_log contains [(date, {asset: weight}), ...]
         # We want to reward days where asset is 'SPY' or '2xSPY'
@@ -49,8 +50,8 @@ def _evaluate_genome_worker(genome):
         mid_tier_days = sum(1 for h in holdings if 'SPY' in h or '2xSPY' in h)
         total_days = len(holdings)
         residency_pct = mid_tier_days / total_days
-        # Add up to 5 points of fitness for high mid-tier residency
-        fitness += (residency_pct * 5.0)
+        # Add up to 15 points of fitness for high mid-tier residency
+        fitness += (residency_pct * 15.0)
 
     # Absolute floor: avoid total liquidation (-95%)
     if metrics['max_dd'] < -0.95: fitness = -9999

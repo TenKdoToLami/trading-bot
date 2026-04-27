@@ -70,55 +70,91 @@ Record-breaking genomes are automatically saved to the `vault/` directory.
 - The best vault genomes (sorted by CAGR) are injected first.
 
 ### 4. Genome V2 — Multi-Brain Evolution (Experimental)
-V2 introduces "Tier-Specific Brains," where each leverage decision (3x, 2x, 1x) has its own independent weights and thresholds.
+V2 introduces "Tier-Specific Brains." Unlike V1, which uses a single weight matrix for all bull decisions, V2 evolves independent weights and thresholds for each target leverage tier (3x, 2x, 1x) and a dedicated "Panic" brain.
+
 ```bash
-# Run the V2 evolution engine
-python tests/run_evolution_v2.py --pop 300 --gen 100 --mut 0.2
+# Cold start (random population)
+python tests/run_evolution_v2.py --pop 500 --gen 100
+
+# Seeding from previous champions (highly recommended)
+python tests/run_evolution_v2.py --pop 1000 --gen 200 --seed vault_v2 --mut 0.3
+
+# High-residency fine-tuning (reward staying in 1x/2x instead of binary 3x/Cash)
+python tests/run_evolution_v2.py --pop 500 --gen 100 --push-mid
 ```
 
+#### CLI Parameters
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--pop` | 30 | Population size |
-| `--gen` | 10 | Number of generations |
-| `--mut` | 0.15 | Mutation rate |
+| `--pop` | 50 | Population size. Higher = more diversity, slower generations. |
+| `--gen` | 20 | Number of generations to evolve. |
+| `--mut` | 0.15 | Mutation rate. Use `0.25 - 0.40` when seeding from a vault. |
+| `--seed` | None | Path to a directory (e.g., `vault_v2`) to load initial genomes from. |
+| `--push-mid` | `False` | **Residency Bonus**: Adds fitness points for time spent in 1x and 2x tiers to reduce volatility. |
+| `--no-ablation` | `False` | Disables indicator ablation (forces all indicators to be active). |
 
-V2 results are stored in `vault_v2/` and saved as `best_genome_v2.json`.
+#### How it Works: Multi-Brain Architecture
+- **State Selection**: The strategy evaluates four independent "brains" simultaneously: `panic`, `3x`, `2x`, and `1x`.
+- **Thresholding**: Each brain produces a score based on its unique weights. The highest-tier brain whose score exceeds its evolved threshold determines the day's allocation.
+- **Fitness Scoring**: The engine optimizes for `(CAGR * 100) - (MaxDD * 10)`. 
+- **Safety Valve**: Any genome hitting a drawdown of >95% is immediately discarded (fitness = -9999).
+- **Persistence**: Record-breaking genomes are saved to `vault_v2/` in real-time.
+
+V2 results are also saved as `best_genome_v2.json` in the root directory.
+
 
 ### 5. Vault Sweep — Cross-Regime Stress Test
-Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
+Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience. This tool automatically detects if a genome is V1 or V2.
+
 ```bash
-# Default: 10 random periods per 5-year bucket
-python tests/vault_sweep.py
+# Sweep V2 vault (recommended)
+python tests/vault_sweep.py --vault vault_v2
 
-# More thorough sweep
-python tests/vault_sweep.py --samples 15
-
-# Show top 5 instead of top 3
-python tests/vault_sweep.py --top 5
+# More thorough sweep with 15 samples per bucket
+python tests/vault_sweep.py --vault vault_v2 --samples 15
 ```
 
-### 5. Genome X-Ray — Deep Behavioral Audit
-Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior.
+### 6. Genome X-Ray — Deep Behavioral Audit
+Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior. Supports both V1 and V2 genomes.
+
 ```bash
-python tests/genome_xray.py vault/genome_cagr_41.15_dd_-73.82.json
-python tests/genome_xray.py best_genome.json
+# X-Ray a V2 champion
+python tests/genome_xray.py vault_v2/v2_cagr_46.86_dd_-48.27.json
 ```
 Reports include:
-- **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths
-- **Leverage Distribution**: Visual histogram of daily leverage levels
-- **Switching Behavior**: Total rebalances, switches per year
-- **Transition Matrix**: Most frequent From→To allocation changes
-- **Genome DNA**: Active indicators, weights, and thresholds
+- **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths.
+- **Leverage Distribution**: Visual histogram of daily leverage levels.
+- **Switching Behavior**: Total rebalances, switches per year.
+- **Genome DNA**: Active indicators, weights, and thresholds per brain.
 
-### 6. Interactive Command Center
+### 7. Performance Audit — Institutional Report
+Produces a bit-perfect terminal table of monthly/yearly returns and core risk metrics for a specific genome.
+
+```bash
+# Audit a V2 genome
+python tests/performance_audit.py vault_v2/v2_cagr_46.86_dd_-48.27.json --v2
+```
+
+### 8. Resilience Showdown — V1 vs V2 Battle
+Runs 100+ random historical periods (1–10 years) and counts how often each champion wins. This is the ultimate test of V2's "specialization" against the established V1 champions.
+
+```bash
+# Compare a V1 champ against a V2 champ
+python tests/sweep_showdown.py vault/genome_cagr_43.79_dd_-52.86.json vault_v2/v2_cagr_46.86_dd_-48.27.json --matches 100
+```
+
+### 9. Interactive Command Center
 A browser-based dashboard for visual backtesting with time-travel capabilities.
 ```bash
 # Generate the latest simulation data
-python tests/generate_viz_data.py
+# (Ensure you are using the correct script for your current strategy)
+python tests/run_tournament.py --strategy "Genome V2 (Multi-Brain)"
 
 # Open in browser
 start visualizer/index.html
 ```
+
+
 Features:
 - **4-Chart Grid**: Macro (log), Relative, Zoomed Equity, and Price vs SMA
 - **Multi-Benchmark**: Bot vs 1x VOO, 2x SSO, 3x UPRO

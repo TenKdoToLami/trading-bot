@@ -17,10 +17,7 @@ from strategies.genome_v2_strategy import GenomeV2Strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-def run_showdown(num_matches=100):
-    v1_path = "vault/genome_cagr_43.79_dd_-52.86.json"
-    v2_path = "vault_v2/v2_cagr_49.12_dd_-65.81.json"
-
+def run_showdown(v1_path, v2_path, num_matches=100):
     # 1. Load Genomes
     with open(v1_path, 'r') as f: v1_genome = json.load(f)
     with open(v2_path, 'r') as f: v2_genome = json.load(f)
@@ -36,7 +33,7 @@ def run_showdown(num_matches=100):
     v2_wins = 0
     results = []
 
-    print(f"--- 🥊 CHAMPION SHOWDOWN: 100 MATCHES ---")
+    print(f"\n--- 🥊 CHAMPION SHOWDOWN: {num_matches} MATCHES ---")
     print(f"V1: {os.path.basename(v1_path)}")
     print(f"V2: {os.path.basename(v2_path)}\n")
 
@@ -91,4 +88,23 @@ def run_showdown(num_matches=100):
     print("="*60 + "\n")
 
 if __name__ == "__main__":
-    run_showdown(100)
+    import argparse
+    parser = argparse.ArgumentParser(description="Head-to-Head Resilience Showdown: V1 vs V2")
+    parser.add_argument("v1", type=str, help="Path to V1 genome JSON")
+    parser.add_argument("v2", type=str, help="Path to V2 genome JSON")
+    parser.add_argument("--matches", type=int, default=100, help="Number of matches (default: 100)")
+    args = parser.parse_args()
+
+    # Resolve paths relative to root
+    v1_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', args.v1))
+    v2_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', args.v2))
+    
+    if not os.path.exists(v1_path):
+        print(f"ERROR: V1 file not found: {v1_path}")
+        sys.exit(1)
+    if not os.path.exists(v2_path):
+        print(f"ERROR: V2 file not found: {v2_path}")
+        sys.exit(1)
+
+    run_showdown(v1_path, v2_path, args.matches)
+
