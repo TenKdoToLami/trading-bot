@@ -172,13 +172,20 @@ class TournamentRunner:
         strategies = self.discover_strategies()
         print(f"\nDiscovered {len(strategies)} strategies. Running in parallel...")
 
-        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
+        price_data_list = self.data[cols].to_dict('records')
         dates = self.data.index
 
         results = {}
         with concurrent.futures.ProcessPoolExecutor() as executor:
             future_to_strat = {
-                executor.submit(_execute_simulation, type(s), price_data_list, dates): s.NAME
+                executor.submit(
+                    _execute_simulation, 
+                    type(s), 
+                    price_data_list, 
+                    dates,
+                    {'genome': s.genome} if hasattr(s, 'genome') and s.genome is not None else {}
+                ): s.NAME
                 for s in strategies
             }
             for future in concurrent.futures.as_completed(future_to_strat):
@@ -213,11 +220,13 @@ class TournamentRunner:
         )
 
     def run_strategy_on_slice(self, strategy: BaseStrategy,
-                              start_idx: int, end_idx: int) -> dict:
+                               start_idx: int, end_idx: int) -> dict:
         """Run a strategy on a sub-range of the loaded data."""
-        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].iloc[start_idx:end_idx].to_dict('records')
+        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
+        price_data_list = self.data[cols].iloc[start_idx:end_idx].to_dict('records')
         dates = self.data.index[start_idx:end_idx]
-        return _execute_simulation(type(strategy), price_data_list, dates)
+        kwargs = {'genome': strategy.genome} if hasattr(strategy, 'genome') and strategy.genome is not None else {}
+        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs=kwargs)
 
     def run_resilience(self, samples_per_bucket: int = 10, target_strategies: list = None):
         """

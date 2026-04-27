@@ -133,8 +133,10 @@ python tests/vault_sweep.py --vault champions/v2_multi/vault --samples 15
 Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior, including transition matrices and DNA visualization.
 
 ```bash
-# X-Ray a V3 champion
+# X-Ray a champion (by path or name)
 python tests/genome_xray.py champions/v3_precision/genome.json
+python tests/genome_xray.py "Champion V3 (AI Precision)"
+python tests/genome_xray.py "BEAST (SMA + RealVol)"
 ```
 Reports include:
 - **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths.
@@ -146,8 +148,9 @@ Reports include:
 Produces a bit-perfect terminal table of monthly/yearly returns and core risk metrics.
 
 ```bash
-# Audit a genome (auto-detects version)
+# Audit any strategy (auto-detects version)
 python tests/performance_audit.py champions/v3_precision/genome.json
+python tests/performance_audit.py "Buy & Hold 3x"
 ```
 
 ### 9. Resilience Showdown — The Champion Battle
@@ -162,11 +165,20 @@ python tests/sweep_showdown.py champions/v2_multi/genome.json champions/v3_preci
 The ultimate verification for V3. Generates 100+ "Alternative Timelines" by adding daily jitter, scaling volatility, and shifting macro signals. Calculates the true **Probability of Ruin**.
 
 ```bash
-# Stress test a V3 champion
+# Stress test any strategy
 python tests/monte_carlo_audit.py champions/v3_precision/genome.json --iterations 100
+python tests/monte_carlo_audit.py "Full Cash Panic"
 ```
 
-### 11. Interactive Command Center
+### 11. Synthetic Data Tester — Anti-Overfitting Audit
+Stitches together random blocks of historical data to ensure the strategy isn't "one-trick pony" that relies on a specific historical sequence.
+
+```bash
+# Run synthetic audit on any strategy
+python tests/synthetic_audit.py "Champion V3 (AI Precision)" --iters 50 --chunk 252
+```
+
+### 12. Interactive Command Center
 A browser-based dashboard for visual backtesting with time-travel capabilities.
 ```bash
 # Generate the latest simulation data
