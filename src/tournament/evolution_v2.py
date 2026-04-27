@@ -191,7 +191,7 @@ class EvolutionEngineV2:
                     best_overall_metrics = best_metrics
                     
                     # Save to Vault V2
-                    vault_dir = "vault_v2"
+                    vault_dir = "champions/v2_multi/vault"
                     if not os.path.exists(vault_dir): os.makedirs(vault_dir)
                     c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
                     with open(f"{vault_dir}/v2_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
@@ -207,7 +207,10 @@ class EvolutionEngineV2:
                     new_pop.append(child)
                 self.population = new_pop
 
-        with open("best_genome_v2.json", "w") as f:
+        save_path = "champions/v2_multi/genome.json"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w") as f:
             json.dump(best_overall_genome, f, indent=2)
+        print(f"Saved best genome to {save_path}")
         print(f"\nEvolution V2 Complete. Best CAGR: {best_overall_metrics['cagr']*100:.2f}%")
         return best_overall_genome

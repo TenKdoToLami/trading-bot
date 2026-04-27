@@ -1,0 +1,53 @@
+{
+  "panic_weights": {
+    "sma": -3.145337932383236,
+    "ema": 1.3909626983108767,
+    "rsi": -0.12691503334901408,
+    "macd": 0.3019759232271818,
+    "adx": -1.8259983880265709,
+    "trix": 0.22789640247607057,
+    "slope": -0.678656262195143,
+    "vol": -1.0524743449953782,
+    "atr": 2.147991194312756
+  },
+  "panic_active": {
+    "sma": true,
+    "ema": true,
+    "rsi": false,
+    "macd": false,
+    "adx": true,
+    "trix": true,
+    "slope": true,
+    "vol": false,
+    "atr": false
+  },
+  "base_weights": {
+    "sma": 1.4688731846311962,
+    "ema": -1.4605751096503692,
+    "rsi": 1.0230601055819974,
+    "macd": -0.3889767057574313,
+    "adx": -1.7920606866432898,
+    "trix": -1.4444871810417665,
+    "slope": -0.8747868139578104,
+    "vol": 2.4847486072005225,
+    "atr": 1.7559764279230725
+  },
+  "base_active": {
+    "sma": false,
+    "ema": true,
+    "rsi": true,
+    "macd": false,
+    "adx": true,
+    "trix": false,
+    "slope": false,
+    "vol": true,
+    "atr": true
+  },
+  "base_thresholds": {
+    "tier_1x": -0.8837568154077242,
+    "tier_2x": 0.4174830504484774,
+    "tier_3x": 0.4194239362620429
+  },
+  "panic_threshold": 2.2109984473744086,
+  "lock_days": 17.555276498693043
+}

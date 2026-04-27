@@ -1,19 +1,13 @@
-# Tactical Bot — Strategy Tournament & Trading Framework
+# Tactical Bot — Strategy Tournament Framework
 
-A dual-purpose framework for backtesting leverage strategies against SPY and (eventually) executing the winning strategy via Alpaca paper trading.
+A specialized framework for backtesting and evolving high-leverage tactical strategies against SPY.
 
 ## 🏗 Architecture
 
-The framework is split into two halves:
-
-### Tournament (Backtesting)
+The framework is built around three core engines:
 - **Strategy Plugins** (`strategies/`): Each strategy is an independent file that receives one day of SPY data at a time and returns holding decisions.
 - **Control Unit** (`src/tournament/`): Feeds data, tracks portfolio state, enforces rules, and computes performance metrics.
 - **Helpers** (`src/helpers/`): Shared indicator functions (SMA, realized volatility) and local-first data loading.
-
-### Live Trading (Future)
-- **Executioner** (`src/execution/`): Alpaca API integration for automated rebalancing.
-- **Persistence** (`src/utils/`): SQLite for state tracking.
 
 ## 🚀 Getting Started
 
@@ -65,7 +59,7 @@ python tests/run_evolution.py --pop 500 --gen 100 --seed vault --mut 0.25
 | `--mut` | 0.15 | Mutation rate (0.25 recommended with `--seed`) |
 | `--seed` | None | Path to vault directory to seed with top performers |
 
-Record-breaking genomes are automatically saved to the `vault/` directory.
+Record-breaking genomes are automatically saved to the `champions/v1_classic/vault/` directory.
 
 - The best vault genomes (sorted by CAGR) are injected first.
 
@@ -98,9 +92,9 @@ python tests/run_evolution_v2.py --pop 500 --gen 100 --push-mid
 - **Thresholding**: Each brain produces a score based on its unique weights. The highest-tier brain whose score exceeds its evolved threshold determines the day's allocation.
 - **Fitness Scoring**: The engine optimizes for `(CAGR * 100) - (MaxDD * 10)`. 
 - **Safety Valve**: Any genome hitting a drawdown of >95% is immediately discarded (fitness = -9999).
-- **Persistence**: Record-breaking genomes are saved to `vault_v2/` in real-time.
+- **Persistence**: Record-breaking genomes are saved to `champions/v2_multi/vault/` in real-time.
 
-V2 results are also saved as `best_genome_v2.json` in the root directory.
+V2 results are also saved as `champions/v2_multi/genome.json`.
 
 
 ### 5. Genome V3 — Precision Binary Evolution (Experimental)
@@ -118,7 +112,7 @@ python tests/run_evolution_v3.py --pop 1000 --gen 200 --seed vault_v3 --mut 0.3
 - **Dual Brains**: `panic` (evaluates first, forces CASH) and `bull` (evaluates second, votes for 3xSPY).
 - **Per-Brain Lookbacks**: The GA mutates the lookback ranges (e.g., SMA 20-300, RSI 5-50) uniquely for each brain, allowing the `panic` brain to be highly reactive while the `bull` brain remains macro-focused.
 - **Pure Alpha Focus**: Fitness is simply `(CAGR * 100) - (MaxDD * 10)`.
-- **Persistence**: Record-breaking genomes are saved to `vault_v3/`.
+- **Persistence**: Record-breaking genomes are saved to `champions/v3_precision/vault/`.
 
 
 ## 🛠️ Diagnostics & Strategy Audit
@@ -129,10 +123,10 @@ Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr
 
 ```bash
 # Sweep V3 vault (recommended)
-python tests/vault_sweep.py --vault vault_v3
+python tests/vault_sweep.py --vault champions/v3_precision/vault
 
 # Sweep the V2 vault
-python tests/vault_sweep.py --vault vault_v2 --samples 15
+python tests/vault_sweep.py --vault champions/v2_multi/vault --samples 15
 ```
 
 ### 7. Genome X-Ray — Deep Behavioral Audit
@@ -140,7 +134,7 @@ Runs a single genome over the full inception period and produces a detailed brea
 
 ```bash
 # X-Ray a V3 champion
-python tests/genome_xray.py vault_v3/v3_cagr_52.12_dd_-42.15.json
+python tests/genome_xray.py champions/v3_precision/genome.json
 ```
 Reports include:
 - **Tier Residency**: % of time in 3x/2x/1x/Cash, average & max streak lengths.
@@ -153,7 +147,7 @@ Produces a bit-perfect terminal table of monthly/yearly returns and core risk me
 
 ```bash
 # Audit a genome (auto-detects version)
-python tests/performance_audit.py vault_v3/v3_cagr_52.12_dd_-42.15.json
+python tests/performance_audit.py champions/v3_precision/genome.json
 ```
 
 ### 9. Resilience Showdown — The Champion Battle
@@ -161,7 +155,7 @@ Runs 100+ random historical periods (1–10 years) and counts how often each cha
 
 ```bash
 # Compare a V2 champ against a V3 champ
-python tests/sweep_showdown.py vault_v2/v2_best.json vault_v3/v3_best.json --matches 100
+python tests/sweep_showdown.py champions/v2_multi/genome.json champions/v3_precision/genome.json --matches 100
 ```
 
 ### 10. Monte Carlo Audit — Robustness Stress Test
@@ -169,7 +163,7 @@ The ultimate verification for V3. Generates 100+ "Alternative Timelines" by addi
 
 ```bash
 # Stress test a V3 champion
-python tests/monte_carlo_audit.py vault_v3/v3_cagr_43.51_dd_-69.28.json --iterations 100
+python tests/monte_carlo_audit.py champions/v3_precision/genome.json --iterations 100
 ```
 
 ### 11. Interactive Command Center
@@ -232,7 +226,24 @@ class MyStrategy(BaseStrategy):
 
 ## 📂 Project Structure
 ```
-strategies/             # Strategy plugins (one file per strategy)
+champions/              # Champion strategies and genomes
+  v1_classic/           #   V1 AI
+    genome.json
+    strategy.py
+    vault/              #   V1 Genome Collection
+  v2_multi/             #   V2 Multi-Brain AI
+    genome.json
+    strategy.py
+    vault/              #   V2 Genome Collection
+  v3_precision/         #   V3 Precision AI
+    genome.json
+    strategy.py
+    vault/              #   V3 Genome Collection
+  v1_manual/            #   Manual/Legacy config
+    genome.json
+    strategy.py
+
+strategies/             # Strategy plugins
   base.py               #   Abstract interface
   beast_rvol.py         #   SMA + realized volatility tiers
   buy_and_hold_3x.py    #   Benchmark: always 3x
@@ -249,7 +260,6 @@ src/
     runner.py           #   Simulation orchestrator (T+1 lag model)
     portfolio.py        #   Holdings & return tracking
     evolution.py        #   Genetic Algorithm engine
-  execution/            # Alpaca live trading (future)
   utils/                # Database utilities
 
 tests/

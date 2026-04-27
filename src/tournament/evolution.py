@@ -269,7 +269,7 @@ class EvolutionEngine:
                     # Save to vault when a new record is found
                     cagr_pct = best_overall_metrics['cagr'] * 100
                     dd_pct = best_overall_metrics['max_dd'] * 100
-                    vault_dir = "vault"
+                    vault_dir = "champions/v1_classic/vault"
                     if not os.path.exists(vault_dir):
                         os.makedirs(vault_dir)
                     filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
@@ -305,8 +305,10 @@ class EvolutionEngine:
         print(f"Best Overall MaxDD: {best_overall_metrics['max_dd']*100:.2f}%")
         
         # Save to file
-        with open("best_genome.json", "w") as f:
+        save_path = "champions/v1_classic/genome.json"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w") as f:
             json.dump(best_overall_genome, f, indent=2)
-        print("Saved best genome to best_genome.json")
+        print(f"Saved best genome to {save_path}")
         
         return best_overall_genome

@@ -1,6 +1,6 @@
 """
 Champion V3 — The best Precision Binary strategy found by the V3 Evolution Engine.
-Automatically loads 'best_genome_v3.json'.
+Automatically loads the sibling 'genome.json'.
 """
 
 import json
@@ -14,9 +14,7 @@ class ChampionV3(GenomeV3Strategy):
         # We prefer the passed genome if provided, otherwise load from file
         genome = kwargs.get('genome')
         if not genome:
-            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-            genome_path = os.path.join(project_root, "best_genome_v3.json")
-            
+            genome_path = os.path.join(os.path.dirname(__file__), "genome.json")
             if os.path.exists(genome_path):
                 with open(genome_path, "r") as f:
                     genome = json.load(f)

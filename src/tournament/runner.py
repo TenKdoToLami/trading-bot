@@ -97,43 +97,54 @@ class TournamentRunner:
 
     def discover_strategies(self) -> list:
         """
-        Auto-discover all BaseStrategy subclasses in the strategies/ package.
-
-        Scans every .py file in strategies/ (except base.py and __init__.py),
-        imports it, and collects any class that subclasses BaseStrategy.
+        Auto-discover all BaseStrategy subclasses in strategies/ and champions/.
         """
-        strategies_dir = os.path.join(
-            os.path.dirname(__file__), "..", "..", "strategies"
-        )
-        strategies_dir = os.path.abspath(strategies_dir)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        search_dirs = {
+            "strategies": os.path.join(project_root, "strategies"),
+            "champions": os.path.join(project_root, "champions")
+        }
+        
         strategies = []
 
-        for filename in sorted(os.listdir(strategies_dir)):
-            if filename.startswith("_") or filename == "base.py":
+        for pkg_name, pkg_path in search_dirs.items():
+            if not os.path.exists(pkg_path):
                 continue
-            if not filename.endswith(".py"):
-                continue
-
-            module_name = f"strategies.{filename[:-3]}"
-            try:
-                module = importlib.import_module(module_name)
-            except Exception as e:
-                print(f"  Warning: could not import {module_name}: {e}")
-                continue
-
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, BaseStrategy)
-                    and attr is not BaseStrategy
-                    and not attr.__name__.startswith("_")
-                    and "Base" not in attr.__name__  # Skip base templates
-                ):
-                    # Only instantiate if it's not a generic Genome strategy without a loaded genome
-                    if "Genome" in attr.__name__ and attr.NAME and "AI" not in attr.NAME:
+                
+            for root, _, files in os.walk(pkg_path):
+                for filename in sorted(files):
+                    if filename.startswith("_") or filename == "base.py" or not filename.endswith(".py"):
                         continue
-                    strategies.append(attr())
+                    
+                    # Calculate module name relative to project root
+                    rel_path = os.path.relpath(os.path.join(root, filename), project_root)
+                    module_name = rel_path.replace(os.path.sep, ".")[:-3]
+                    
+                    try:
+                        module = importlib.import_module(module_name)
+                        # Reload to ensure we get fresh state if needed
+                        importlib.reload(module)
+                    except Exception as e:
+                        print(f"  Warning: could not import {module_name}: {e}")
+                        continue
+
+                    for attr_name in dir(module):
+                        attr = getattr(module, attr_name)
+                        if (
+                            isinstance(attr, type)
+                            and issubclass(attr, BaseStrategy)
+                            and attr is not BaseStrategy
+                            and not attr.__name__.startswith("_")
+                            and "Base" not in attr.__name__
+                        ):
+                            # Special handling for generic Genome strategies
+                            if "Genome" in attr.__name__ and attr.NAME and "AI" not in attr.NAME:
+                                continue
+                            
+                            try:
+                                strategies.append(attr())
+                            except Exception as e:
+                                print(f"  Warning: could not instantiate {attr_name} from {module_name}: {e}")
 
         return strategies
 
