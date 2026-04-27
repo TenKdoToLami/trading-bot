@@ -147,7 +147,11 @@ class TournamentRunner:
         cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
         price_data_list = self.data[cols].to_dict('records')
         dates = self.data.index
-        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs={'genome': getattr(strategy, 'genome', None)})
+        kwargs = {}
+        if hasattr(strategy, 'genome') and getattr(strategy, 'genome', None) is not None:
+            kwargs['genome'] = strategy.genome
+            
+        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs=kwargs)
 
     def run_all(self) -> dict:
         """Run every discovered strategy and collect results (Parallel)."""
@@ -458,13 +462,20 @@ class TournamentRunner:
             "#9b59b6", "#1abc9c", "#e74c3c", "#00cec9",
         ]
 
-        for i, (name, res) in enumerate(self.results.items()):
+        # Sort results by CAGR descending for an ordered legend
+        sorted_results = sorted(
+            self.results.items(),
+            key=lambda x: x[1]["metrics"]["cagr"],
+            reverse=True,
+        )
+
+        for i, (name, res) in enumerate(sorted_results):
             portfolio = res["portfolio"]
             dates = [d for d, _ in portfolio.equity_curve]
             equities = [e for _, e in portfolio.equity_curve]
 
             color = colors[i % len(colors)]
-            ax.plot(dates, equities, label=name, color=color, linewidth=2)
+            ax.plot(dates, equities, label=f"{name} ({res['metrics']['cagr']*100:.1f}%)", color=color, linewidth=2)
 
         ax.set_yscale("log")
         ax.set_title(

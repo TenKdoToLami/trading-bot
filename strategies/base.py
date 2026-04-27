@@ -25,21 +25,45 @@ class BaseStrategy(ABC):
 
     @abstractmethod
     def on_data(self, date: str, price_data: dict, prev_data: Optional[dict]) -> Optional[Dict[str, float]]:
-        """
-        Called once per trading day with today's price data and yesterday's finalized data.
-
-        Args:
-            date:       ISO date string "YYYY-MM-DD".
-            price_data: Today's OHLCV dict.
-            prev_data:  Yesterday's OHLCV dict (None on the first day).
-
-        Returns:
-            None  — hold current allocation (no rebalance).
-            dict  — new target allocation (e.g. {"3xSPY": 1.0}).
-        """
         pass
 
     @abstractmethod
     def reset(self) -> None:
-        """Reset all internal state for a fresh simulation run."""
+        pass
+
+class _IndicatorExitStrategy(BaseStrategy):
+    """Base for binary 3x/CASH strategies."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.prices = []
+        self.highs = []
+        self.lows = []
+        self.current_data = None
+        self.last_holdings = None
+
+    def on_data(self, date, price_data, prev_data):
+        self.prices.append(price_data['close'])
+        self.highs.append(price_data['high'])
+        self.lows.append(price_data['low'])
+        self.current_data = price_data
+        
+        in_cash = self.check_exit_condition()
+        
+        if in_cash is None: # Not enough data
+            new_holdings = {"3xSPY": 1.0}
+        elif in_cash:
+            new_holdings = {"CASH": 1.0}
+        else:
+            new_holdings = {"3xSPY": 1.0}
+
+        if new_holdings != self.last_holdings:
+            self.last_holdings = new_holdings
+            return new_holdings
+        return None
+
+    @abstractmethod
+    def check_exit_condition(self) -> bool:
+        """Returns True if indicator triggers CASH exit."""
         pass

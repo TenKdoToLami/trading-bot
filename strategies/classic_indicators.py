@@ -1,43 +1,11 @@
 """
-Simple 3x SPY strategies that exit to CASH based on technical indicators.
+Classic indicator-based binary strategies (3x SPY / CASH).
 """
 
-from strategies.base import BaseStrategy
+from strategies.base import _IndicatorExitStrategy
 from src.helpers.indicators import (
-    ema, rsi, macd, bollinger_bands, momentum
+    sma, ema, rsi, macd, bollinger_bands, momentum
 )
-
-class _IndicatorExitStrategy(BaseStrategy):
-    """Base for binary 3x/CASH strategies."""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.prices = []
-        self.last_holdings = None
-
-    def on_data(self, date, price_data, prev_data):
-        spy_price = price_data['close']
-        self.prices.append(spy_price)
-        
-        # Determine if we should be in CASH (True) or 3x (False)
-        in_cash = self.check_exit_condition()
-        
-        if in_cash is None: # Not enough data
-            new_holdings = {"3xSPY": 1.0}
-        elif in_cash:
-            new_holdings = {"CASH": 1.0}
-        else:
-            new_holdings = {"3xSPY": 1.0}
-
-        if new_holdings != self.last_holdings:
-            self.last_holdings = new_holdings
-            return new_holdings
-        return None
-
-    def check_exit_condition(self) -> bool:
-        """Returns True if indicator triggers CASH exit."""
-        raise NotImplementedError
 
 class RSI_Exit(_IndicatorExitStrategy):
     NAME = "3x SPY (Exit RSI < 50)"
@@ -80,3 +48,12 @@ class Momentum_Exit(_IndicatorExitStrategy):
     def check_exit_condition(self):
         val = momentum(self.prices, 10)
         return val < 0 if val is not None else None
+
+class GoldenCross_Exit(_IndicatorExitStrategy):
+    NAME = "3x SPY (Golden Cross 50/200)"
+    def check_exit_condition(self):
+        sma50 = sma(self.prices, 50)
+        sma200 = sma(self.prices, 200)
+        if sma50 is None or sma200 is None:
+            return None
+        return sma50 <= sma200
