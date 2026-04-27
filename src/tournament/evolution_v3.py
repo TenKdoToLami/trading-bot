@@ -35,9 +35,9 @@ def _evaluate_genome_worker(genome):
     cagr = metrics['cagr']
     max_dd = abs(metrics['max_dd'])
     
-    # ── Pure Alpha & Risk Focus ──
-    # Penalty of 25.0 means a 50% DD costs 12.5 points.
-    fitness = (cagr * 100) - (max_dd * 25)
+    # ── High Alpha Focus ──
+    # Penalty of 10.0 means 1% of CAGR is worth 1% of MaxDD.
+    fitness = (cagr * 100) - (max_dd * 10)
 
     # Absolute floor: avoid total liquidation (-95%)
     if metrics['max_dd'] < -0.95: fitness = -9999
@@ -87,10 +87,9 @@ class EvolutionEngineV3:
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
                             genome = json.load(jf)
-                            # Minimal V3 structure check
-                            if 'lookbacks' not in genome or 'bull' not in genome:
-                                # We could auto-upgrade, but V3 is drastically different
-                                # Let's just skip non-V3 genomes for now.
+                            # Minimal V3 structure check (lookbacks are nested in brains)
+                            if 'panic' not in genome or 'bull' not in genome or 'lookbacks' not in genome['panic']:
+                                # Skip non-V3 genomes (V1/V2)
                                 continue
                             seeds.append(genome)
                         except: continue

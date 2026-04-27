@@ -128,7 +128,11 @@ class TournamentRunner:
                     and issubclass(attr, BaseStrategy)
                     and attr is not BaseStrategy
                     and not attr.__name__.startswith("_")
+                    and "Base" not in attr.__name__  # Skip base templates
                 ):
+                    # Only instantiate if it's not a generic Genome strategy without a loaded genome
+                    if "Genome" in attr.__name__ and attr.NAME and "AI" not in attr.NAME:
+                        continue
                     strategies.append(attr())
 
         return strategies
@@ -139,9 +143,11 @@ class TournamentRunner:
 
     def run_strategy(self, strategy: BaseStrategy) -> dict:
         """Run a single strategy through the full dataset."""
-        price_data_list = self.data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+        # Include Macro Data (VIX and Yield Curve) for macro-aware strategies (V2/V3)
+        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
+        price_data_list = self.data[cols].to_dict('records')
         dates = self.data.index
-        return _execute_simulation(type(strategy), price_data_list, dates)
+        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs={'genome': getattr(strategy, 'genome', None)})
 
     def run_all(self) -> dict:
         """Run every discovered strategy and collect results (Parallel)."""
@@ -380,15 +386,16 @@ class TournamentRunner:
             return
 
         # Header
-        print("\n" + "=" * 95)
+        width = 88
+        print("\n" + "=" * width)
         print("  STRATEGY TOURNAMENT RESULTS")
-        print("=" * 95)
+        print("=" * width)
         header = (
-            f"  {'Strategy':<30} | {'CAGR':>8} | {'Sharpe':>8} | "
-            f"{'Max DD':>9} | {'Vol':>8} | {'Trades':>7}"
+            f"  {'Strategy':<28} | {'CAGR':>8} | {'Sharpe':>8} | "
+            f"{'Max DD':>7} | {'Vol':>7} | {'Trades':>6}"
         )
         print(header)
-        print("-" * 95)
+        print("-" * width)
 
         # Rows sorted by CAGR descending
         sorted_results = sorted(
@@ -399,32 +406,33 @@ class TournamentRunner:
         for name, res in sorted_results:
             m = res["metrics"]
             print(
-                f"  {name:<30} | {m['cagr']*100:>7.2f}% | "
-                f"{m['sharpe']:>8.2f} | {m['max_dd']*100:>8.1f}% | "
-                f"{m['volatility']*100:>7.1f}% | {m['num_rebalances']:>7}"
+                f"  {name:<28} | {m['cagr']*100:>7.2f}% | "
+                f"{m['sharpe']:>8.2f} | {m['max_dd']*100:>6.1f}% | "
+                f"{m['volatility']*100:>6.1f}% | {m['num_rebalances']:>6}"
             )
 
-        print("=" * 95)
+        print("=" * width)
 
         # Allocation breakdown table
-        print("\n" + "=" * 95)
+        print("\n" + "=" * width)
         print("  ALLOCATION BREAKDOWN (Average Weight %)")
-        print("=" * 95)
+        print("=" * width)
         header = (
-            f"  {'Strategy':<30} | {'Avg Lev':>8} | "
-            f"{'SPY':>8} | {'2xSPY':>8} | {'3xSPY':>8} | {'CASH':>8}"
+            f"  {'Strategy':<28} | {'Avg Lev':>7} | "
+            f"{'SPY':>7} | {'2xSPY':>7} | {'3xSPY':>7} | {'CASH':>7}"
         )
         print(header)
-        print("-" * 95)
+        print("-" * width)
 
         for name, res in sorted_results:
             m = res["metrics"]
             a = m["allocation_pct"]
             print(
-                f"  {name:<30} | {m['avg_leverage']:>7.2f}x | "
-                f"{a['SPY']*100:>7.1f}% | {a['2xSPY']*100:>7.1f}% | "
-                f"{a['3xSPY']*100:>7.1f}% | {a['CASH']*100:>7.1f}%"
+                f"  {name:<28} | {m['avg_leverage']:>6.2f}x | "
+                f"{a['SPY']*100:>6.1f}% | {a['2xSPY']*100:>6.1f}% | "
+                f"{a['3xSPY']*100:>6.1f}% | {a['CASH']*100:>6.1f}%"
             )
+        print("=" * width)
 
         print("=" * 95)
 

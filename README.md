@@ -117,7 +117,7 @@ python tests/run_evolution_v3.py --pop 1000 --gen 200 --seed vault_v3 --mut 0.3
 #### How it Works: Binary Architecture & Dynamic Lookbacks
 - **Dual Brains**: `panic` (evaluates first, forces CASH) and `bull` (evaluates second, votes for 3xSPY).
 - **Per-Brain Lookbacks**: The GA mutates the lookback ranges (e.g., SMA 20-300, RSI 5-50) uniquely for each brain, allowing the `panic` brain to be highly reactive while the `bull` brain remains macro-focused.
-- **Pure Alpha Focus**: Fitness is simply `(CAGR * 100) - (MaxDD * 25)`.
+- **Pure Alpha Focus**: Fitness is simply `(CAGR * 100) - (MaxDD * 10)`.
 - **Persistence**: Record-breaking genomes are saved to `vault_v3/`.
 
 
@@ -164,8 +164,15 @@ Runs 100+ random historical periods (1–10 years) and counts how often each cha
 python tests/sweep_showdown.py vault_v2/v2_best.json vault_v3/v3_best.json --matches 100
 ```
 
+### 10. Monte Carlo Audit — Robustness Stress Test
+The ultimate verification for V3. Generates 100+ "Alternative Timelines" by adding daily jitter, scaling volatility, and shifting macro signals. Calculates the true **Probability of Ruin**.
 
-### 10. Interactive Command Center
+```bash
+# Stress test a V3 champion
+python tests/monte_carlo_audit.py vault_v3/v3_cagr_43.51_dd_-69.28.json --iterations 100
+```
+
+### 11. Interactive Command Center
 A browser-based dashboard for visual backtesting with time-travel capabilities.
 ```bash
 # Generate the latest simulation data
