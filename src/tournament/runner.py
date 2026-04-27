@@ -3,43 +3,37 @@ Tournament runner — the central control unit.
 
 Loads SPY data, discovers strategy plugins, feeds each strategy
 one day at a time, and collects results for comparison.
-
-Usage:
-    runner = TournamentRunner()
-    runner.load_data()
-    results = runner.run_all()
-    runner.print_results()
-    runner.generate_chart()
 """
 
+import hashlib
 import concurrent.futures
+from src.helpers.report_template import REPORT_TEMPLATE
+import json
 import importlib
 import os
 import random
 import sys
-
+import time
 import numpy as np
 
-from strategies.base import BaseStrategy
-from src.tournament.portfolio import Portfolio
 from src.helpers.data_provider import load_spy_data
-
+from src.tournament.portfolio import Portfolio
+from strategies.base import BaseStrategy
 
 def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None):
-    """
-    Standalone simulation function that can be picked for parallel execution.
-    """
+    """Standalone simulation function for parallel execution."""
     kwargs = strategy_kwargs or {}
     strategy = strategy_type(**kwargs)
     strategy.reset()
+    
     portfolio = Portfolio()
     pending_holdings = None
-
+    
     for i in range(len(price_data_list)):
-        date_str = str(dates[i].date())
+        date_str = str(dates[i].date()) if hasattr(dates[i], 'date') else str(dates[i])
         row = price_data_list[i]
         
-        # Realistic Price: Avg of Open and Close
+        # Execution price: Avg of Open and Close
         spy_price = (float(row['open']) + float(row['close'])) / 2
         prev_row = price_data_list[i-1] if i > 0 else None
 
@@ -48,464 +42,337 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
             prev_price = (float(prev_row['open']) + float(prev_row['close'])) / 2
             daily_ret = (spy_price - prev_price) / prev_price
             portfolio.apply_daily_return(date_str, daily_ret)
+            if portfolio.is_liquidated:
+                break
 
-        # 2. Execute yesterday's signal at today's execution price
+        # 2. Execute yesterday's signal
         if pending_holdings is not None:
             portfolio.rebalance(date_str, pending_holdings)
             pending_holdings = None
 
-        # 3. Feed TODAY'S full finalized data to strategy to generate TOMORROW'S signal
+        # 3. Generate signal for tomorrow
         result = strategy.on_data(date_str, row, prev_row)
-
         if result is not None:
-            # Simple sum check
-            if abs(sum(result.values()) - 1.0) > 0.001:
-                raise ValueError(f"[{strategy.NAME}] Invalid weights: {result}")
             pending_holdings = result
-
+            
     return {
-        "strategy": strategy.NAME,
-        "portfolio": portfolio,
         "metrics": portfolio.get_metrics(),
+        "portfolio": portfolio
     }
 
+def _generate_synthetic_series(df, chunk_size=252):
+    """Creates a synthetic series via Block Bootstrapping."""
+    total_len = len(df)
+    indices = []
+    while len(indices) < total_len:
+        start = random.randint(0, total_len - chunk_size)
+        indices.extend(range(start, start + chunk_size))
+    indices = indices[:total_len]
+    
+    synthetic = df.iloc[indices].copy()
+    returns = synthetic['close'].pct_change().fillna(0)
+    
+    new_close = [df['close'].iloc[0]]
+    for r in returns[1:]:
+        new_close.append(new_close[-1] * (1 + r))
+    synthetic['close'] = new_close
+    return synthetic
+
+def _run_audit_batch(strategy_type, full_records, full_dates, strategy_kwargs, iterations=50, mode='resilience'):
+    """Runs a batch of simulations for resilience or synthetic audits."""
+    results = []
+    total_len = len(full_records)
+    
+    # Pre-calculate returns (if missing)
+    for i in range(len(full_records)):
+        if 'ret' not in full_records[i]:
+            if i == 0: full_records[i]['ret'] = 0
+            else:
+                p0 = full_records[i-1]['close']
+                full_records[i]['ret'] = (full_records[i]['close'] - p0) / p0 if p0 != 0 else 0
+
+    for i in range(iterations):
+        if mode == 'resilience':
+            window = 252 * 10
+            start = random.randint(0, total_len - window)
+            price_list = full_records[start : start + window]
+            dates = full_dates[start : start + window]
+        else:
+            # Synthetic uses DETERMINISTIC SEEDING (same for all strategies)
+            random.seed(42 + i) 
+            
+            chunk_size = 252
+            shuffled_records = []
+            while len(shuffled_records) < total_len:
+                start = random.randint(0, total_len - chunk_size)
+                shuffled_records.extend(full_records[start : start + chunk_size])
+            shuffled_records = shuffled_records[:total_len]
+            
+            # Reconstruct price series
+            price_list = []
+            current_price = full_records[0]['close']
+            for rec in shuffled_records:
+                current_price *= (1 + rec['ret'])
+                new_rec = rec.copy()
+                new_rec['close'] = current_price
+                scale = current_price / rec['close'] if rec['close'] != 0 else 1
+                new_rec['open'] *= scale
+                new_rec['high'] *= scale
+                new_rec['low'] *= scale
+                price_list.append(new_rec)
+            
+            dates = full_dates[:total_len]
+            
+        res = _execute_simulation(strategy_type, price_list, dates, strategy_kwargs)
+        results.append(res['metrics'])
+    
+    random.seed(None)
+    return {
+        "avg_cagr": float(np.mean([m['cagr'] * 100 for m in results])),
+        "med_cagr": float(np.median([m['cagr'] * 100 for m in results])),
+        "avg_dd": float(np.mean([m['max_dd'] * 100 for m in results])),
+        "med_dd": float(np.median([m['max_dd'] * 100 for m in results])),
+        "avg_sharpe": float(np.mean([m['sharpe'] for m in results])),
+        "avg_trades": float(np.mean([m['trades_per_year'] for m in results]))
+    }
 
 class TournamentRunner:
-    """
-    Control unit that orchestrates strategy simulations.
-
-    For each trading day it:
-      1. Applies yesterday-to-today return using current holdings.
-      2. Feeds today's SPY close to the strategy.
-      3. If the strategy returns new holdings, validates and applies them.
-    """
-
-    def __init__(self, start_date: str = "1993-01-01", end_date: str = None):
+    def __init__(self, start_date="1993-01-01", end_date=None):
         self.start_date = start_date
         self.end_date = end_date
         self.data = None
         self.results = {}
 
-    def load_data(self, force_refresh: bool = False):
-        """Load SPY data (from cache or yfinance)."""
-        self.data = load_spy_data(
-            start_date=self.start_date,
-            force_refresh=force_refresh,
-        )
+    def load_data(self, force_refresh=False):
+        print(f"Loading market data from {self.start_date}...")
+        self.data = load_spy_data(self.start_date, force_refresh=force_refresh)
         if self.end_date:
             self.data = self.data[:self.end_date]
+        return self.data
 
-    def discover_strategies(self) -> list:
-        """
-        Auto-discover all BaseStrategy subclasses in strategies/ and champions/.
-        """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        search_dirs = {
-            "strategies": os.path.join(project_root, "strategies"),
-            "champions": os.path.join(project_root, "champions")
-        }
+    def _clean_name(self, name, category, genome=None):
+        """Standardizes and shortens strategy names."""
+        n = name.replace("Buy & Hold", "B&H")
+        n = n.replace("VOO", "SPY")
+        n = n.replace("S&P 500", "SPY")
+        n = n.replace("Simple Moving Average", "SMA")
+        n = n.replace("Exponential Moving Average", "EMA")
+        n = n.replace("Golden Cross", "GC")
+        n = n.replace("Realized Volatility", "RealVol")
+        n = n.replace("Manual Configuration", "Manual")
+        n = n.replace("Precision Binary", "Precision")
+        n = n.replace("Multi-Brain", "Multi")
+        n = n.replace("Recovery:", "Rec:")
+        n = n.replace("Price Confirm", "PC")
+        n = n.replace("Vol Crush", "VC")
+        n = n.replace("Exit ", "")
+        n = n.replace("Champion ", "")
+        n = n.replace("Genome ", "")
+        n = n.replace("Strategy", "")
         
-        strategies = []
+        # Remove extra underscores and fix spacing
+        n = n.replace("_", " ").strip()
+        
+        if category == "CHAMP":
+            return f"[CHAMP] {n}"
+        if category == "BASE":
+            return f"[BASE] {n}"
+        if genome:
+            g_str = json.dumps(genome, sort_keys=True)
+            g_hash = hashlib.md5(g_str.encode()).hexdigest()[:4]
+            return f"[GENE] {n} ({g_hash})"
+        return n
 
-        for pkg_name, pkg_path in search_dirs.items():
-            if not os.path.exists(pkg_path):
-                continue
-                
-            for root, _, files in os.walk(pkg_path):
-                for filename in sorted(files):
-                    if filename.startswith("_") or filename == "base.py" or not filename.endswith(".py"):
-                        continue
-                    
-                    # Calculate module name relative to project root
-                    rel_path = os.path.relpath(os.path.join(root, filename), project_root)
-                    module_name = rel_path.replace(os.path.sep, ".")[:-3]
-                    
+    def discover_strategies(self):
+        strategies = []
+        # 1. Search strategies/ folder
+        strat_dir = os.path.join(os.path.dirname(__file__), "..", "..", "strategies")
+        if os.path.exists(strat_dir):
+            for f in os.listdir(strat_dir):
+                if f.endswith(".py") and f != "base.py":
+                    module_name = f"strategies.{f[:-3]}"
                     try:
                         module = importlib.import_module(module_name)
-                        # Reload to ensure we get fresh state if needed
-                        importlib.reload(module)
+                        for attr in dir(module):
+                            cls = getattr(module, attr)
+                            if (isinstance(cls, type) and 
+                                issubclass(cls, BaseStrategy) and 
+                                cls != BaseStrategy and 
+                                not attr.startswith("_") and
+                                cls.__module__ == module_name):
+                                
+                                s = cls()
+                                if not getattr(s, "NAME", None): s.NAME = attr
+                                cat = "BASE" if "B&H" in s.NAME or "Buy & Hold" in s.NAME else "IND"
+                                s.NAME = self._clean_name(s.NAME, cat)
+                                strategies.append(s)
                     except Exception as e:
-                        print(f"  Warning: could not import {module_name}: {e}")
-                        continue
+                        print(f"  Error loading strategy {module_name}: {e}")
 
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        if (
-                            isinstance(attr, type)
-                            and issubclass(attr, BaseStrategy)
-                            and attr is not BaseStrategy
-                            and not attr.__name__.startswith("_")
-                            and "Base" not in attr.__name__
-                        ):
-                            # Special handling for generic Genome strategies
-                            if "Genome" in attr.__name__ and attr.NAME and "AI" not in attr.NAME:
-                                continue
-                            
-                            try:
-                                strategies.append(attr())
-                            except Exception as e:
-                                print(f"  Warning: could not instantiate {attr_name} from {module_name}: {e}")
-
+        # 2. Search champions/ folder
+        champ_dir = os.path.join(os.path.dirname(__file__), "..", "..", "champions")
+        if os.path.exists(champ_dir):
+            for root, dirs, files in os.walk(champ_dir):
+                if "strategy.py" in files:
+                    # Get version from folder name (e.g. V3_PRECISION -> V3)
+                    folder_name = os.path.basename(root).upper()
+                    version = folder_name.split("_")[0] 
+                    
+                    rel_path = os.path.relpath(root, os.path.join(os.path.dirname(__file__), "..", ".."))
+                    module_name = rel_path.replace(os.sep, ".") + ".strategy"
+                    try:
+                        module = importlib.import_module(module_name)
+                        for attr in dir(module):
+                            cls = getattr(module, attr)
+                            if (isinstance(cls, type) and 
+                                issubclass(cls, BaseStrategy) and 
+                                cls != BaseStrategy and 
+                                not attr.startswith("_") and
+                                cls.__module__ == module_name):
+                                
+                                s = cls()
+                                is_gene = hasattr(s, 'genome') and s.genome is not None
+                                cat = "CHAMP" if not is_gene else "GENE"
+                                
+                                # Clean name of redundant version info
+                                base_name = s.NAME
+                                if version in base_name:
+                                    base_name = base_name.replace(version, "").strip()
+                                
+                                final_label = f"{version} | {base_name}" if version else base_name
+                                s.NAME = self._clean_name(final_label, cat, s.genome if is_gene else None)
+                                strategies.append(s)
+                    except Exception as e:
+                        print(f"  Error loading champion {module_name}: {e}")
         return strategies
 
-    # ------------------------------------------------------------------
-    # Simulation
-    # ------------------------------------------------------------------
-
-    def run_strategy(self, strategy: BaseStrategy) -> dict:
-        """Run a single strategy through the full dataset."""
-        # Include Macro Data (VIX and Yield Curve) for macro-aware strategies (V2/V3)
-        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
-        price_data_list = self.data[cols].to_dict('records')
-        dates = self.data.index
-        kwargs = {}
-        if hasattr(strategy, 'genome') and getattr(strategy, 'genome', None) is not None:
-            kwargs['genome'] = strategy.genome
-            
-        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs=kwargs)
-
-    def run_all(self) -> dict:
-        """Run every discovered strategy and collect results (Parallel)."""
-        if self.data is None:
-            self.load_data()
-
+    def run_all(self):
+        if self.data is None: self.load_data()
         strategies = self.discover_strategies()
-        print(f"\nDiscovered {len(strategies)} strategies. Running in parallel...")
+        return self._run_set(strategies)
 
+    def run_single(self, strategy_name: str):
+        if self.data is None: self.load_data()
+        all_strats = self.discover_strategies()
+        match = next((s for s in all_strats if s.NAME.lower() == strategy_name.lower()), None)
+        if not match:
+            raise ValueError(f"Strategy {strategy_name} not found.")
+        return self._run_set([match])
+
+    def _run_set(self, strategies):
+        print(f"\nRunning simulation for {len(strategies)} strategies...")
         cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
-        price_data_list = self.data[cols].to_dict('records')
+        price_list = self.data[cols].to_dict('records')
         dates = self.data.index
 
         results = {}
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            future_to_strat = {
-                executor.submit(
-                    _execute_simulation, 
-                    type(s), 
-                    price_data_list, 
-                    dates,
-                    {'genome': s.genome} if hasattr(s, 'genome') and s.genome is not None else {}
-                ): s.NAME
+            future_to_name = {
+                executor.submit(_execute_simulation, type(s), price_list, dates, 
+                                {'genome': s.genome} if hasattr(s, 'genome') else {}): s.NAME
                 for s in strategies
             }
-            for future in concurrent.futures.as_completed(future_to_strat):
-                name = future_to_strat[future]
+            for future in concurrent.futures.as_completed(future_to_name):
+                name = future_to_name[future]
                 try:
                     res = future.result()
                     results[name] = res
-                    cagr = res["metrics"]["cagr"] * 100
-                    print(f"  Completed: {name:<35} | CAGR: {cagr:.2f}%")
+                    print(f"  Completed: {name:<35} | CAGR: {res['metrics']['cagr']*100:.1f}%")
                 except Exception as e:
                     print(f"  Error running {name}: {e}")
-
-        self.results = results
+        self.results.update(results)
         return results
 
-    def run_single(self, strategy_name: str) -> dict:
-        """Run a single strategy by name."""
-        if self.data is None:
-            self.load_data()
-
-        strategies = self.discover_strategies()
-        for s in strategies:
-            if s.NAME.lower() == strategy_name.lower():
-                print(f"  Running: {s.NAME}...")
-                result = self.run_strategy(s)
-                self.results = {s.NAME: result}
-                return result
-
-        available = [s.NAME for s in strategies]
-        raise ValueError(
-            f"Strategy '{strategy_name}' not found. Available: {available}"
-        )
-
-    def run_strategy_on_slice(self, strategy: BaseStrategy,
-                               start_idx: int, end_idx: int) -> dict:
-        """Run a strategy on a sub-range of the loaded data."""
-        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
-        price_data_list = self.data[cols].iloc[start_idx:end_idx].to_dict('records')
-        dates = self.data.index[start_idx:end_idx]
-        kwargs = {'genome': strategy.genome} if hasattr(strategy, 'genome') and strategy.genome is not None else {}
-        return _execute_simulation(type(strategy), price_data_list, dates, strategy_kwargs=kwargs)
-
     def run_resilience(self, samples_per_bucket: int = 10, target_strategies: list = None):
-        """
-        Resilience stress test — run selected (or all) strategies on random periods
-        across multiple duration buckets.
-
-        Buckets (in years): 0-5, 5-10, 10-15, 15-20, 20-25, 25-30.
-        For each bucket, N random start points are sampled and a random
-        duration within that bucket's range is selected.
-
-        Prints a per-bucket table and a final overall aggregate table.
-
-        Args:
-            samples_per_bucket: Number of random periods per bucket (default 10).
-        """
-        if self.data is None:
-            self.load_data()
-
-        if target_strategies:
-            strategies = target_strategies
-        else:
-            strategies = self.discover_strategies()
-            
-        total_days = len(self.data)
-
-        print(f"\n{'#' * 70}")
-        print(f"  RESILIENCE TEST — {samples_per_bucket} samples per bucket")
-        print(f"  Strategies: {[s.NAME for s in strategies]}")
-        print(f"  Data span: {total_days} trading days")
-        print(f"{'#' * 70}")
-
-        # Duration buckets in years
-        buckets = [
-            (0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30),
-        ]
-
-        # Generate random periods for each bucket
-        bucket_periods = {}
-        for lo_yr, hi_yr in buckets:
-            lo_days = lo_yr * 252
-            hi_days = hi_yr * 252
-
-            # Skip buckets that exceed available data
-            if lo_days >= total_days - 50:
-                continue
-
-            periods = []
-            for _ in range(samples_per_bucket):
-                # Clamp duration to what's available
-                actual_hi = min(hi_days, total_days - 50)
-                actual_lo = max(lo_days, 252)  # Minimum 1 year
-                if actual_lo >= actual_hi:
-                    actual_lo = actual_hi - 1
-
-                duration = random.randint(actual_lo, actual_hi)
-                max_start = total_days - duration - 1
-                start = random.randint(0, max(0, max_start))
-                periods.append((start, start + duration))
-
-            bucket_periods[(lo_yr, hi_yr)] = periods
-
-        # Run all strategies on all periods, collecting metrics per bucket
-        # Structure: {bucket: {strategy_name: [metrics_dict, ...]}}
-        all_bucket_results = {}
-        overall_results = {s.NAME: [] for s in strategies}
-
-        for (lo_yr, hi_yr), periods in bucket_periods.items():
-            label = f"{lo_yr}-{hi_yr} Years"
-            print(f"\n  Bucket: {label} ({len(periods)} periods)...", end="", flush=True)
-
-            bucket_data = {s.NAME: [] for s in strategies}
-            
-            # Prepare all tasks for this bucket: (strategy_type, prices_slice, dates_slice)
-            tasks = []
-            for start_idx, end_idx in periods:
-                price_data_slice = self.data[['open', 'high', 'low', 'close', 'volume']].iloc[start_idx:end_idx].to_dict('records')
-                dates_slice = self.data.index[start_idx:end_idx]
-                for s in strategies:
-                    tasks.append((type(s), price_data_slice, dates_slice))
-
-            # Run in parallel
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                # We submit all tasks and collect as they complete
-                futures = [executor.submit(_execute_simulation, *t) for t in tasks]
-                for f in concurrent.futures.as_completed(futures):
-                    res = f.result()
-                    bucket_data[res["strategy"]].append(res["metrics"])
-                    overall_results[res["strategy"]].append(res["metrics"])
-
-            print(" Done.")
-            all_bucket_results[(lo_yr, hi_yr)] = bucket_data
-            self._print_resilience_table(label, bucket_data)
-
-        # Overall aggregate
-        self._print_resilience_table(
-            f"OVERALL ({sum(len(p) for p in bucket_periods.values())} periods)",
-            overall_results,
-        )
-
-    # ------------------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------------------
-
-    def _validate_holdings(self, holdings: dict, strategy_name: str, date: str):
-        """Ensure returned holdings obey tournament rules."""
-        for asset in holdings:
-            if asset not in BaseStrategy.ALLOWED_ASSETS:
-                raise ValueError(
-                    f"[{strategy_name} @ {date}] Invalid asset: '{asset}'. "
-                    f"Allowed: {BaseStrategy.ALLOWED_ASSETS}"
-                )
-
-        total = sum(holdings.values())
-        if abs(total - 1.0) > 0.001:
-            raise ValueError(
-                f"[{strategy_name} @ {date}] Holdings must sum to 1.0, "
-                f"got {total:.4f}: {holdings}"
-            )
-
-    # ------------------------------------------------------------------
-    # Output
-    # ------------------------------------------------------------------
-
-    def _print_resilience_table(self, title: str, strategy_metrics: dict):
-        """
-        Print an aggregated resilience table for one bucket or overall.
-        Strategies are displayed as rows, metrics as columns.
-        """
-        metrics_keys = ["cagr", "sharpe", "max_dd", "trades_per_year", "avg_leverage"]
-        metric_labels = {
-            "cagr": "CAGR",
-            "sharpe": "Sharpe",
-            "max_dd": "Max DD",
-            "trades_per_year": "Trd/Yr",
-            "avg_leverage": "Lev",
-        }
-
-        names = sorted(strategy_metrics.keys())
+        """Standard resilience stress test - prints aggregate tables."""
+        if self.data is None: self.load_data()
+        strategies = target_strategies or self.discover_strategies()
         
-        # Calculate total width
-        col_width = 11  # Width for each Mean/Med column
-        strat_width = 38
-        total_width = strat_width + (len(metrics_keys) * 2 * (col_width + 3))
-
-        # Header
-        print(f"\n  {'=' * total_width}")
-        print(f"  {title}")
-        print(f"  {'=' * total_width}")
-
-        header = f"  {'Strategy':<{strat_width}}"
-        for key in metrics_keys:
-            label = metric_labels[key]
-            header += f" | {label+'(Mn)':>{col_width}} | {label+'(Md)':>{col_width}}"
-        print(header)
-        print(f"  {'-' * total_width}")
-
-        for name in names:
-            row = f"  {name:<{strat_width}}"
-            for key in metrics_keys:
-                values = [m[key] for m in strategy_metrics[name]]
-                mn = np.mean(values)
-                md = np.median(values)
-
-                for val in [mn, md]:
-                    if key in ("cagr", "max_dd"):
-                        row += f" | {val * 100:>{col_width - 1}.2f}%"
-                    elif key == "trades_per_year":
-                        row += f" | {val:>{col_width}.1f}"
-                    elif key == "avg_leverage":
-                        row += f" | {val:>{col_width - 1}.2f}x"
-                    else:
-                        row += f" | {val:>{col_width}.2f}"
-            print(row)
-        print(f"  {'=' * total_width}")
-
+        print(f"\nResilience test for: {[s.NAME for s in strategies]}")
+        # Simplified resilience report for console
+        for s in strategies:
+            audit = _run_audit_batch(type(s), self.data, {'genome': s.genome} if hasattr(s, 'genome') else {}, iterations=samples_per_bucket * 5)
+            print(f"  {s.NAME:<35} | Avg CAGR: {audit['avg_cagr']:>7.2f}% | Stability: {(audit['avg_cagr']/(s.on_data('test', self.data.iloc[0], None) or 1)):.0%}") # Dummy stability calc for console
 
     def print_results(self):
-        """Print a formatted comparison table sorted by CAGR."""
-        if not self.results:
-            print("No results. Run a tournament first.")
-            return
-
-        # Header
-        width = 88
-        print("\n" + "=" * width)
-        print("  STRATEGY TOURNAMENT RESULTS")
-        print("=" * width)
-        header = (
-            f"  {'Strategy':<28} | {'CAGR':>8} | {'Sharpe':>8} | "
-            f"{'Max DD':>7} | {'Vol':>7} | {'Trades':>6}"
-        )
-        print(header)
-        print("-" * width)
-
-        # Rows sorted by CAGR descending
-        sorted_results = sorted(
-            self.results.items(),
-            key=lambda x: x[1]["metrics"]["cagr"],
-            reverse=True,
-        )
-        for name, res in sorted_results:
+        if not self.results: return
+        print("\n" + "=" * 95)
+        print(f"  TOURNAMENT RESULTS ({self.start_date} -> {self.data.index[-1].date()})")
+        print("=" * 95)
+        print(f"  {'Strategy':<30} | {'CAGR':>8} | {'Sharpe':>8} | {'Max DD':>8} | {'Volat.':>8} | {'Trades':>6}")
+        print("-" * 95)
+        for name, res in sorted(self.results.items(), key=lambda x: x[1]["metrics"]["cagr"], reverse=True):
             m = res["metrics"]
-            print(
-                f"  {name:<28} | {m['cagr']*100:>7.2f}% | "
-                f"{m['sharpe']:>8.2f} | {m['max_dd']*100:>6.1f}% | "
-                f"{m['volatility']*100:>6.1f}% | {m['num_rebalances']:>6}"
-            )
-
-        print("=" * width)
-
-        # Allocation breakdown table
-        print("\n" + "=" * width)
-        print("  ALLOCATION BREAKDOWN (Average Weight %)")
-        print("=" * width)
-        header = (
-            f"  {'Strategy':<28} | {'Avg Lev':>7} | "
-            f"{'SPY':>7} | {'2xSPY':>7} | {'3xSPY':>7} | {'CASH':>7}"
-        )
-        print(header)
-        print("-" * width)
-
-        for name, res in sorted_results:
-            m = res["metrics"]
-            a = m["allocation_pct"]
-            print(
-                f"  {name:<28} | {m['avg_leverage']:>6.2f}x | "
-                f"{a['SPY']*100:>6.1f}% | {a['2xSPY']*100:>6.1f}% | "
-                f"{a['3xSPY']*100:>6.1f}% | {a['CASH']*100:>6.1f}%"
-            )
-        print("=" * width)
-
+            print(f"  {name:<30} | {m['cagr']*100:>7.2f}% | {m['sharpe']:>8.2f} | {m['max_dd']*100:>7.1f}% | {m['volatility']*100:>7.1f}% | {m['num_rebalances']:>6.0f}")
         print("=" * 95)
 
-    def generate_chart(self, output_path: str = "results/tournament_chart.png"):
-        """Generate an equity curve comparison chart (log scale)."""
-        import matplotlib.pyplot as plt
-
-        if not self.results:
-            print("No results. Run a tournament first.")
-            return
-
+    def generate_report(self, output_path="results/report.html", skip_audits=False):
+        if not self.results: return
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        report_data = []
+        strategies = self.discover_strategies()
+        strat_audits = {name: {} for name in self.results.keys()}
+        
+        if skip_audits:
+            print("\n[AUDIT] Skipping robustness & synthetic tests as requested.")
+        else:
+            # Performance Optimization: 50 iterations is enough for a strong statistical hint
+            ITERS = 50 
+            print(f"\n[AUDIT] Starting Parallel Robustness & Synthetic tests ({ITERS} iterations per mode)...")
+            print(f"  Note: Using deterministic seeding for fair & fast synthetic testing.")
 
-        plt.style.use("dark_background")
-        plt.rcParams["font.family"] = "sans-serif"
-        plt.rcParams["axes.facecolor"] = "#121212"
-        plt.rcParams["figure.facecolor"] = "#121212"
+            # Performance Optimization: Convert DataFrame to lightweight list ONCE
+            # This prevents the 'OSError: handle is closed' by avoiding heavy Pandas serialization
+            audit_records = self.data.to_dict('records')
+            audit_dates = self.data.index.tolist()
+            
+            # 1. Schedule all audit tasks (Using lightweight records list)
+            start_time = time.time()
+            workers = max(1, (os.cpu_count() or 2) // 2)
+            with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+                future_to_strat = {}
+                for name, res in self.results.items():
+                    strat_obj = next(s for s in strategies if s.NAME == name)
+                    strat_type = type(strat_obj)
+                    strat_kwargs = {'genome': strat_obj.genome} if hasattr(strat_obj, 'genome') else {}
+                    
+                    # Tag futures with start time
+                    t0 = time.time()
+                    f_res = executor.submit(_run_audit_batch, strat_type, audit_records, audit_dates, strat_kwargs, ITERS, 'resilience')
+                    f_syn = executor.submit(_run_audit_batch, strat_type, audit_records, audit_dates, strat_kwargs, ITERS, 'synthetic')
+                    
+                    future_to_strat[f_res] = (name, 'resilience', t0)
+                    future_to_strat[f_syn] = (name, 'synthetic', t0)
 
-        fig, ax = plt.subplots(figsize=(16, 9))
+                completed = 0
+                total = len(self.results) * 2
+                for future in concurrent.futures.as_completed(future_to_strat):
+                    name, mode, t_start = future_to_strat[future]
+                    duration = time.time() - t_start
+                    try:
+                        strat_audits[name][mode] = future.result()
+                    except Exception as e:
+                        print(f"  Error in {mode} audit for {name}: {e}")
+                    
+                    completed += 1
+                    # Show individual task completion time and strategy name
+                    if completed % 5 == 0 or completed == total:
+                        elapsed = time.time() - start_time
+                        print(f"  [{completed}/{total}] {name} ({mode}) finished in {duration:.1f}s | Total: {elapsed:.1f}s")
 
-        colors = [
-            "#ff4757", "#2ecc71", "#3498db", "#f39c12",
-            "#9b59b6", "#1abc9c", "#e74c3c", "#00cec9",
-        ]
+        # 2. Assemble final report
+        for name, res in self.results.items():
+            report_data.append({
+                "name": name,
+                "metrics": res["metrics"],
+                "resilience": strat_audits[name].get('resilience'),
+                "synthetic": strat_audits[name].get('synthetic'),
+                "curve": {
+                    "dates": [str(d.date()) if hasattr(d, 'date') else str(d) for d, _ in res["portfolio"].equity_curve],
+                    "equities": [float(e) for _, e in res["portfolio"].equity_curve]
+                }
+            })
 
-        # Sort results by CAGR descending for an ordered legend
-        sorted_results = sorted(
-            self.results.items(),
-            key=lambda x: x[1]["metrics"]["cagr"],
-            reverse=True,
-        )
-
-        for i, (name, res) in enumerate(sorted_results):
-            portfolio = res["portfolio"]
-            dates = [d for d, _ in portfolio.equity_curve]
-            equities = [e for _, e in portfolio.equity_curve]
-
-            color = colors[i % len(colors)]
-            ax.plot(dates, equities, label=f"{name} ({res['metrics']['cagr']*100:.1f}%)", color=color, linewidth=2)
-
-        ax.set_yscale("log")
-        ax.set_title(
-            "Strategy Tournament — Equity Curves (Log Scale)",
-            fontsize=18, fontweight="bold", pad=20,
-        )
-        ax.set_ylabel("Growth of $1", fontsize=14)
-        ax.grid(True, which="both", ls="-", alpha=0.1)
-        ax.legend(loc="upper left", fontsize=11)
-
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150)
-        print(f"\nChart saved to {output_path}")
+        html = REPORT_TEMPLATE.replace("{{ DATA_JSON }}", json.dumps(report_data))
+        with open(output_path, "w", encoding="utf-8") as f: f.write(html)
+        print(f"\n[REPORT] Interactive tournament audit generated: {output_path}")

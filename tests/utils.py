@@ -5,6 +5,7 @@ from strategies.base import BaseStrategy
 from strategies._genome_strategy import GenomeStrategy
 from strategies.genome_v2_strategy import GenomeV2Strategy
 from strategies.genome_v3_strategy import GenomeV3Strategy
+from strategies.gene_v4_chameleon import ChameleonV4
 from src.tournament.runner import TournamentRunner
 
 def resolve_strategy(identifier: str) -> BaseStrategy:
@@ -29,6 +30,8 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             # Legacy Manual or V1 structure
             from champions.v1_manual.strategy import ManualV1
             return ManualV1(genome=genome)
+        elif "vix_ema" in genome and "vol_stretch" in genome:
+            return ChameleonV4(genome=genome)
         elif "panic" in genome and "bull" in genome and "lookbacks" in genome['panic']:
             return GenomeV3Strategy(genome=genome)
         elif "panic" in genome and "3x" in genome:

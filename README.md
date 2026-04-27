@@ -30,8 +30,8 @@ python tests/run_tournament.py --start 2008-01-01 --end 2012-12-31
 # Force refresh cached SPY data
 python tests/run_tournament.py --refresh
 
-# Skip chart generation
-python tests/run_tournament.py --no-chart
+# Skip interactive report generation
+python tests/run_tournament.py --no-report
 
 # Resilience stress test — random periods across duration buckets
 python tests/run_tournament.py --resilience
@@ -115,6 +115,28 @@ python tests/run_evolution_v3.py --pop 1000 --gen 200 --seed vault_v3 --mut 0.3
 - **Persistence**: Record-breaking genomes are saved to `champions/v3_precision/vault/`.
 
 
+### 6. Genome V4 — Adaptive Chameleon Evolution (New)
+V4 introduces the "Chameleon" architecture. It replaces the complex scoring system of V3 with an environment-aware state machine that uses **Volatility Stretch** (VIX vs. its own EMA) to define regimes.
+
+```bash
+# Start evolution
+python tests/run_evolution_v4.py --pop 100 --gen 50
+```
+
+#### How it Works: Environment-Aware Tiers
+- **Dynamic Regimes**: Switches between `Calm`, `Stressed`, and `Panic` based on how far VIX is stretching from its long-term average.
+- **Evolvable Parameters**:
+  - `vix_ema`: The "memory" of market volatility (baseline).
+  - `vol_stretch`: The threshold multiplier above baseline to trigger defensive modes.
+  - `mom_period`: The lookback for the structural trend filter.
+  - `rsi_period` & `rsi_entry`: Parameters for the "Aggressive Buy the Dip" logic during stress.
+  - `lev_calm`: Targeted leverage during stability (e.g., 3.0x).
+  - `lev_stress`: Reduced leverage when volatility spikes but trend holds (e.g., 1.0x).
+  - `lev_panic`: Extreme defense when volatility spikes AND trend breaks (e.g., 0.0x).
+- **Multi-Timeframe Resilience**: Optimized for robustness across the entire 30+ year SPY history.
+- **Persistence**: Record-breaking genomes are saved to `champions/V4_CHAMELEON/vault/`.
+
+
 ## 🛠️ Diagnostics & Strategy Audit
 These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect if a genome is **V1, V2, or V3**.
 
@@ -122,7 +144,10 @@ These tools help you verify the quality and resilience of your discovered strate
 Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
 
 ```bash
-# Sweep V3 vault (recommended)
+# Sweep V4 Chameleon vault (The current gold standard)
+python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault --samples 20
+
+# Sweep V3 vault
 python tests/vault_sweep.py --vault champions/v3_precision/vault
 
 # Sweep the V2 vault
@@ -199,8 +224,8 @@ Features:
 
 ### 11. Output
 - **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
-- **Equity chart**: Saved to `results/tournament_chart.png`.
-- **Vault**: Optimal DNA matrices saved to `vault/genome_cagr_X_dd_Y.json`.
+- **Interactive Audit**: Once the tournament completes, it will automatically generate an interactive HTML report in `results/report.html` with sortable tables and Plotly charts.
+- **Vault**: Optimal DNA matrices saved to `champions/vX/vault/`.
 
 ## 🧩 Writing a New Strategy
 
@@ -251,6 +276,10 @@ champions/              # Champion strategies and genomes
     genome.json
     strategy.py
     vault/              #   V3 Genome Collection
+  V4_CHAMELEON/         #   V4 Adaptive Chameleon AI
+    genome.json
+    strategy.py
+    vault/              #   V4 Genome Collection
   v1_manual/            #   Manual/Legacy config
     genome.json
     strategy.py
@@ -263,6 +292,7 @@ strategies/             # Strategy plugins
   full_cash_panic.py    #   Binary: 3x bull / 100% cash panic
   genome_v2_strategy.py #   AI: Multi-Brain (3x/2x/1x/Cash)
   genome_v3_strategy.py #   AI: Precision Binary with Genetic Lookbacks
+  gene_v4_chameleon.py  #   AI: Adaptive Volatility & Momentum (Chameleon)
 
 src/
   helpers/              # Shared utilities
@@ -278,7 +308,8 @@ tests/
   run_tournament.py     # CLI: full tournament
   run_evolution.py      # CLI: genetic algorithm V1
   run_evolution_v2.py   # CLI: genetic algorithm V2
-  run_evolution_v3.py   # CLI: genetic algorithm V3
+  run_evolution_v3.py   #   CLI: genetic algorithm V3
+  run_evolution_v4.py   #   CLI: genetic algorithm V4
   vault_sweep.py        # CLI: cross-regime stress test
   sweep_showdown.py     # CLI: V1 vs V2 resilience showdown
   performance_audit.py  # CLI: institutional performance report
@@ -288,6 +319,7 @@ tests/
 vault/                  # V1 Genomes
 vault_v2/               # V2 Genomes
 vault_v3/               # V3 Genomes
+champions/V4_CHAMELEON/vault/ # V4 Genomes
 visualizer/             # Interactive Command Center dashboard
   index.html            #   Browser-based UI
   data.js               #   Generated simulation data (gitignored)
@@ -302,6 +334,7 @@ results/                # Tournament output (charts)
 | Strategy | Description |
 |---|---|
 | **BEAST (SMA + RealVol)** | SMA regime detection + realized volatility tiers. 3x in bull, tiered allocation in panic. |
+| **Chameleon V4 (AI)** | **Current Meta**: Adaptive volatility state machine using VIX-Stretch and Momentum filters. |
 | **Genome Strategy** | AI-bred strategy using **Dual-State** (Panic/Base) logic, Ablation (Feature Selection), and Rebalance Lockouts. |
 | **Full Cash Panic** | Same SMA regime, but 100% cash during any panic. |
 | **Buy & Hold 3x** | Pure 3x leveraged buy-and-hold benchmark. |

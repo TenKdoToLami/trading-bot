@@ -1,0 +1,10 @@
+{
+    "vix_ema": 41,
+    "vol_stretch": 2.2,
+    "mom_period": 297,
+    "rsi_period": 2,
+    "rsi_entry": 28,
+    "lev_calm": 3.0,
+    "lev_stress": 0.79,
+    "lev_panic": 0.17
+}

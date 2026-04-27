@@ -37,9 +37,12 @@ from src.helpers.data_provider import load_spy_data
 V1_KEYS = {'panic_weights', 'base_weights', 'base_thresholds', 'panic_threshold', 'lock_days'}
 V2_BRAINS = {'panic', '3x', '2x', '1x'}
 V3_BRAINS = {'panic', 'bull'}
+V4_KEYS = {'vix_ema', 'vol_stretch', 'mom_period'}
 
 def get_genome_version(genome: dict) -> int:
-    """Detect if genome is V1, V2, or V3."""
+    """Detect if genome is V1, V2, V3, or V4."""
+    if V4_KEYS.issubset(genome.keys()):
+        return 4
     if V3_BRAINS.issubset(genome.keys()) and all('lookbacks' in genome[b] for b in V3_BRAINS):
         return 3
     if V2_BRAINS.issubset(genome.keys()):
@@ -51,6 +54,8 @@ def get_genome_version(genome: dict) -> int:
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has the correct genome structure."""
     ver = get_genome_version(genome)
+    if ver == 4:
+        return all(k in genome for k in V4_KEYS)
     if ver == 3:
         return all('w' in genome[b] and 't' in genome[b] and 'lookbacks' in genome[b] for b in V3_BRAINS)
     if ver == 2:
@@ -87,9 +92,11 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     from strategies._genome_strategy import GenomeStrategy
     from strategies.genome_v2_strategy import GenomeV2Strategy
     from strategies.genome_v3_strategy import GenomeV3Strategy
+    from strategies.gene_v4_chameleon import ChameleonV4
     
     ver = get_genome_version(genome)
-    if ver == 3: strat_type = GenomeV3Strategy
+    if ver == 4: strat_type = ChameleonV4
+    elif ver == 3: strat_type = GenomeV3Strategy
     elif ver == 2: strat_type = GenomeV2Strategy
     else: strat_type = GenomeStrategy
     
@@ -108,7 +115,7 @@ def run_sweep(genomes, data, samples_per_bucket=10):
     Returns: {filename: {'metrics_list': [...], 'name': str}}
     """
     total_days = len(data)
-    price_data_list = data[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
+    price_data_list = data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
     dates = data.index
 
     # Define 5-year buckets

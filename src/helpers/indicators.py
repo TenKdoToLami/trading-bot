@@ -7,69 +7,21 @@ Strategies import and call these with their own price history.
 """
 
 import math
-
+import numpy as np
 
 def sma(prices: list, period: int):
-    """
-    Simple Moving Average over the last `period` values.
-
-    Args:
-        prices: List of prices accumulated by the strategy.
-        period: Lookback window length.
-
-    Returns:
-        float — the SMA value, or None if len(prices) < period.
-    """
     if len(prices) < period:
         return None
-    return sum(prices[-period:]) / period
-
-
-def realized_volatility(prices: list, window: int = 20):
-    """
-    Annualized realized volatility from a price series.
-
-    Computes the standard deviation of daily log-returns over
-    the last `window` days and annualizes it (× √252).
-
-    This is the strategy-local proxy for VIX — it measures
-    historical (realized) volatility rather than implied.
-
-    Args:
-        prices: List of prices accumulated by the strategy.
-        window: Number of trading days for the lookback.
-
-    Returns:
-        float — annualized volatility (e.g. 0.15 = 15%), or None
-                if insufficient data (need window + 1 prices).
-    """
-    if len(prices) < window + 1:
-        return None
-
-    # Log returns for the trailing window
-    log_returns = []
-    for i in range(-window, 0):
-        log_returns.append(math.log(prices[i] / prices[i - 1]))
-
-    # Sample standard deviation
-    mean = sum(log_returns) / len(log_returns)
-    variance = sum((r - mean) ** 2 for r in log_returns) / (len(log_returns) - 1)
-    daily_vol = math.sqrt(variance)
-
-    return daily_vol * math.sqrt(252)
-
+    # For short periods, sum() is faster than numpy
+    # We avoid slicing by using a sum generator if period is large
+    if period < 100:
+        return sum(prices[-period:]) / period
+    s = 0
+    for i in range(len(prices)-1, len(prices)-1-period, -1):
+        s += prices[i]
+    return s / period
 
 def drawdown_from_peak(prices: list):
-    """
-    Current drawdown from the running peak of a price series.
-
-    Args:
-        prices: List of prices.
-
-    Returns:
-        float — drawdown as a negative fraction (e.g. -0.10 = 10% below peak),
-                or 0.0 if at peak. Returns None if prices is empty.
-    """
     if not prices:
         return None
     peak = prices[0]
@@ -78,75 +30,61 @@ def drawdown_from_peak(prices: list):
             peak = p
     return (prices[-1] - peak) / peak if peak > 0 else 0.0
 
-
-def ema(prices: list, period: int, prev_ema: float = None):
-    """
-    Exponential Moving Average.
-    Formula: EMA = Price(today) * k + EMA(yesterday) * (1 - k)
-    where k = 2 / (period + 1)
-    
-    If prev_ema is provided, calculation is O(1).
-    """
-    if len(prices) < period:
-        return None
-
-    k = 2 / (period + 1)
-    
-    if prev_ema is not None:
-        return (prices[-1] * k) + (prev_ema * (1 - k))
-
-    # Full calculation path
-    current_ema = sum(prices[:period]) / period
-    for i in range(period, len(prices)):
-        current_ema = (prices[i] * k) + (current_ema * (1 - k))
-    return current_ema
-
-
-def rsi(prices: list, period: int = 14, state: dict = None):
-    """
-    Relative Strength Index (RSI).
-    Uses Wilder's smoothing method.
-    
-    If state={'avg_gain': f, 'avg_loss': f} is provided, calculation is O(1).
-    State is modified in-place.
-    """
+def realized_volatility(prices: list, period: int = 20):
     if len(prices) < period + 1:
         return None
+    # Annualized volatility: std(log_returns) * sqrt(252)
+    # Using numpy for the period slice is much faster than manual loops here
+    p_slice = np.array(prices[-(period+1):])
+    log_rets = np.log(p_slice[1:] / p_slice[:-1])
+    return np.std(log_rets, ddof=1) * 15.8745  # 15.8745 approx sqrt(252)
 
+def ema(prices: list, period: int, prev_ema: float = None):
+    if len(prices) < period:
+        return None
+    k = 2 / (period + 1)
+    if prev_ema is not None:
+        return (prices[-1] * k) + (prev_ema * (1 - k))
+    # Full path: Cap history to period*10 or 250 to prevent O(N^2) hangs in long simulations
+    arr = np.asanyarray(prices)
+    if len(arr) > period * 10:
+        arr = arr[-(period * 10):]
+    
+    current_ema = np.mean(arr[:period])
+    for i in range(period, len(arr)):
+        current_ema = (arr[i] * k) + (current_ema * (1 - k))
+    return current_ema
+
+def rsi(prices: list, period: int = 14, state: dict = None):
+    if len(prices) < period + 1:
+        return None
     if state and "avg_gain" in state and "avg_loss" in state:
-        # Incremental path
         delta = prices[-1] - prices[-2]
         gain = delta if delta > 0 else 0
         loss = -delta if delta < 0 else 0
-        
         state["avg_gain"] = (state["avg_gain"] * (period - 1) + gain) / period
         state["avg_loss"] = (state["avg_loss"] * (period - 1) + loss) / period
-        
         if state["avg_loss"] == 0: return 100
-        rs = state["avg_gain"] / state["avg_loss"]
-        return 100 - (100 / (1 + rs))
+        return 100 - (100 / (1 + (state["avg_gain"] / state["avg_loss"])))
 
-    # Full calculation path
-    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
-    gains = [d if d > 0 else 0 for d in deltas[:period]]
-    losses = [-d if d < 0 else 0 for d in deltas[:period]]
-    
-    avg_gain = sum(gains) / period
-    avg_loss = sum(losses) / period
+    # Fast initial calculation: Cap history to prevent O(N^2) slowdowns
+    # A window of 250 bars is enough for RSI to converge almost perfectly
+    deltas = np.diff(prices)
+    if len(deltas) > period * 15:
+        deltas = deltas[-(period * 15):]
 
+    gains = np.where(deltas > 0, deltas, 0)
+    losses = np.where(deltas < 0, -deltas, 0)
+    avg_gain = np.mean(gains[:period])
+    avg_loss = np.mean(losses[:period])
     for i in range(period, len(deltas)):
-        gain = deltas[i] if deltas[i] > 0 else 0
-        loss = -deltas[i] if deltas[i] < 0 else 0
-        avg_gain = (avg_gain * (period - 1) + gain) / period
-        avg_loss = (avg_loss * (period - 1) + loss) / period
-
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
     if state is not None:
         state["avg_gain"] = avg_gain
         state["avg_loss"] = avg_loss
-
     if avg_loss == 0: return 100
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    return 100 - (100 / (1 + (avg_gain / avg_loss)))
 
 
 def macd(prices: list, fast: int = 12, slow: int = 26, signal: int = 9, state: dict = None):
@@ -286,17 +224,21 @@ def kama(prices: list, period: int = 10, fast: int = 2, slow: int = 30, prev_kam
         sc = (er * (fast_sc - slow_sc) + slow_sc) ** 2
         return prev_kama + sc * (prices[-1] - prev_kama)
 
-    # Full calculation path
-    current_kama = prices[0]
-    for i in range(1, len(prices)):
+    # Full calculation path: Cap history
+    arr = np.asanyarray(prices)
+    if len(arr) > period * 15:
+        arr = arr[-(period * 15):]
+
+    current_kama = arr[0]
+    for i in range(1, len(arr)):
         if i >= period:
-            c = abs(prices[i] - prices[i - period])
-            v = sum(abs(prices[j] - prices[j-1]) for j in range(i - period + 1, i + 1))
+            c = abs(arr[i] - arr[i - period])
+            v = sum(abs(arr[j] - arr[j-1]) for j in range(i - period + 1, i + 1))
             er_i = c / v if v != 0 else 0
             sc_i = (er_i * (fast_sc - slow_sc) + slow_sc) ** 2
-            current_kama = current_kama + sc_i * (prices[i] - current_kama)
+            current_kama = current_kama + sc_i * (arr[i] - current_kama)
         else:
-            current_kama = current_kama + slow_sc * (prices[i] - current_kama)
+            current_kama = current_kama + slow_sc * (arr[i] - current_kama)
             
     return current_kama
 
@@ -327,19 +269,14 @@ def hma(prices: list, period: int):
     half_period = period // 2
     sqrt_period = int(math.sqrt(period))
     
-    # We need a series of the inner WMA calculation to compute the outer WMA
-    # (2 * WMA(n/2) - WMA(n))
+    # HMA Optimization: Only calculate inner WMAs for the required sqrt_period window
     inner_values = []
-    # Loop back to get enough values for the final WMA
+    # To compute the final WMA(sqrt_n), we need sqrt_period points of (2*WMA(n/2) - WMA(n))
     for i in range(len(prices) - sqrt_period, len(prices)):
         p_slice = prices[:i+1]
         wma_half = wma(p_slice, half_period)
         wma_full = wma(p_slice, period)
-        if wma_half is not None and wma_full is not None:
-            inner_values.append(2 * wma_half - wma_full)
-    
-    if len(inner_values) < sqrt_period:
-        return None
+        inner_values.append(2 * wma_half - wma_full)
         
     return wma(inner_values, sqrt_period)
 

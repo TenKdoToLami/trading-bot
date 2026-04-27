@@ -33,6 +33,7 @@ class Portfolio:
             self.initial_equity = initial_equity
         self.equity = self.initial_equity
         self.holdings = {"CASH": 1.0}
+        self.is_liquidated = False
 
         self.equity_curve = []     # [(date_str, equity), ...]
         self.holdings_log = []     # [(date_str, holdings_dict), ...]
@@ -65,12 +66,21 @@ class Portfolio:
             "CASH":  self.CASH_YIELD / 252,
         }
 
+        if self.is_liquidated:
+            self.equity_curve.append((date, 0.0))
+            return
+
         portfolio_return = sum(
             self.holdings.get(asset, 0.0) * ret
             for asset, ret in asset_returns.items()
         )
 
         self.equity *= (1.0 + portfolio_return)
+        
+        if self.equity <= 0:
+            self.equity = 0.0
+            self.is_liquidated = True
+
         self.equity_curve.append((date, self.equity))
         self.holdings_log.append((date, dict(self.holdings)))
 
