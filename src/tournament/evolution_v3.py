@@ -181,7 +181,7 @@ class EvolutionEngineV3:
         best_overall_genome = None
 
         max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V3: {self.generations} generations, pop {self.population_size} (using {max_workers} cores)")
+        print(f"Starting Evolution V3: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f} (using {max_workers} cores)")
         
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers,

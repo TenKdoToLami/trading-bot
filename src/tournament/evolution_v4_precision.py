@@ -125,7 +125,7 @@ class EvolutionEngineV4Precision:
         best_overall_fitness = -9999
         best_overall_genome = None
         max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V4 Precision: {self.generations} generations, pop {self.population_size}")
+        print(f"Starting Evolution V4 Precision: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f}")
         
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file,)) as executor:
             for gen in range(self.generations):
