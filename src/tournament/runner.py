@@ -218,15 +218,27 @@ class TournamentRunner:
         champ_dir = os.path.join(os.path.dirname(__file__), "..", "..", "champions")
         if os.path.exists(champ_dir):
             for root, dirs, files in os.walk(champ_dir):
-                # A. Look for JSON genomes (Dynamic Champions)
+                # Skip vault directories to avoid loading historical noise
+                if 'vault' in root.lower():
+                    continue
+                
+                # A. Look for JSON genomes (Dynamic Champions) - ONLY genome.json
                 for f in files:
-                    if f.endswith(".json") and f != "metadata.json":
+                    if f.lower() == "genome.json":
                         json_path = os.path.join(root, f)
                         try:
                             with open(json_path, "r") as jf:
                                 genome = json.load(jf)
                             
                             version = genome.get('version', 0.0)
+                            if version == 0.0:
+                                folder_name = os.path.basename(root).lower()
+                                if "v6" in folder_name: version = 6.0
+                                elif "v5" in folder_name: version = 5.0
+                                elif "v4" in folder_name: version = 4.0
+                                elif "v3" in folder_name: version = 3.0
+                                elif "v2" in folder_name: version = 2.0
+                                
                             strat_cls = None
                             
                             if version == 6.0:
@@ -236,20 +248,36 @@ class TournamentRunner:
                                 from strategies.genome_v5_sniper import GenomeV5Sniper
                                 strat_cls = GenomeV5Sniper
                             elif version == 4.0:
-                                from strategies.genome_v4_precision import GenomeV4Precision
-                                strat_cls = GenomeV4Precision
+                                folder_name = os.path.basename(root).lower()
+                                if "chameleon" in folder_name:
+                                    from strategies.genome_v4_chameleon import ChameleonV4
+                                    strat_cls = ChameleonV4
+                                else:
+                                    from strategies.genome_v4_precision import GenomeV4Precision
+                                    strat_cls = GenomeV4Precision
                             elif version == 3.0:
                                 from strategies.genome_v3_precision import GenomeV3
                                 strat_cls = GenomeV3
+                            elif version == 2.0:
+                                from strategies.genome_v2_multi import GenomeV2Strategy
+                                strat_cls = GenomeV2Strategy
                                 
                             if strat_cls:
                                 s = strat_cls(genome=genome)
-                                # Use filename as label if it's descriptive, else version
-                                label = f.replace(".json", "")
-                                if "cagr" not in label.lower():
-                                    label = f"V{int(version)}"
+                                
+                                # Professional Naming: Champion VX (Name)
+                                folder_name = os.path.basename(root)
+                                if f.lower() == "genome.json":
+                                    # Convert v6_balancer -> Champion V6 (Balancer)
+                                    parts = folder_name.split("_")
+                                    ver = parts[0].upper() # V6
+                                    name = " ".join(p.capitalize() for p in parts[1:]) # Balancer
+                                    s.NAME = f"Champion {ver} ({name})"
+                                else:
+                                    # Fallback for other JSONs
+                                    label = f.replace(".json", "")
+                                    s.NAME = self._clean_name(label, "GENE", genome)
                                     
-                                s.NAME = self._clean_name(label, "GENE", genome)
                                 strategies.append(s)
                         except Exception as e:
                             print(f"  Error loading genome {f}: {e}")

@@ -96,19 +96,19 @@ class GenomeV6(BaseStrategy):
         for b_name, b_data in self.genome['brains'].items():
             total = 0
             w, a = b_data['w'], b_data['a']
-            if a.get('sma', True) and val_sma: total += w['sma'] * ((spy_price - val_sma) / val_sma * 5)
-            if a.get('ema', True) and val_ema: total += w['ema'] * ((spy_price - val_ema) / val_ema * 10)
-            if a.get('rsi', True) and val_rsi: total += w['rsi'] * ((val_rsi - 50) / 50.0)
-            if a.get('macd', True): total += w['macd'] * (val_macd / spy_price * 100)
-            if a.get('adx', True) and val_adx: total += w['adx'] * ((val_adx - 25) / 25.0)
-            if a.get('trix', True) and val_trix: total += w['trix'] * val_trix
-            if a.get('slope', True) and val_slope: total += w['slope'] * (val_slope / spy_price * 1000)
-            if a.get('vol', True) and val_vol: total += w['vol'] * (val_vol * 5)
-            if a.get('atr', True) and val_atr: total += w['atr'] * ((val_atr / spy_price) * 50)
-            if a.get('mfi', True) and val_mfi: total += w['mfi'] * ((val_mfi - 50) / 50.0)
-            if a.get('bbw', True) and val_bbw: total += w['bbw'] * (val_bbw * 10)
-            if a.get('vix', True): total += w['vix'] * ((macro_vix - 20) / 10.0)
-            if a.get('yc', True): total += w['yc'] * macro_yc
+            if a.get('sma', True) and val_sma: total += w.get('sma', 0) * ((spy_price - val_sma) / val_sma * 5)
+            if a.get('ema', True) and val_ema: total += w.get('ema', 0) * ((spy_price - val_ema) / val_ema * 10)
+            if a.get('rsi', True) and val_rsi: total += w.get('rsi', 0) * ((val_rsi - 50) / 50.0)
+            if a.get('macd', True): total += w.get('macd', 0) * (val_macd / spy_price * 100)
+            if a.get('adx', True) and val_adx: total += w.get('adx', 0) * ((val_adx - 25) / 25.0)
+            if a.get('trix', True) and val_trix: total += w.get('trix', 0) * val_trix
+            if a.get('slope', True) and val_slope: total += w.get('slope', 0) * (val_slope / spy_price * 1000)
+            if a.get('vol', True) and val_vol: total += w.get('vol', 0) * (val_vol * 5)
+            if a.get('atr', True) and val_atr: total += w.get('atr', 0) * ((val_atr / spy_price) * 50)
+            if a.get('mfi', True) and val_mfi: total += w.get('mfi', 0) * ((val_mfi - 50) / 50.0)
+            if a.get('bbw', True) and val_bbw: total += w.get('bbw', 0) * (val_bbw * 10)
+            if a.get('vix', True): total += w.get('vix', 0) * ((macro_vix - 20) / 10.0)
+            if a.get('yc', True): total += w.get('yc', 0) * macro_yc
             scores[b_name] = total
             
         return scores
