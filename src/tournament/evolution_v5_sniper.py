@@ -5,7 +5,7 @@ import time
 import os
 import pandas as pd
 
-from strategies.genome_v5_sniper import GenomeV5Sniper
+from strategies.v5_sniper.genome import GenomeV5Sniper
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
@@ -152,7 +152,7 @@ class EvolutionEngineV5Sniper:
                     vault_dir = "champions/v5_sniper/vault"
                     if not os.path.exists(vault_dir): os.makedirs(vault_dir)
                     c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
-                    with open(f"{vault_dir}/v5s_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
+                    with open(f"{vault_dir}/v5_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
                         json.dump(best_genome, f, indent=2)
                 
                 elapsed = time.time() - start_time
