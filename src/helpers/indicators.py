@@ -436,3 +436,50 @@ def adx(highs: list, lows: list, closes: list, period: int = 14, state: dict = N
         state["adx"] = (state["adx"] * (period - 1) + dx) / period
         
     return state["adx"]
+
+def mfi(highs: list, lows: list, closes: list, volumes: list, period: int = 14):
+    """Money Flow Index: Volume-weighted RSI."""
+    if len(highs) < period + 1:
+        return None
+    
+    typical_prices = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
+    raw_money_flow = [tp * v for tp, v in zip(typical_prices, volumes)]
+    
+    pos_flow = []
+    neg_flow = []
+    
+    for i in range(1, len(typical_prices)):
+        if typical_prices[i] > typical_prices[i-1]:
+            pos_flow.append(raw_money_flow[i])
+            neg_flow.append(0)
+        elif typical_prices[i] < typical_prices[i-1]:
+            pos_flow.append(0)
+            neg_flow.append(raw_money_flow[i])
+        else:
+            pos_flow.append(0)
+            neg_flow.append(0)
+            
+    if len(pos_flow) < period:
+        return None
+        
+    sum_pos = sum(pos_flow[-period:])
+    sum_neg = sum(neg_flow[-period:])
+    
+    if sum_neg == 0:
+        return 100
+        
+    m_ratio = sum_pos / sum_neg
+    return 100 - (100 / (1 + m_ratio))
+
+def bollinger_width(prices: list, period: int = 20, std_dev: float = 2.0):
+    """Returns Bollinger Band Width (BBW)."""
+    if len(prices) < period:
+        return None
+    
+    prices_arr = np.array(prices[-period:])
+    mid = np.mean(prices_arr)
+    std = np.std(prices_arr)
+    
+    upper = mid + (std * std_dev)
+    lower = mid - (std * std_dev)
+    return (upper - lower) / mid if mid != 0 else 0

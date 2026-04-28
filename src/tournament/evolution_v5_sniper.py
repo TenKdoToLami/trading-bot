@@ -5,7 +5,7 @@ import time
 import os
 import pandas as pd
 
-from strategies.v5_sniper.genome import GenomeV5Sniper
+from strategies.genome_v5_sniper import GenomeV5Sniper
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 

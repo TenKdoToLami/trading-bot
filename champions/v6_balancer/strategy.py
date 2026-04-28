@@ -1,6 +1,6 @@
 import json
 import os
-from strategies.v6_balancer.genome import GenomeV6
+from strategies.genome_v6_balancer import GenomeV6
 
 class ChampionV6(GenomeV6):
     """

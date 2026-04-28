@@ -214,46 +214,59 @@ class TournamentRunner:
                     except Exception as e:
                         print(f"  Error loading strategy {module_name}: {e}")
 
-        # 2. Search champions/ folder
+        # 2. Search champions/ folder for JSON genomes and Bridges
         champ_dir = os.path.join(os.path.dirname(__file__), "..", "..", "champions")
         if os.path.exists(champ_dir):
             for root, dirs, files in os.walk(champ_dir):
+                # A. Look for JSON genomes (Dynamic Champions)
+                for f in files:
+                    if f.endswith(".json") and f != "metadata.json":
+                        json_path = os.path.join(root, f)
+                        try:
+                            with open(json_path, "r") as jf:
+                                genome = json.load(jf)
+                            
+                            version = genome.get('version', 0.0)
+                            strat_cls = None
+                            
+                            if version == 6.0:
+                                from strategies.genome_v6_balancer import GenomeV6
+                                strat_cls = GenomeV6
+                            elif version == 5.0:
+                                from strategies.genome_v5_sniper import GenomeV5Sniper
+                                strat_cls = GenomeV5Sniper
+                            elif version == 4.0:
+                                from strategies.genome_v4_precision import GenomeV4Precision
+                                strat_cls = GenomeV4Precision
+                            elif version == 3.0:
+                                from strategies.genome_v3_precision import GenomeV3
+                                strat_cls = GenomeV3
+                                
+                            if strat_cls:
+                                s = strat_cls(genome=genome)
+                                # Use filename as label if it's descriptive, else version
+                                label = f.replace(".json", "")
+                                if "cagr" not in label.lower():
+                                    label = f"V{int(version)}"
+                                    
+                                s.NAME = self._clean_name(label, "GENE", genome)
+                                strategies.append(s)
+                        except Exception as e:
+                            print(f"  Error loading genome {f}: {e}")
+
+                # B. Look for manual strategy.py Bridges (Legacy/Manual Champions)
                 if "strategy.py" in files:
-                    # Get version from folder name (e.g. V3_PRECISION -> V3)
-                    folder_name = os.path.basename(root).upper()
-                    version = folder_name.split("_")[0] 
-                    
+                    # (Keep existing bridge logic for non-json strategies)
                     rel_path = os.path.relpath(root, os.path.join(os.path.dirname(__file__), "..", ".."))
                     module_name = rel_path.replace(os.sep, ".") + ".strategy"
                     try:
                         module = importlib.import_module(module_name)
                         for attr in dir(module):
                             cls = getattr(module, attr)
-                            if (isinstance(cls, type) and 
-                                issubclass(cls, BaseStrategy) and 
-                                cls != BaseStrategy and 
-                                not attr.startswith("_") and
-                                cls.__module__ == module_name):
-                                
+                            if (isinstance(cls, type) and issubclass(cls, BaseStrategy) and cls != BaseStrategy and not attr.startswith("_")):
                                 s = cls()
-                                is_gene = hasattr(s, 'genome') and s.genome is not None
-                                cat = "CHAMP" if not is_gene else "GENE"
-                                
-                                # Clean name of redundant version info
-                                base_name = s.NAME
-                                if version in base_name:
-                                    base_name = base_name.replace(version, "").replace("|", "").strip()
-                                
-                                final_label = f"{version} | {base_name}" if version else base_name
-                                s.NAME = self._clean_name(final_label, cat, s.genome if is_gene else None)
-                                
-                                # Skip evolved genomes that don't trade (the "10.72% noise")
-                                if is_gene and "B&H" not in s.NAME:
-                                    # Quick dry run to check trade count? 
-                                    # Better: filter during/after results gathering.
-                                    pass
-                                
-                                strategies.append(s)
+                                if not any(existing.NAME == s.NAME for existing in strategies):
+                                    strategies.append(s)
                     except Exception as e:
                         print(f"  Error loading champion {module_name}: {e}")
         return strategies

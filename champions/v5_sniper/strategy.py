@@ -1,6 +1,6 @@
 import json
 import os
-from strategies.v5_sniper.genome import GenomeV5Sniper
+from strategies.genome_v5_sniper import GenomeV5Sniper
 
 class ChampionV5Sniper(GenomeV5Sniper):
     """

@@ -9,7 +9,8 @@ import math
 import numpy as np
 from strategies.base import BaseStrategy
 from src.helpers.indicators import (
-    sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
+    sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility,
+    mfi, bollinger_width
 )
 
 def softmax(x, temp=1.0):
@@ -26,7 +27,7 @@ class GenomeV6(BaseStrategy):
         self.reset()
 
     def _default_genome(self):
-        indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
+        indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc', 'mfi', 'bbw']
         return {
             'brains': {
                 'cash': {'w': {k: 0.0 for k in indicators}, 'a': {k: True for k in indicators}},
@@ -36,7 +37,8 @@ class GenomeV6(BaseStrategy):
             },
             'lookbacks': {
                 'sma': 200, 'ema': 50, 'rsi': 14, 'macd_f': 12, 'macd_s': 26,
-                'adx': 14, 'trix': 15, 'slope': 20, 'vol': 20, 'atr': 14
+                'adx': 14, 'trix': 15, 'slope': 20, 'vol': 20, 'atr': 14,
+                'mfi': 14, 'bbw': 20
             },
             'temp': 1.0,
             'lock_days': 2,
@@ -47,6 +49,7 @@ class GenomeV6(BaseStrategy):
         self.prices = []
         self.highs = []
         self.lows = []
+        self.volumes = []
         self.brain_state = {}
         self.last_holdings = None
         self.lock_counter = 0
@@ -81,6 +84,9 @@ class GenomeV6(BaseStrategy):
         val_vol = _fetch('vol', realized_volatility, self.prices)
         val_atr = atr(self.highs, self.lows, self.prices, max(2, int(round(lb.get('atr', 14)))), prev_atr=state.get('prev_atr'))
         state['prev_atr'] = val_atr
+        
+        val_mfi = mfi(self.highs, self.lows, self.prices, self.volumes, max(2, int(round(lb.get('mfi', 14)))))
+        val_bbw = bollinger_width(self.prices, max(2, int(round(lb.get('bbw', 20)))))
 
         macro_vix = float(price_data.get('vix', 15.0))
         macro_yc = float(price_data.get('yield_curve', 0.0))
@@ -99,6 +105,8 @@ class GenomeV6(BaseStrategy):
             if a.get('slope', True) and val_slope: total += w['slope'] * (val_slope / spy_price * 1000)
             if a.get('vol', True) and val_vol: total += w['vol'] * (val_vol * 5)
             if a.get('atr', True) and val_atr: total += w['atr'] * ((val_atr / spy_price) * 50)
+            if a.get('mfi', True) and val_mfi: total += w['mfi'] * ((val_mfi - 50) / 50.0)
+            if a.get('bbw', True) and val_bbw: total += w['bbw'] * (val_bbw * 10)
             if a.get('vix', True): total += w['vix'] * ((macro_vix - 20) / 10.0)
             if a.get('yc', True): total += w['yc'] * macro_yc
             scores[b_name] = total
@@ -109,6 +117,7 @@ class GenomeV6(BaseStrategy):
         self.prices.append(price_data['close'])
         self.highs.append(price_data['high'])
         self.lows.append(price_data['low'])
+        self.volumes.append(float(price_data.get('volume', 1000000)))
 
         if self.lock_counter > 0: self.lock_counter -= 1
 

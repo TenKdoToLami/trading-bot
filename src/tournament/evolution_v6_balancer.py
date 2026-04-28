@@ -5,7 +5,7 @@ import time
 import os
 import pandas as pd
 
-from strategies.v6_balancer.genome import GenomeV6
+from strategies.genome_v6_balancer import GenomeV6
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
@@ -43,13 +43,13 @@ class EvolutionEngineV6:
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
-        self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
+        self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc', 'mfi', 'bbw']
         self.brains = ['cash', '1x', '2x', '3x']
         
         self.lb_bounds = {
             'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30),
             'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50),
-            'vol': (5, 60), 'atr': (5, 50)
+            'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bbw': (5, 60)
         }
 
         print("Loading master data for Evolution V6 Balancer...")
@@ -79,8 +79,8 @@ class EvolutionEngineV6:
         genome = {
             'brains': {},
             'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()},
-            'temp': random.uniform(0.5, 2.0),
-            'lock_days': random.uniform(1, 5),
+            'temp': random.uniform(0.1, 1.5),
+            'lock_days': random.uniform(1, 10),
             'version': 6.0
         }
         for b in self.brains:
@@ -110,7 +110,7 @@ class EvolutionEngineV6:
             'brains': {},
             'lookbacks': {},
             'temp': max(0.1, genome['temp'] + random.gauss(0, 0.2)) if random.random() < self.mutation_rate else genome['temp'],
-            'lock_days': max(1, min(10, genome['lock_days'] + random.gauss(0, 1))) if random.random() < self.mutation_rate else genome['lock_days'],
+            'lock_days': max(1, min(14, genome['lock_days'] + random.gauss(0, 1))) if random.random() < self.mutation_rate else genome['lock_days'],
             'version': 6.0
         }
         for b in self.brains:
