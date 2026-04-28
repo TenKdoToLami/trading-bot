@@ -100,19 +100,20 @@ def macd(prices: list, fast: int = 12, slow: int = 26, signal: int = 9, state: d
 
     if state and "fast_ema" in state and "slow_ema" in state:
         # Incremental path
-        state["fast_ema"] = ema(prices, fast, prev_ema=state["fast_ema"])
-        state["slow_ema"] = ema(prices, slow, prev_ema=state["slow_ema"])
-        macd_line = state["fast_ema"] - state["slow_ema"]
+        f_ema = ema(prices, fast, prev_ema=state["fast_ema"])
+        s_ema = ema(prices, slow, prev_ema=state["slow_ema"])
+        
+        if f_ema is None or s_ema is None:
+            return None, None, None
+            
+        state["fast_ema"] = f_ema
+        state["slow_ema"] = s_ema
+        macd_line = f_ema - s_ema
         
         # Signal line is an EMA of the MACD line
-        # We use a temporary list of 1 value to use the ema() helper or just do it manually
         if "signal_ema" in state and state["signal_ema"] is not None:
             k = 2 / (signal + 1)
             state["signal_ema"] = (macd_line * k) + (state["signal_ema"] * (1 - k))
-        else:
-            # Need to seed signal_ema? Usually we'd need 'signal' macd values.
-            # For simplicity, if not yet seeded, we fall back to full.
-            pass
         
         if "signal_ema" in state and state["signal_ema"] is not None:
             return macd_line, state["signal_ema"], macd_line - state["signal_ema"]
