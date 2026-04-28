@@ -137,19 +137,21 @@ python tests/run_evolution_v4.py --pop 100 --gen 50
 - **Persistence**: Record-breaking genomes are saved to `champions/V4_CHAMELEON/vault/`.
 
 
-### 7. Genome V4 Precision — 3-State AI Evolution (Alternative)
-V4 Precision (V4P) evolves the same deep indicator logic as V3 but introduces a **Neutral State**. Instead of jumping between 3xSPY and CASH, it uses SPY as a baseline during moderate conditions.
+### 7. Genome V4 Precision & Beyond (Advanced)
+- **V4 Precision**: 3-State AI (CASH/1x/3x) with evolved lookbacks.
+- **V5 Sniper**: Tiered leverage specialists (1x -> 2x -> 3x) for optimized entry.
+- **V6 Balancer**: Institutional-grade probabilistic allocator (Softmax CASH/1x/2x/3x).
 
 ```bash
-# Evolve the 3-state AI
+# V4 Precision Evolution
 python tests/run_evolution_v4_precision.py --pop 300 --gen 100
-```
 
-#### How it Works: 3-State Logic
-- **Three Regimes**: 
-  - **Panic**: Triggered by the `panic` brain scoring above threshold -> **CASH**.
-  - **Bullish**: Triggered by the `bull` brain scoring above threshold -> **3xSPY**.
-  - **Neutral**: Default state when neither brain triggers -> **SPY**.
+# V5 Sniper Evolution (Tiered Leverage)
+python tests/run_evolution_v5_sniper.py --pop 300 --gen 100
+
+# V6 Balancer Evolution (Probabilistic Allocator)
+python tests/run_evolution_v6_balancer.py --pop 500 --gen 100
+```
 
 
 ### 8. Genome V5 Sniper — Tiered Leverage Specialist (New)
@@ -160,7 +162,6 @@ The V5 architecture is a high-performance **Entry Hunter**. Unlike previous vers
 python tests/run_evolution_v5_sniper.py --pop 300 --gen 100
 
 python tests/run_evolution_v5_sniper.py --pop 500 --gen 100 --seed champions/v5_sniper/vault
-
 ```
 
 #### How it Works: Tiered Logic
@@ -178,11 +179,14 @@ These tools help you verify the quality and resilience of your discovered strate
 Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
 
 ```bash
-# Sweep V4 Precision vault (The new 3-state AI)
-python tests/vault_sweep.py --vault champions/v4_precision/vault
+# Sweep V6 Balancer (Probabilistic)
+python tests/vault_sweep.py --vault champions/v6_balancer/vault
 
-# Sweep V4 Chameleon vault (The gold standard)
-python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault
+# Sweep V5 Sniper (Tiered)
+python tests/vault_sweep.py --vault champions/v5_sniper/vault
+
+# Sweep V4 Precision (3-State)
+python tests/vault_sweep.py --vault champions/v4_precision/vault
 
 # Sweep V3 vault
 python tests/vault_sweep.py --vault champions/v3_precision/vault
