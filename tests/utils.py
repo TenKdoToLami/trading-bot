@@ -5,6 +5,7 @@ from strategies.base import BaseStrategy
 from strategies._genome_strategy import GenomeStrategy
 from strategies.genome_v2_strategy import GenomeV2Strategy
 from strategies.genome_v3_strategy import GenomeV3Strategy
+from strategies.genome_v4_precision import GenomeV4Precision
 from strategies.gene_v4_chameleon import ChameleonV4
 from src.tournament.runner import TournamentRunner
 
@@ -33,7 +34,11 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         elif "vix_ema" in genome and "vol_stretch" in genome:
             return ChameleonV4(genome=genome)
         elif "panic" in genome and "bull" in genome and "lookbacks" in genome['panic']:
-            return GenomeV3Strategy(genome=genome)
+            # Distinguish V3 (Binary) from V4 (3-State)
+            if genome.get('version') == 4.0 or "v4_precision" in identifier.lower():
+                return GenomeV4Precision(genome=genome)
+            else:
+                return GenomeV3Strategy(genome=genome)
         elif "panic" in genome and "3x" in genome:
             return GenomeV2Strategy(genome=genome)
         else:

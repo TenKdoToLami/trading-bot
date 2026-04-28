@@ -137,30 +137,64 @@ python tests/run_evolution_v4.py --pop 100 --gen 50
 - **Persistence**: Record-breaking genomes are saved to `champions/V4_CHAMELEON/vault/`.
 
 
-## 🛠️ Diagnostics & Strategy Audit
-These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect if a genome is **V1, V2, or V3**.
+### 7. Genome V4 Precision — 3-State AI Evolution (Alternative)
+V4 Precision (V4P) evolves the same deep indicator logic as V3 but introduces a **Neutral State**. Instead of jumping between 3xSPY and CASH, it uses SPY as a baseline during moderate conditions.
 
-### 6. Vault Sweep — Cross-Regime Stress Test
+```bash
+# Evolve the 3-state AI
+python tests/run_evolution_v4_precision.py --pop 300 --gen 100
+```
+
+#### How it Works: 3-State Logic
+- **Three Regimes**: 
+  - **Panic**: Triggered by the `panic` brain scoring above threshold -> **CASH**.
+  - **Bullish**: Triggered by the `bull` brain scoring above threshold -> **3xSPY**.
+  - **Neutral**: Default state when neither brain triggers -> **SPY**.
+
+
+### 8. Genome V5 Sniper — Tiered Leverage Specialist (New)
+The V5 architecture is a high-performance **Entry Hunter**. Unlike previous versions that hide in cash, the Sniper stays 100% invested in SPY as its baseline and use "fading" leverage to boost gains during bullish setups.
+
+```bash
+# Evolve the Tiered Sniper AI
+python tests/run_evolution_v5_sniper.py --pop 300 --gen 100
+```
+
+#### How it Works: Tiered Logic
+- **Baseline (1.0x SPY)**: Default state. No cash drag, always capturing market growth.
+- **Moderate Snipe (2.0x SPY)**: Triggered when the AI brain score exceeds `t_low`.
+- **Extreme Snipe (3.0x SPY)**: Triggered when the AI brain score exceeds `t_high`.
+- **Fading Leverage**: As market signals fade, the strategy scales back from 3x -> 2x -> 1x, ensuring a smoother equity curve than binary switching.
+- **Pure Growth**: This strategy has **no CASH state**. It is designed for investors who want to be 100% long at all times but with intelligent leverage scaling.
+
+
+## 🛠️ Diagnostics & Strategy Audit
+These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect if a genome is **V1, V2, V3, or V4**.
+
+### 8. Vault Sweep — Cross-Regime Stress Test
 Tests every genome in the vault across rolling 5-year windows (0–5yr, 5–10yr, ... 25–30yr) and ranks them by resilience.
 
 ```bash
-# Sweep V4 Chameleon vault (The current gold standard)
-python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault --samples 20
+# Sweep V4 Precision vault (The new 3-state AI)
+python tests/vault_sweep.py --vault champions/v4_precision/vault
+
+# Sweep V4 Chameleon vault (The gold standard)
+python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault
 
 # Sweep V3 vault
 python tests/vault_sweep.py --vault champions/v3_precision/vault
 
 # Sweep the V2 vault
-python tests/vault_sweep.py --vault champions/v2_multi/vault --samples 15
+python tests/vault_sweep.py --vault champions/v2_multi/vault
 ```
 
-### 7. Genome X-Ray — Deep Behavioral Audit
+### 9. Genome X-Ray — Deep Behavioral Audit
 Runs a single genome over the full inception period and produces a detailed breakdown of allocation behavior, including transition matrices and DNA visualization.
 
 ```bash
 # X-Ray a champion (by path or name)
-python tests/genome_xray.py champions/v3_precision/genome.json
-python tests/genome_xray.py "Champion V3 (AI Precision)"
+python tests/genome_xray.py champions/v4_precision/genome.json
+python tests/genome_xray.py "Champion V4 (AI Precision)"
 python tests/genome_xray.py "BEAST (SMA + RealVol)"
 ```
 Reports include:
@@ -169,41 +203,41 @@ Reports include:
 - **Switching Behavior**: Total rebalances, switches per year.
 - **Genome DNA**: Active indicators, weights, and **Lookback Periods** (for V3).
 
-### 8. Performance Audit — Institutional Report
+### 10. Performance Audit — Institutional Report
 Produces a bit-perfect terminal table of monthly/yearly returns and core risk metrics.
 
 ```bash
 # Audit any strategy (auto-detects version)
-python tests/performance_audit.py champions/v3_precision/genome.json
+python tests/performance_audit.py champions/v4_precision/genome.json
 python tests/performance_audit.py "Buy & Hold 3x"
 ```
 
-### 9. Resilience Showdown — The Champion Battle
+### 11. Resilience Showdown — The Champion Battle
 Runs 100+ random historical periods (1–10 years) and counts how often each champion wins.
 
 ```bash
-# Compare a V2 champ against a V3 champ
-python tests/sweep_showdown.py champions/v2_multi/genome.json champions/v3_precision/genome.json --matches 100
+# Compare V4 Precision against V4 Chameleon
+python tests/sweep_showdown.py champions/v4_precision/genome.json champions/V4_CHAMELEON/genome.json --matches 100
 ```
 
-### 10. Monte Carlo Audit — Robustness Stress Test
-The ultimate verification for V3. Generates 100+ "Alternative Timelines" by adding daily jitter, scaling volatility, and shifting macro signals. Calculates the true **Probability of Ruin**.
+### 12. Monte Carlo Audit — Robustness Stress Test
+The ultimate verification for V4. Generates 100+ "Alternative Timelines" by adding daily jitter, scaling volatility, and shifting macro signals. Calculates the true **Probability of Ruin**.
 
 ```bash
-# Stress test any strategy
-python tests/monte_carlo_audit.py champions/v3_precision/genome.json --iterations 100
+# Stress test V4 Precision
+python tests/monte_carlo_audit.py champions/v4_precision/genome.json --iterations 100
 python tests/monte_carlo_audit.py "Full Cash Panic"
 ```
 
-### 11. Synthetic Data Tester — Anti-Overfitting Audit
+### 13. Synthetic Data Tester — Anti-Overfitting Audit
 Stitches together random blocks of historical data to ensure the strategy isn't "one-trick pony" that relies on a specific historical sequence.
 
 ```bash
-# Run synthetic audit on any strategy
-python tests/synthetic_audit.py "Champion V3 (AI Precision)" --iters 50 --chunk 252
+# Run synthetic audit on V4 Precision
+python tests/synthetic_audit.py "Champion V4 (AI Precision)" --iters 50 --chunk 252
 ```
 
-### 12. Interactive Command Center
+### 14. Interactive Command Center
 A browser-based dashboard for visual backtesting with time-travel capabilities.
 ```bash
 # Generate the latest simulation data
@@ -222,7 +256,7 @@ Features:
 - **Live Simulation**: Press PLAY to watch the bot navigate 30 years of history
 - **Risk Telemetry**: Real-time drawdown, VIX, tier tracking, and tactical grid
 
-### 11. Output
+### 15. Output
 - **Metrics table**: CAGR, Sharpe, Max Drawdown, Volatility, Trade count — printed to console.
 - **Interactive Audit**: Once the tournament completes, it will automatically generate an interactive HTML report in `results/report.html` with sortable tables and Plotly charts.
 - **Vault**: Optimal DNA matrices saved to `champions/vX/vault/`.
@@ -292,6 +326,7 @@ strategies/             # Strategy plugins
   full_cash_panic.py    #   Binary: 3x bull / 100% cash panic
   genome_v2_strategy.py #   AI: Multi-Brain (3x/2x/1x/Cash)
   genome_v3_strategy.py #   AI: Precision Binary with Genetic Lookbacks
+  genome_v4_precision.py #  AI: Precision 3-State (3x/1x/Cash)
   gene_v4_chameleon.py  #   AI: Adaptive Volatility & Momentum (Chameleon)
 
 src/
@@ -309,6 +344,7 @@ tests/
   run_evolution.py      # CLI: genetic algorithm V1
   run_evolution_v2.py   # CLI: genetic algorithm V2
   run_evolution_v3.py   #   CLI: genetic algorithm V3
+  run_evolution_v4_precision.py # CLI: 3-state AI evolution
   run_evolution_v4.py   #   CLI: genetic algorithm V4
   vault_sweep.py        # CLI: cross-regime stress test
   sweep_showdown.py     # CLI: V1 vs V2 resilience showdown
