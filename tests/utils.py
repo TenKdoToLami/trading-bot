@@ -2,11 +2,6 @@ import json
 import os
 import sys
 from strategies.base import BaseStrategy
-from strategies._genome_strategy import GenomeStrategy
-from strategies.genome_v2_strategy import GenomeV2Strategy
-from strategies.genome_v3_strategy import GenomeV3Strategy
-from strategies.genome_v4_precision import GenomeV4Precision
-from strategies.gene_v4_chameleon import ChameleonV4
 from src.tournament.runner import TournamentRunner
 
 def resolve_strategy(identifier: str) -> BaseStrategy:
@@ -26,29 +21,41 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         with open(identifier, "r") as f:
             genome = json.load(f)
             
-        # Detect version
-        if "bounds_p" in genome or "weights_p" in genome:
-            # Legacy Manual or V1 structure
-            from champions.v1_manual.strategy import ManualV1
-            return ManualV1(genome=genome)
+        # --- PRIORITY 1: Modern Champions (V6, V5) ---
+        if "brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"]) or genome.get('version') == 6.0:
+            from strategies.genome_v6_balancer import GenomeV6
+            return GenomeV6(genome=genome)
+            
+        elif "sniper" in genome or genome.get('version') == 5.0:
+            from strategies.genome_v5_sniper import GenomeV5Sniper
+            return GenomeV5Sniper(genome=genome)
+            
+        # --- PRIORITY 2: Elite Versions (V4, V3) ---
         elif "vix_ema" in genome and "vol_stretch" in genome:
+            from strategies.genome_v4_chameleon import ChameleonV4
             return ChameleonV4(genome=genome)
-        elif "panic" in genome and "bull" in genome and "lookbacks" in genome['panic']:
+        
+        elif "panic" in genome and "bull" in genome:
             # Distinguish V3 (Binary) from V4 (3-State)
             if genome.get('version') == 4.0 or "v4_precision" in identifier.lower():
+                from strategies.genome_v4_precision import GenomeV4Precision
                 return GenomeV4Precision(genome=genome)
             else:
+                from strategies.genome_v3_precision import GenomeV3Strategy
                 return GenomeV3Strategy(genome=genome)
-        elif "sniper" in genome:
-            from strategies.v5_sniper.genome import GenomeV5Sniper
-            return GenomeV5Sniper(genome=genome)
-        elif "brains" in genome and "cash" in genome["brains"]:
-            from strategies.v6_balancer.genome import GenomeV6
-            return GenomeV6(genome=genome)
+                
+        # --- PRIORITY 3: Legacy Versions (V2, V1) ---
         elif "panic" in genome and "3x" in genome:
+            from strategies.genome_v2_multi import GenomeV2Strategy
             return GenomeV2Strategy(genome=genome)
+            
+        elif "panic_weights" in genome:
+            from strategies._genome_strategy import GenomeStrategy
+            return GenomeStrategy(genome=genome)
+            
         else:
-            # Fallback to V1
+            # Final fallback
+            from strategies._genome_strategy import GenomeStrategy
             return GenomeStrategy(genome=genome)
 
     # 2. Treat as strategy name

@@ -232,12 +232,19 @@ class TournamentRunner:
                             
                             version = genome.get('version', 0.0)
                             if version == 0.0:
-                                folder_name = os.path.basename(root).lower()
-                                if "v6" in folder_name: version = 6.0
-                                elif "v5" in folder_name: version = 5.0
-                                elif "v4" in folder_name: version = 4.0
-                                elif "v3" in folder_name: version = 3.0
-                                elif "v2" in folder_name: version = 2.0
+                                # Detection for legacy V1 structures
+                                if "bounds_p" in genome or "weights_p" in genome:
+                                    version = 1.0
+                                elif "panic_weights" in genome:
+                                    # V1 Classic (GenomeStrategy)
+                                    version = 1.1 
+                                else:
+                                    folder_name = os.path.basename(root).lower()
+                                    if "v6" in folder_name: version = 6.0
+                                    elif "v5" in folder_name: version = 5.0
+                                    elif "v4" in folder_name: version = 4.0
+                                    elif "v3" in folder_name: version = 3.0
+                                    elif "v2" in folder_name: version = 2.0
                                 
                             strat_cls = None
                             
@@ -256,11 +263,17 @@ class TournamentRunner:
                                     from strategies.genome_v4_precision import GenomeV4Precision
                                     strat_cls = GenomeV4Precision
                             elif version == 3.0:
-                                from strategies.genome_v3_precision import GenomeV3
-                                strat_cls = GenomeV3
+                                from strategies.genome_v3_precision import GenomeV3Strategy
+                                strat_cls = GenomeV3Strategy
                             elif version == 2.0:
                                 from strategies.genome_v2_multi import GenomeV2Strategy
                                 strat_cls = GenomeV2Strategy
+                            elif version == 1.1:
+                                from strategies._genome_strategy import GenomeStrategy
+                                strat_cls = GenomeStrategy
+                            elif version == 1.0:
+                                from strategies.genome_v1_manual import ManualV1
+                                strat_cls = ManualV1
                                 
                             if strat_cls:
                                 s = strat_cls(genome=genome)
