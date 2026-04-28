@@ -39,6 +39,5 @@ python tests/run_evolution_v4_precision.py --pop 300 --gen 50 --seed champions/v
 
 ### 🧪 Special Modifiers
 - `--mutation 0.4`: Increase "Creative" mutation for exploration.
-- `--mutation 0.1`: Decrease mutation for fine-tuning a champion.
+- `--min-cagr 0.40`: **Vault-Lock**. Prevents disk saves (vault and genome.json) for any genome failing to hit 40% CAGR, while allowing genetic discovery to continue.
 - `--ablation`: Enable **Ablation Mode**. Allows the AI to evolve "False" states for indicators, effectively pruning its own logic tree for better generalization.
-```

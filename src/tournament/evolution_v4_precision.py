@@ -146,11 +146,21 @@ class EvolutionEngineV4Precision:
                 if best_fit > best_overall_fitness:
                     best_overall_fitness = best_fit
                     best_overall_genome = best_genome
-                    vault_dir = "champions/v4_precision/vault"
-                    if not os.path.exists(vault_dir): os.makedirs(vault_dir)
-                    c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
-                    with open(f"{vault_dir}/v4p_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
-                        json.dump(best_genome, f, indent=2)
+                    
+                    # Vault-Lock: Only write to disk if threshold is met
+                    if best_metrics['cagr'] >= self.min_cagr:
+                        vault_dir = "champions/v4_precision/vault"
+                        if not os.path.exists(vault_dir): os.makedirs(vault_dir)
+                        c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
+                        with open(f"{vault_dir}/v4p_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
+                            json.dump(best_genome, f, indent=2)
+                        
+                        # Update main champion file
+                        save_path = "champions/v4_precision/genome.json"
+                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                        with open(save_path, "w") as f: json.dump(best_genome, f, indent=2)
+                    else:
+                        print(f"  [Vault-Lock] Gen {gen+1} champion blocked (CAGR {best_metrics['cagr']*100:.2f}% < {self.min_cagr*100:.1f}%)")
                 
                 elapsed = time.time() - start_time
                 print(f"V4-Prec Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")
@@ -161,7 +171,4 @@ class EvolutionEngineV4Precision:
                     new_pop.append(self._mutate(self._crossover(random.choice(elites), random.choice(elites))))
                 self.population = new_pop
 
-        save_path = "champions/v4_precision/genome.json"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "w") as f: json.dump(best_overall_genome, f, indent=2)
         return best_overall_genome

@@ -39,6 +39,5 @@ python tests/run_evolution_v5_sniper.py --pop 300 --gen 50 --seed champions/v5_s
 
 ### 🧪 Special Modifiers
 - `--mutation 0.4`: Increase "Creative" mutation for exploration.
-- `--mutation 0.1`: Decrease mutation for fine-tuning a champion.
+- `--min-cagr 0.30`: **Vault-Lock**. Evolution proceeds freely, but disk saves (vault and genome.json) are blocked unless the 30% CAGR target is met.
 - `--ablation`: Enable **Ablation Mode**. Allows the AI to evolve "False" states for indicators, effectively pruning its own logic tree for better generalization.
-```
