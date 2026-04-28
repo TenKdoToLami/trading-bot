@@ -151,6 +151,19 @@ class Portfolio:
             avg_leverage = 0.0
             allocation_pct = {a: 0.0 for a in all_assets}
 
+        # Win Rate and Profit Factor
+        wins = daily_rets[daily_rets > 0]
+        losses = daily_rets[daily_rets < 0]
+        
+        win_rate = len(wins) / len(daily_rets) if len(daily_rets) > 0 else 0.0
+        
+        gross_wins = np.sum(wins)
+        gross_losses = np.sum(np.abs(losses))
+        profit_factor = gross_wins / gross_losses if gross_losses > 0 else (99.0 if gross_wins > 0 else 0.0)
+        
+        # Calmar Ratio
+        calmar = cagr / abs(max_dd) if max_dd != 0 else 0.0
+        
         return {
             "cagr": cagr,
             "sharpe": sharpe,
@@ -161,5 +174,8 @@ class Portfolio:
             "trades_per_year": trades_per_year,
             "avg_leverage": avg_leverage,
             "allocation_pct": allocation_pct,
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
+            "calmar": calmar
         }
 

@@ -196,9 +196,12 @@ REPORT_TEMPLATE = """
                         <th onclick="sortTable('mainTable', 1)">CAGR</th>
                         <th onclick="sortTable('mainTable', 2)">Max DD</th>
                         <th onclick="sortTable('mainTable', 3)">Sharpe</th>
-                        <th onclick="sortTable('mainTable', 4)">Volat.</th>
-                        <th onclick="sortTable('mainTable', 5)">Lev.</th>
-                        <th onclick="sortTable('mainTable', 6)">Trades/Yr</th>
+                        <th onclick="sortTable('mainTable', 4)">Calmar</th>
+                        <th onclick="sortTable('mainTable', 5)">PF</th>
+                        <th onclick="sortTable('mainTable', 6)">Win%</th>
+                        <th onclick="sortTable('mainTable', 7)">Volat.</th>
+                        <th onclick="sortTable('mainTable', 8)">Lev.</th>
+                        <th onclick="sortTable('mainTable', 9)">Trades/Yr</th>
                         <th>Residency <i class="info-icon" data-tooltip="Percentage of time spent in each leverage tier. Red: 3x, Yellow: 2x, Blue: 1x, Gray: Cash.">i</i></th>
                     </tr>
                 </thead>
@@ -265,20 +268,29 @@ REPORT_TEMPLATE = """
         function buildMainTable(items) {
             document.getElementById('mainTableBody').innerHTML = items.map(item => {
                 const m = item.metrics; const a = m.allocation_pct;
+                
+                // Tooltip text for residency
+                const resTooltip = `3x: ${(a['3xSPY']*100).toFixed(1)}% | 2x: ${(a['2xSPY']*100).toFixed(1)}% | 1x: ${(a['SPY']*100).toFixed(1)}% | Cash: ${(a['CASH']*100).toFixed(1)}%`;
+                
                 return `<tr>
                     <td class="strat-name">${item.name}</td>
                     <td class="${m.cagr > 0 ? 'positive' : 'negative'}">${(m.cagr * 100).toFixed(2)}%</td>
                     <td class="negative">${(m.max_dd * 100).toFixed(1)}%</td>
                     <td>${m.sharpe.toFixed(2)}</td>
+                    <td>${m.calmar.toFixed(2)}</td>
+                    <td class="${m.profit_factor > 1.5 ? 'positive' : ''}">${m.profit_factor.toFixed(2)}</td>
+                    <td>${(m.win_rate * 100).toFixed(1)}%</td>
                     <td>${(m.volatility * 100).toFixed(1)}%</td>
                     <td>${m.avg_leverage.toFixed(2)}x</td>
                     <td>${(m.num_rebalances / (item.curve.dates.length / 252)).toFixed(1)}</td>
-                    <td><div class="residency-bar">
-                        <div class="res-upro" style="width: ${a['3xSPY']*100}%"></div>
-                        <div class="res-sso" style="width: ${a['2xSPY']*100}%"></div>
-                        <div class="res-spy" style="width: ${a['SPY']*100}%"></div>
-                        <div class="res-cash" style="width: ${a['CASH']*100}%"></div>
-                    </div></td>
+                    <td>
+                        <div class="residency-bar info-icon" data-tooltip="${resTooltip}" style="width: 140px; height: 12px; border-radius: 6px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.1)">
+                            <div class="res-upro" style="width: ${a['3xSPY']*100}%"></div>
+                            <div class="res-sso" style="width: ${a['2xSPY']*100}%"></div>
+                            <div class="res-spy" style="width: ${a['SPY']*100}%"></div>
+                            <div class="res-cash" style="width: ${a['CASH']*100}%"></div>
+                        </div>
+                    </td>
                 </tr>`;
             }).join('');
         }
@@ -286,7 +298,7 @@ REPORT_TEMPLATE = """
         function buildAuditTable(tableId, items, auditKey) {
             document.getElementById(tableId).innerHTML = items.map(item => {
                 const a = item[auditKey];
-                if (!a) return `<tr><td class="strat-name">${item.name}</td><td colspan="6" style="text-align:center; color:var(--text-dim)">Audit Pending</td></tr>`;
+                if (!a) return `<tr><td class="strat-name">${item.name}</td><td colspan="7" style="text-align:center; color:var(--text-dim)">Audit Pending</td></tr>`;
                 
                 // Stability/Robustness score logic
                 const baselineCagr = item.metrics.cagr * 100;
@@ -324,11 +336,11 @@ REPORT_TEMPLATE = """
             const sorted = [...data].sort((a, b) => {
                 let valA, valB;
                 if (!auditKey) {
-                    const keys = ['name', 'metrics.cagr', 'metrics.max_dd', 'metrics.sharpe', 'metrics.volatility', 'metrics.avg_leverage'];
+                    const keys = ['name', 'metrics.cagr', 'metrics.max_dd', 'metrics.sharpe', 'metrics.calmar', 'metrics.profit_factor', 'metrics.win_rate', 'metrics.volatility', 'metrics.avg_leverage', 'metrics.num_rebalances'];
                     valA = keys[colIdx].split('.').reduce((o, i) => o[i], a);
                     valB = keys[colIdx].split('.').reduce((o, i) => o[i], b);
                 } else {
-                    const keys = ['name', 'avg_cagr', 'med_cagr', 'avg_dd', 'med_dd', 'avg_sharpe', 'stability'];
+                    const keys = ['name', 'avg_cagr', 'med_cagr', 'avg_dd', 'med_dd', 'avg_sharpe', 'avg_trades', 'stability'];
                     valA = colIdx === 0 ? a.name : (a[auditKey] ? a[auditKey][keys[colIdx]] : -999);
                     valB = colIdx === 0 ? b.name : (b[auditKey] ? b[auditKey][keys[colIdx]] : -999);
                 }

@@ -364,8 +364,10 @@ def atr(highs: list, lows: list, closes: list, period: int = 14, prev_atr: float
         return (prev_atr * (period - 1) + tr) / period
 
     # Full path (initial SMA of TRs)
+    # Optimization: Only look at the required window
     tr_history = []
-    for i in range(1, len(highs)):
+    start_idx = max(1, len(highs) - (period * 2)) 
+    for i in range(start_idx, len(highs)):
         curr_tr = max(
             highs[i] - lows[i],
             abs(highs[i] - closes[i-1]),
@@ -442,33 +444,28 @@ def mfi(highs: list, lows: list, closes: list, volumes: list, period: int = 14):
     if len(highs) < period + 1:
         return None
     
-    typical_prices = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
-    raw_money_flow = [tp * v for tp, v in zip(typical_prices, volumes)]
+    # Optimization: Slice lists to only include relevant period
+    h_s = highs[-(period+1):]
+    l_s = lows[-(period+1):]
+    c_s = closes[-(period+1):]
+    v_s = volumes[-(period+1):]
+
+    typical_prices = [(h + l + c) / 3 for h, l, c in zip(h_s, l_s, c_s)]
+    raw_money_flow = [tp * v for tp, v in zip(typical_prices, v_s)]
     
-    pos_flow = []
-    neg_flow = []
+    pos_flow = 0
+    neg_flow = 0
     
     for i in range(1, len(typical_prices)):
         if typical_prices[i] > typical_prices[i-1]:
-            pos_flow.append(raw_money_flow[i])
-            neg_flow.append(0)
+            pos_flow += raw_money_flow[i]
         elif typical_prices[i] < typical_prices[i-1]:
-            pos_flow.append(0)
-            neg_flow.append(raw_money_flow[i])
-        else:
-            pos_flow.append(0)
-            neg_flow.append(0)
+            neg_flow += raw_money_flow[i]
             
-    if len(pos_flow) < period:
-        return None
-        
-    sum_pos = sum(pos_flow[-period:])
-    sum_neg = sum(neg_flow[-period:])
-    
-    if sum_neg == 0:
+    if neg_flow == 0:
         return 100
         
-    m_ratio = sum_pos / sum_neg
+    m_ratio = pos_flow / neg_flow
     return 100 - (100 / (1 + m_ratio))
 
 def bollinger_width(prices: list, period: int = 20, std_dev: float = 2.0):

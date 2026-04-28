@@ -61,6 +61,7 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 | `--mut` | 0.15 | Mutation rate. Use `0.25 - 0.40` when seeding from a vault. |
 | `--seed`| None | Path to a `vault/` directory to load initial genomes from. |
 | `--ablation` | `Off` | Feature Selection: Disables indicators randomly to find the most robust subset. |
+| `--min-cagr`| `0.0` | **Performance Floor**: Ignores any genome with CAGR lower than this (e.g., `0.35` for 35%). |
 
 ---
 

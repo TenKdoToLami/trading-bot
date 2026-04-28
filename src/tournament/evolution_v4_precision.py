@@ -12,12 +12,16 @@ from src.helpers.data_provider import load_spy_data
 _worker_price_data = None
 _worker_dates = None
 
-def _init_worker(cache_file):
-    global _worker_price_data, _worker_dates
+_worker_min_cagr = 0.0
+
+def _init_worker(cache_file, min_cagr):
+    global _worker_price_data, _worker_dates, _worker_min_cagr
     import pandas as pd
+    _worker_min_cagr = min_cagr
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-    _worker_price_data = df.to_dict('records')
     _worker_dates = df.index
+    _worker_price_data = [row.to_dict() for _, row in df.iterrows()]
+    print(f"  [Worker {os.getpid()}] V4 Ready. Min CAGR: {_worker_min_cagr*100:.1f}%")
 
 def _evaluate_genome_worker(genome):
     res = _execute_simulation(
@@ -30,19 +34,23 @@ def _evaluate_genome_worker(genome):
     cagr = metrics['cagr']
     max_dd = abs(metrics['max_dd'])
     
+    # CAGR Threshold Enforcement
+    if cagr < _worker_min_cagr:
+        return -99999, genome, metrics
+        
     # ── Fitness Function: Alpha ──
-    # Base fitness: CAGR focus with MaxDD penalty
     fitness = (cagr * 100) - (max_dd * 10)
     
-    if metrics['max_dd'] < -0.95: fitness = -9999
+    if metrics['max_dd'] < -0.95: fitness = -99999
     return fitness, genome, metrics
 
 class EvolutionEngineV4Precision:
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.2, seed_vault=None, use_ablation=True):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
+        self.min_cagr = min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', 'bull']
         
@@ -125,9 +133,9 @@ class EvolutionEngineV4Precision:
         best_overall_fitness = -9999
         best_overall_genome = None
         max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V4 Precision: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f}")
+        print(f"Starting Evolution V4 Precision: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f}, MinCAGR: {self.min_cagr*100:.1f}%")
         
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file, self.min_cagr)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]

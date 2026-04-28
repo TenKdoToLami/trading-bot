@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--mutation", type=float, default=0.2, help="Mutation rate")
     parser.add_argument("--seed", type=str, default=None, help="Path to seed vault")
     parser.add_argument("--ablation", action="store_true", help="Enable indicator ablation")
+    parser.add_argument("--min-cagr", type=float, default=0.0, help="Minimum CAGR threshold (e.g. 0.35 for 35%)")
     
     args = parser.parse_args()
     
@@ -22,7 +23,8 @@ def main():
         generations=args.gen,
         mutation_rate=args.mutation,
         seed_vault=args.seed,
-        use_ablation=args.ablation
+        use_ablation=args.ablation,
+        min_cagr=args.min_cagr
     )
     
     engine.run()
