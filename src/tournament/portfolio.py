@@ -42,11 +42,10 @@ class Portfolio:
     def rebalance(self, date: str, new_holdings: dict):
         """
         Update allocation weights.
-
-        Args:
-            date:         ISO date string.
-            new_holdings: e.g. {"3xSPY": 0.7, "CASH": 0.3}
         """
+        if new_holdings == self.holdings:
+            return
+            
         self.holdings = dict(new_holdings)
         self.rebalance_log.append((date, dict(new_holdings)))
 

@@ -158,6 +158,9 @@ The V5 architecture is a high-performance **Entry Hunter**. Unlike previous vers
 ```bash
 # Evolve the Tiered Sniper AI
 python tests/run_evolution_v5_sniper.py --pop 300 --gen 100
+
+python tests/run_evolution_v5_sniper.py --pop 500 --gen 100 --seed champions/v5_sniper/vault
+
 ```
 
 #### How it Works: Tiered Logic

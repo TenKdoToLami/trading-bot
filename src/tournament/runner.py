@@ -203,6 +203,11 @@ class TournamentRunner:
                                 
                                 s = cls()
                                 if not getattr(s, "NAME", None): s.NAME = attr
+                                
+                                # Skip evolution templates (raw Genome classes in strategies folder)
+                                if "Genome" in attr or "[GENE]" in str(getattr(s, "NAME", "")):
+                                    continue
+                                    
                                 cat = "BASE" if "B&H" in s.NAME or "Buy & Hold" in s.NAME else "IND"
                                 s.NAME = self._clean_name(s.NAME, cat)
                                 strategies.append(s)
@@ -237,10 +242,17 @@ class TournamentRunner:
                                 # Clean name of redundant version info
                                 base_name = s.NAME
                                 if version in base_name:
-                                    base_name = base_name.replace(version, "").strip()
+                                    base_name = base_name.replace(version, "").replace("|", "").strip()
                                 
                                 final_label = f"{version} | {base_name}" if version else base_name
                                 s.NAME = self._clean_name(final_label, cat, s.genome if is_gene else None)
+                                
+                                # Skip evolved genomes that don't trade (the "10.72% noise")
+                                if is_gene and "B&H" not in s.NAME:
+                                    # Quick dry run to check trade count? 
+                                    # Better: filter during/after results gathering.
+                                    pass
+                                
                                 strategies.append(s)
                     except Exception as e:
                         print(f"  Error loading champion {module_name}: {e}")
@@ -276,6 +288,10 @@ class TournamentRunner:
                 name = future_to_name[future]
                 try:
                     res = future.result()
+                    # Filter out dormant strategies that didn't trade (less than 1 rebalance/year)
+                    if res['metrics']['num_rebalances'] < 5 and "B&H" not in name and "[BASE]" not in name:
+                        continue
+                        
                     results[name] = res
                     print(f"  Completed: {name:<35} | CAGR: {res['metrics']['cagr']*100:.1f}%")
                 except Exception as e:

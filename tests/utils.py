@@ -39,6 +39,12 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
                 return GenomeV4Precision(genome=genome)
             else:
                 return GenomeV3Strategy(genome=genome)
+        elif "sniper" in genome:
+            from strategies.v5_sniper.genome import GenomeV5Sniper
+            return GenomeV5Sniper(genome=genome)
+        elif "brains" in genome and "cash" in genome["brains"]:
+            from strategies.v6_balancer.genome import GenomeV6
+            return GenomeV6(genome=genome)
         elif "panic" in genome and "3x" in genome:
             return GenomeV2Strategy(genome=genome)
         else:

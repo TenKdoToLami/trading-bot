@@ -1,11 +1,11 @@
 import json
 import os
-from strategies.v5_sniper.genome import GenomeV5Sniper
+from strategies.v6_balancer.genome import GenomeV6
 
-class ChampionV5Sniper(GenomeV5Sniper):
+class ChampionV6(GenomeV6):
     """
-    Standard wrapper for the best-performing V5 Sniper genome.
-    Loads from champions/v5_sniper/genome.json.
+    Standard wrapper for the best-performing V6 Balancer genome.
+    Loads from champions/v6_balancer/genome.json.
     """
     def __init__(self, genome=None):
         # We prefer the passed genome if provided, otherwise load from file
@@ -16,4 +16,4 @@ class ChampionV5Sniper(GenomeV5Sniper):
                     genome = json.load(f)
                     
         super().__init__(genome=genome)
-        self.NAME = "V5 | Tiered Sniper"
+        self.NAME = "V6 | Probabilistic Balancer"
