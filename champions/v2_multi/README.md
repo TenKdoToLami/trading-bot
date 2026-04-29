@@ -46,8 +46,10 @@ python tests/run_evolution_v2.py --seed champions/v2_multi/vault --pop 100 --gen
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows). Use --promote to update champion.
-python tests/vault_sweep.py --vault champions/v2_multi/vault --promote
+# Cross-Regime Sweep (Rolling 5yr Windows). 
+# --promote: Update main genome.json with the best performer.
+# --top X: Retain only Top X most resilient genomes and prune the rest.
+python tests/vault_sweep.py --vault champions/v2_multi/vault --promote --top 20
 ```
 
 

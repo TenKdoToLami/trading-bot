@@ -43,6 +43,8 @@ python tests/run_evolution_v7_deep_binary.py --seed champions/v7_deep_binary/vau
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep
-python tests/vault_sweep.py --vault champions/v7_deep_binary/vault --promote
+# Cross-Regime Sweep (Rolling 5yr Windows). 
+# --promote: Update main genome.json with the best performer.
+# --top X: Retain only Top X most resilient genomes and prune the rest.
+python tests/vault_sweep.py --vault champions/v7_deep_binary/vault --promote --top 20
 ```

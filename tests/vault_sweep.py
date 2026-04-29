@@ -182,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--samples", type=int, default=10, help="Number of random periods to test per duration bucket")
     parser.add_argument("--vault", type=str, default="vault", help="Path to the vault directory containing genomes")
     parser.add_argument("--promote", action="store_true", help="Replace genome.json in parent directory with the best performer")
+    parser.add_argument("--top", type=int, default=0, help="Retain only the Top X performers and delete the rest from the vault")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -208,6 +209,21 @@ if __name__ == "__main__":
     data = load_spy_data("1993-01-01")
     results = run_sweep(genomes, data, samples_per_bucket=args.samples)
     leaderboard = print_leaderboard(results)
+
+    # --- PRUNING LOGIC ---
+    if args.top > 0 and leaderboard:
+        top_names = {row['name'] for row in leaderboard[:args.top]}
+        removed_count = 0
+        for f, _ in genomes:
+            if f not in top_names:
+                try:
+                    os.remove(os.path.join(vault_dir, f))
+                    removed_count += 1
+                except Exception as e:
+                    print(f"  [Error] Could not remove {f}: {e}")
+        
+        if removed_count > 0:
+            print(f"\n  [PRUNE] Retained Top {args.top} performers. Removed {removed_count} genomes from vault.")
 
     if args.promote and leaderboard:
         best_genome_name = leaderboard[0]['name']

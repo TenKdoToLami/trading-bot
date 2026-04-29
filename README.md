@@ -69,9 +69,16 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect the strategy version (V2–V6).
 
 ### 1. Vault Sweep — Cross-Regime Stress Test
-Tests every genome in a vault across rolling 5-year windows to rank them by resilience. Use `--promote` to automatically update the champion `genome.json`.
+Tests every genome in a vault across rolling windows (5yr to 30yr) to rank them by resilience. 
+*   Use `--promote` to automatically update the main champion `genome.json` with the #1 winner.
+*   Use `--top X` to **prune** the vault, retaining only the Top X performers and deleting the rest.
+
 ```bash
+# Audit and promote the best performer
 python tests/vault_sweep.py --vault champions/v6_balancer/vault --promote
+
+# Prune vault to keep only the Top 20 most resilient genomes
+python tests/vault_sweep.py --vault champions/v7_deep_fluid/vault --top 20
 ```
 
 ### 2. Genome X-Ray — Behavioral Audit

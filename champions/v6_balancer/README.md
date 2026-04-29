@@ -28,8 +28,10 @@ python tests/genome_xray.py champions/v6_balancer/genome.json
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows). Use --promote to update champion.
-python tests/vault_sweep.py --vault champions/v6_balancer/vault --promote
+# Cross-Regime Sweep (Rolling 5yr Windows). 
+# --promote: Update main genome.json with the best performer.
+# --top X: Retain only Top X most resilient genomes and prune the rest.
+python tests/vault_sweep.py --vault champions/v6_balancer/vault --promote --top 20
 ```
 
 ### 🧬 Evolution
