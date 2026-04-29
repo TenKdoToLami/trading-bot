@@ -12,8 +12,9 @@ from src.helpers.indicators import (
 class GenomeV2Strategy(BaseStrategy):
     NAME = "Genome V2 (Multi-Brain)"
 
-    def __init__(self, genome=None):
+    def __init__(self, genome=None, precalculated_features=None):
         self.genome = genome or self._default_genome()
+        self.nitro_features = precalculated_features
         self.reset()
 
     def _default_genome(self):
@@ -46,46 +47,50 @@ class GenomeV2Strategy(BaseStrategy):
 
     def on_data(self, date, price_data, prev_data):
         spy_price = price_data['close']
-        self.prices.append(spy_price)
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
-
+        
         if self.lock_counter > 0:
             self.lock_counter -= 1
 
-        # 1. Calculate Indicators
-        val_sma = sma(self.prices, 200)
-        val_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
-        self.prev_ema = val_ema
-        val_rsi = rsi(self.prices, 14, state=self.indicator_state)
-        val_macd_tuple = macd(self.prices, 12, 26, state=self.indicator_state)
-        val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
-        val_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
-        val_trix = trix(self.prices, 15, state=self.indicator_state)
-        val_slope = linear_regression_slope(self.prices, 20)
-        val_vol = realized_volatility(self.prices, 20)
-        val_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
-        self.prev_atr = val_atr
+        if self.nitro_features and date in self.nitro_features:
+            # NITRO MODE: Fast lookup
+            inputs = self.nitro_features[date]
+        else:
+            # LEGACY MODE: Calculate indicators on the fly
+            self.prices.append(spy_price)
+            self.highs.append(price_data['high'])
+            self.lows.append(price_data['low'])
 
-        # 2. Normalize
-        # We use today's finalized macro data to generate a signal for tomorrow (T+1 execution).
-        # This is 100% lookahead-free.
-        macro_vix = float(price_data.get('vix', 15.0))
-        macro_yc = float(price_data.get('yield_curve', 0.0))
-        
-        inputs = {
-            'sma': ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0,
-            'ema': ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0,
-            'rsi': ((val_rsi or 50) - 50) / 50.0,
-            'macd': val_macd / spy_price * 100,
-            'adx': ((val_adx or 25) - 25) / 25.0,
-            'trix': val_trix or 0.0,
-            'slope': (val_slope or 0.0) / spy_price * 1000,
-            'vol': (val_vol or 0.15) * 5,
-            'atr': ((val_atr or 0.0) / spy_price) * 50,
-            'vix': (macro_vix - 20) / 10.0,
-            'yc': macro_yc
-        }
+            # 1. Calculate Indicators
+            val_sma = sma(self.prices, 200)
+            val_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
+            self.prev_ema = val_ema
+            val_rsi = rsi(self.prices, 14, state=self.indicator_state)
+            val_macd_tuple = macd(self.prices, 12, 26, state=self.indicator_state)
+            val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
+            val_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
+            val_trix = trix(self.prices, 15, state=self.indicator_state)
+            val_slope = linear_regression_slope(self.prices, 20)
+            val_vol = realized_volatility(self.prices, 20)
+            val_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
+            self.prev_atr = val_atr
+
+            # 2. Normalize
+            macro_vix = float(price_data.get('vix', 15.0))
+            macro_yc = float(price_data.get('yield_curve', 0.0))
+            
+            inputs = {
+                'sma': ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0,
+                'ema': ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0,
+                'rsi': ((val_rsi or 50) - 50) / 50.0,
+                'macd': val_macd / spy_price * 100,
+                'adx': ((val_adx or 25) - 25) / 25.0,
+                'trix': val_trix or 0.0,
+                'slope': (val_slope or 0.0) / spy_price * 1000,
+                'vol': (val_vol or 0.15) * 5,
+                'atr': ((val_atr or 0.0) / spy_price) * 50,
+                'vix': (macro_vix - 20) / 10.0,
+                'yc': macro_yc
+            }
 
         # 3. Decision Pipeline (Each tier has its own weighted score and threshold)
         def _get_score(brain_key):
@@ -115,3 +120,4 @@ class GenomeV2Strategy(BaseStrategy):
                 return new_holdings
             
         return None
+

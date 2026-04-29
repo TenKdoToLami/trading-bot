@@ -63,7 +63,7 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 | `python tests/run_evolution_v4_precision.py`| **V4** | Precision 3-State AI (CASH/1x/3x) |
 | `python tests/run_evolution_v4.py`          | **V4** | Adaptive Chameleon (Volatility Regime Selection) |
 | `python tests/run_evolution_v3.py`          | **V3** | Binary AI with Genetic Lookback Optimization |
-| `python tests/run_evolution_v2.py`          | **V2** | Multi-Brain Tiered Logic |
+| `python tests/run_evolution_v2_multi.py`    | **V2** | Multi-Brain Multi-Regime Logic |
 | `python tests/run_evolution_v1_classic.py`  | **V1** | Classic Linear Weight-Sum (Baseline) |
 
 ### Common Parameters

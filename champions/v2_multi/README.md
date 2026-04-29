@@ -24,23 +24,23 @@ python tests/performance_audit.py champions/v2_multi/genome.json
 python tests/genome_xray.py champions/v2_multi/genome.json
 ```
 
-### 🧬 Genetic Evolution (Seeding)
-Improve the champion by evolving from existing "seeds" in the vault.
+### 🧬 Genetic Evolution (Nitro Mode)
+V2 now supports **Nitro Mode** (pre-calculated indicators), allowing for massive population sizes.
 
 ```bash
-# Basic Seeded Run
-python tests/run_evolution_v2.py --seed champions/v2_multi/vault --pop 100 --gen 50
+# High-Diversity Seeded Evolution (Fast)
+python tests/run_evolution_v2_multi.py --pop 1000 --gen 100 --seed champions/v2_multi/vault
 ```
 
 #### ⚙️ Evolution Parameters
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
+| `--pop` | `50` | Population size. Recommend `500+` for Nitro. |
+| `--gen` | `20` | Generations to evolve. Recommend `100+`. |
+| `--mut` | `0.15` | Mutation rate (DNA change probability). |
 | `--seed` | `None` | Path to the vault directory for seed injection. |
-| `--pop` | `50` | Population size (higher = more diversity, slower). |
-| `--gen` | `20` | Number of generations to evolve. |
-| `--mut` | `0.15` | Mutation rate (probability of DNA change). |
-| `--no-ablation` | `False` | Disable "Indicator Ablation" (forces all indicators to stay active). |
 | `--push-mid` | `False` | Reward strategies that prefer SPY/2xSPY over flipping between 3x and CASH. |
+| `--no-ablation` | `False` | Disable "Indicator Ablation" (forces all indicators to stay active). |
 
 
 

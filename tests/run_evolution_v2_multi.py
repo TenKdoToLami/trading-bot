@@ -5,7 +5,7 @@ import os
 # Add project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.tournament.evolution_v2 import EvolutionEngineV2
+from src.tournament.evolution_v2_multi import EvolutionEngineV2
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Genome V2 — Multi-Brain Evolution Engine")

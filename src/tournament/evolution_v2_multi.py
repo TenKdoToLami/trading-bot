@@ -15,16 +15,59 @@ from src.helpers.data_provider import load_spy_data
 
 _worker_price_data = None
 _worker_dates = None
-
+_worker_nitro_features = None
 _worker_push_mid = False
 
 def _init_worker(cache_file, push_mid=False):
-    global _worker_price_data, _worker_dates, _worker_push_mid
+    global _worker_price_data, _worker_dates, _worker_push_mid, _worker_nitro_features
     import pandas as pd
+    from src.helpers.indicators import (
+        sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
+    )
+
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_price_data = df.to_dict('records')
     _worker_dates = df.index
     _worker_push_mid = push_mid
+
+    # ──────────────────────────────────────────────────────
+    # NITRO MODE: Pre-calculate V2 features
+    # ──────────────────────────────────────────────────────
+    print(f"  [Worker {os.getpid()}] Pre-calculating V2 Nitro features...")
+    nitro = {}
+    prices, highs, lows = [], [], []
+    prev_ema, prev_atr, indicator_state = None, None, {}
+
+    for i in range(len(_worker_price_data)):
+        row = _worker_price_data[i]
+        date = str(_worker_dates[i].date())
+        spy_price = row['close']
+        prices.append(spy_price); highs.append(row['high']); lows.append(row['low'])
+
+        v_sma = sma(prices, 200)
+        v_ema = ema(prices, 50, prev_ema=prev_ema); prev_ema = v_ema
+        v_rsi = rsi(prices, 14, state=indicator_state)
+        v_macd = macd(prices, 12, 26, state=indicator_state)[0] or 0.0
+        v_adx = adx(highs, lows, prices, 14, state=indicator_state)
+        v_trix = trix(prices, 15, state=indicator_state)
+        v_slope = linear_regression_slope(prices, 20)
+        v_vol = realized_volatility(prices, 20)
+        v_atr = atr(highs, lows, prices, 14, prev_atr=prev_atr); prev_atr = v_atr
+
+        nitro[date] = {
+            'sma': ((spy_price - v_sma) / v_sma * 5) if v_sma else 0.0,
+            'ema': ((spy_price - v_ema) / v_ema * 10) if v_ema else 0.0,
+            'rsi': ((v_rsi or 50) - 50) / 50.0,
+            'macd': v_macd / spy_price * 100,
+            'adx': ((v_adx or 25) - 25) / 25.0,
+            'trix': v_trix or 0.0,
+            'slope': (v_slope or 0.0) / spy_price * 1000,
+            'vol': (v_vol or 0.15) * 5,
+            'atr': ((v_atr or 0.0) / spy_price) * 50,
+            'vix': (float(row.get('vix', 15.0)) - 20) / 10.0,
+            'yc': float(row.get('yield_curve', 0.0))
+        }
+    _worker_nitro_features = nitro
 
 
 def _evaluate_genome_worker(genome):
@@ -32,30 +75,25 @@ def _evaluate_genome_worker(genome):
         strategy_type=GenomeV2Strategy,
         price_data_list=_worker_price_data,
         dates=_worker_dates,
-        strategy_kwargs={'genome': genome}
+        strategy_kwargs={'genome': genome, 'precalculated_features': _worker_nitro_features}
     )
     metrics = res['metrics']
-    cagr = metrics['cagr']
-    max_dd = abs(metrics['max_dd'])
+    cagr = metrics['cagr'] * 100
+    max_dd = abs(metrics['max_dd']) * 100
     
-    # ── Maximum Alpha Focus (Balanced Risk Penalty) ──
-    # Penalty of 25.0 means a 50% DD costs 12.5 points.
-    fitness = (cagr * 100) - (max_dd * 25)
+    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
+    # Formula: CAGR - (MaxDD * 0.15)
+    fitness = cagr - (max_dd * 0.15)
     
-    # ── Balanced Mid-Tier Residency Bonus ──
+    # Extreme Blowout Penalty
+    if max_dd >= 95.0: fitness -= 1000
+
     if _worker_push_mid:
-        # res['portfolio'].holdings_log contains [(date, {asset: weight}), ...]
-        # We want to reward days where asset is 'SPY' or '2xSPY'
         holdings = [h[1] for h in res['portfolio'].holdings_log]
         mid_tier_days = sum(1 for h in holdings if 'SPY' in h or '2xSPY' in h)
-        total_days = len(holdings)
-        residency_pct = mid_tier_days / total_days
-        # Add up to 15 points of fitness for high mid-tier residency
+        residency_pct = mid_tier_days / len(holdings)
         fitness += (residency_pct * 15.0)
 
-    # Absolute floor: avoid total liquidation (-95%)
-    if metrics['max_dd'] < -0.95: fitness = -9999
-    
     return fitness, genome, metrics
 
 
