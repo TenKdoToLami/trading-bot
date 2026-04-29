@@ -124,13 +124,15 @@ class GenomeV4Precision(BaseStrategy):
         score_panic = self._get_brain_score('panic', price_data, shared_cache)
         score_bull = self._get_brain_score('bull', price_data, shared_cache)
 
-        # 3-State Decision Pipeline
+        # 3-State Decision Pipeline (Defensive Default)
         if score_panic > self.genome['panic']['t']:
             new_holdings = {"CASH": 1.0}
         elif score_bull > self.genome['bull']['t']:
             new_holdings = {"3xSPY": 1.0}
-        else:
+        elif score_bull > 0: # Active but weak conviction
             new_holdings = {"SPY": 1.0}
+        else:
+            new_holdings = {"CASH": 1.0}
 
         # Apply lockout
         if new_holdings != self.last_holdings:

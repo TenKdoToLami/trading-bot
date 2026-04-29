@@ -1,16 +1,18 @@
 # V4 Precision — 3-State AI Architecture
 
 ## 🧠 Strategy Logic
-V4 Precision introduces a **Neutral Baseline** (1x SPY) to act as a buffer between Panic and Bullish extremes.
+V4 Precision is the most advanced "Weighted Brain" engine in the fleet. It uses a **Dual-Brain Architecture** (Panic vs Bull) to determine transitions between CASH, SPY (Neutral), and 3xSPY (Bullish). 
 
 ### ⚙️ Decision Engine
-- **Dual Brains**: Uses a `Panic` brain and a `Bull` brain.
-- **Evolved Perception**: Evolves independent **Lookback Periods** for every indicator (SMA, RSI, etc.) for each brain.
+- **Genetic Lookbacks**: Unlike V1-V2, every indicator lookback (SMA, RSI, MACD, etc.) is evolved as a distinct gene.
+- **Dynamic Weighting**: Scores indicators across 11 market signals to build a high-fidelity "Confidence Score".
+- **Indicator Ablation**: Supports evolutionary pruning of weak indicators to prevent overfitting.
+- **Institutional Guardrails**: Includes evolved "Lockout" periods to prevent over-trading.
 
 ### 📈 Leverage States
-- **CASH (Panic)**: Triggered if `Panic Brain > Threshold`.
-- **3x SPY (Bullish)**: Triggered if `Bull Brain > Threshold`.
-- **1x SPY (Neutral)**: The default state if neither brain is triggered.
+- **CASH / 1x / 3x** (Regime-based switching)
+
+---
 
 ## 🚀 Execution Commands
 
@@ -25,21 +27,25 @@ python tests/genome_xray.py champions/v4_precision/genome.json
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows). 
-# --promote: Update main genome.json with the best performer.
-# --top X: Retain only Top X most resilient genomes and prune the rest.
+# Cross-Regime Sweep (Rolling 5yr Windows)
 python tests/vault_sweep.py --vault champions/v4_precision/vault --promote --top 20
 ```
 
 ### 🧬 Evolution
 ```bash
-# Cold Start Evolution
-python tests/run_evolution_v4_precision.py --pop 300 --gen 100
+# Standard Evolution run
+python tests/run_evolution_v4_precision.py --pop 500 --gen 100 --ablation
 
-# Seeded Evolution (Refine Champions)
-python tests/run_evolution_v4_precision.py --pop 300 --gen 50 --seed champions/v4_precision/vault
+# Seeded Evolution (Refine from vault)
+python tests/run_evolution_v4_precision.py --pop 500 --gen 100 --ablation --seed champions/v4_precision/vault
+```
 
-### 🧪 Special Modifiers
-- `--mutation 0.4`: Increase "Creative" mutation for exploration.
-- `--min-cagr 0.40`: **Vault-Lock**. Prevents disk saves (vault and genome.json) for any genome failing to hit 40% CAGR, while allowing genetic discovery to continue.
-- `--ablation`: Enable **Ablation Mode**. Allows the AI to evolve "False" states for indicators, effectively pruning its own logic tree for better generalization.
+#### ⚙️ Evolution Parameters
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 300 | Population size. |
+| `--gen` | 100 | Number of generations. |
+| `--mut` | 0.20 | Mutation rate. Use `0.40` for aggressive exploration. |
+| `--seed`| `None` | Path to vault dir for seed injection. |
+| `--ablation` | `Off` | Enable **Indicator Ablation** (AI prunes its own logic tree). |
+| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
