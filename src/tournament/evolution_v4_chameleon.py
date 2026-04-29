@@ -47,12 +47,12 @@ def _evaluate_genome_worker(genome):
     
     return fitness, genome, metrics
 
-class EvolutionEngineV4:
-    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False):
+    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
+        self.min_cagr = min_cagr
         
         self.bounds = {
             "vix_ema": (10, 100),
@@ -146,10 +146,13 @@ class EvolutionEngineV4:
                 
                 print(f"Gen {gen+1:02d} | Best Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:5.2f}% | DD: {best_metrics['max_dd']*100:5.2f}% | Time: {elapsed:.1f}s")
                 
-                # Save to vault
-                v_path = os.path.join(vault_dir, f"v4_cagr_{best_metrics['cagr']*100:.2f}_dd_{abs(best_metrics['max_dd']*100):.2f}.json")
-                with open(v_path, 'w') as f:
-                    json.dump(best_genome, f, indent=4)
+                # Save to vault (only if above CAGR threshold)
+                if (best_metrics['cagr'] * 100) >= self.min_cagr:
+                    v_path = os.path.join(vault_dir, f"v4_cagr_{best_metrics['cagr']*100:.2f}_dd_{abs(best_metrics['max_dd']*100):.2f}.json")
+                    with open(v_path, 'w') as f:
+                        json.dump(best_genome, f, indent=4)
+                else:
+                    print(f"  [SKIPPED] CAGR {best_metrics['cagr']*100:.2f}% < {self.min_cagr}% (Vault not updated)")
 
                 # Selection
                 elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]

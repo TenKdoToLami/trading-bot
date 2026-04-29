@@ -14,6 +14,7 @@ if __name__ == "__main__":
     parser.add_argument("--mut", type=float, default=0.15, help="Mutation rate")
     parser.add_argument("--ablation", action="store_true", help="Enable indicator ablation")
     parser.add_argument("--seed", type=str, default=None, help="Directory to load seed genomes from")
+    parser.add_argument("--min-cagr", type=float, default=0.0, help="Minimum CAGR % to save to vault")
     
     args = parser.parse_args()
 
@@ -22,6 +23,7 @@ if __name__ == "__main__":
         generations=args.gen, 
         mutation_rate=args.mut,
         use_ablation=args.ablation,
-        seed_vault=args.seed
+        seed_vault=args.seed,
+        min_cagr=args.min_cagr
     )
     engine.run()

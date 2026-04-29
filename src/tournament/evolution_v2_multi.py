@@ -101,12 +101,13 @@ class EvolutionEngineV2:
     """
     Genetic Algorithm Engine for Genome V2 (Multi-Brain Architecture).
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True, push_mid_tiers=False):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True, push_mid_tiers=False, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
         self.push_mid_tiers = push_mid_tiers
+        self.min_cagr = min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', '3x', '2x', '1x']
         
@@ -229,12 +230,15 @@ class EvolutionEngineV2:
                     best_overall_genome = best_genome
                     best_overall_metrics = best_metrics
                     
-                    # Save to Vault V2
-                    vault_dir = "champions/v2_multi/vault"
-                    if not os.path.exists(vault_dir): os.makedirs(vault_dir)
-                    c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
-                    with open(f"{vault_dir}/v2_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
-                        json.dump(best_genome, f, indent=2)
+                    # Save to Vault V2 (only if above CAGR threshold)
+                    if (best_metrics['cagr'] * 100) >= self.min_cagr:
+                        vault_dir = "champions/v2_multi/vault"
+                        if not os.path.exists(vault_dir): os.makedirs(vault_dir)
+                        c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
+                        with open(f"{vault_dir}/v2_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
+                            json.dump(best_genome, f, indent=2)
+                    else:
+                        print(f"  [SKIPPED] CAGR {best_metrics['cagr']*100:.2f}% < {self.min_cagr}% (Vault not updated)")
 
                 elapsed = time.time() - start_time
                 print(f"V2 Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")

@@ -120,11 +120,12 @@ class EvolutionEngineV1Classic:
     """
     Genetic Algorithm Engine to breed the optimal V1 Classic GenomeStrategy.
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
+        self.min_cagr = min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']
         
         # Load data once to ensure cache exists
@@ -304,14 +305,17 @@ class EvolutionEngineV1Classic:
                     best_overall_genome = best_genome
                     best_overall_metrics = best_metrics
                     
-                    # Save to vault
-                    cagr_pct = best_overall_metrics['cagr'] * 100
-                    dd_pct = best_overall_metrics['max_dd'] * 100
-                    vault_dir = "champions/v1_classic/vault"
-                    os.makedirs(vault_dir, exist_ok=True)
-                    filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
-                    with open(filename, "w") as f:
-                        json.dump(best_genome, f, indent=2)
+                    # Save to vault (only if above CAGR threshold)
+                    if (best_overall_metrics['cagr'] * 100) >= self.min_cagr:
+                        cagr_pct = best_overall_metrics['cagr'] * 100
+                        dd_pct = best_overall_metrics['max_dd'] * 100
+                        vault_dir = "champions/v1_classic/vault"
+                        os.makedirs(vault_dir, exist_ok=True)
+                        filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
+                        with open(filename, "w") as f:
+                            json.dump(best_genome, f, indent=2)
+                    else:
+                        print(f"  [SKIPPED] CAGR {best_overall_metrics['cagr']*100:.2f}% < {self.min_cagr}% (Vault not updated)")
 
                 cagr = best_metrics['cagr'] * 100
                 dd = best_metrics['max_dd'] * 100

@@ -60,11 +60,12 @@ class EvolutionEngineV3:
     """
     Genetic Algorithm Engine for Genome V3 (Precision Binary Architecture).
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True):
+    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.use_ablation = use_ablation
+        self.min_cagr = min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', 'bull']
         
@@ -214,9 +215,14 @@ class EvolutionEngineV3:
                     
                     vault_dir = "champions/v3_precision/vault"
                     if not os.path.exists(vault_dir): os.makedirs(vault_dir)
-                    c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
-                    with open(f"{vault_dir}/v3_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
-                        json.dump(best_genome, f, indent=2)
+                    
+                    # Save to vault (only if above CAGR threshold)
+                    if (best_metrics['cagr'] * 100) >= self.min_cagr:
+                        v_path = os.path.join(vault_dir, f"v3_cagr_{best_metrics['cagr']*100:.2f}_dd_{abs(best_metrics['max_dd']*100):.2f}.json")
+                        with open(v_path, 'w') as f:
+                            json.dump(best_genome, f, indent=4)
+                    else:
+                        print(f"  [SKIPPED] CAGR {best_metrics['cagr']*100:.2f}% < {self.min_cagr}% (Vault not updated)")
 
                 elapsed = time.time() - start_time
                 print(f"V3 Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")

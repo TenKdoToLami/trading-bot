@@ -15,6 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-ablation", action="store_true", help="Disable indicator ablation (force all active)")
     parser.add_argument("--seed", type=str, default=None, help="Directory to load seed genomes from")
     parser.add_argument("--push-mid", action="store_true", help="Reward residency in 1x and 2x tiers")
+    parser.add_argument("--min-cagr", type=float, default=0.0, help="Minimum CAGR % to save to vault")
     args = parser.parse_args()
 
     engine = EvolutionEngineV2(
@@ -23,6 +24,7 @@ if __name__ == "__main__":
         mutation_rate=args.mut,
         use_ablation=not args.no_ablation,
         seed_vault=args.seed,
-        push_mid_tiers=args.push_mid
+        push_mid_tiers=args.push_mid,
+        min_cagr=args.min_cagr
     )
     engine.run()

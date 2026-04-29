@@ -46,3 +46,4 @@ python tests/run_evolution_v3_precision.py --pop 500 --gen 50 --mut 0.25 --seed 
 | `--mut` | `0.15` | Mutation rate (DNA change probability). Use `0.25+` for seeding. |
 | `--seed` | `None` | Path to the vault directory for seed injection. |
 | `--ablation` | `False` | Enable "Indicator Ablation" (allows GA to disable weak indicators). |
+| `--min-cagr` | `35.0` | Minimum CAGR % threshold for saving to the vault. |

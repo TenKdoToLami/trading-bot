@@ -47,3 +47,4 @@ python tests/run_evolution_v1_classic.py --pop 1000 --gen 100 --seed champions/v
 | `--mut` | 0.15 | Mutation rate. Use `0.25 - 0.40` for exploration, `0.05` for fine-tuning. |
 | `--seed`| None | Path to a `vault/` directory to load initial winners from. |
 | `--ablation` | Off | **Feature Selection**: Disables indicators randomly to find the most robust subset. |
+| `--min-cagr` | `35.0` | Minimum CAGR % threshold for saving to the vault. |

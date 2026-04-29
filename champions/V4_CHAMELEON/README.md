@@ -46,3 +46,4 @@ python tests/run_evolution_v4_chameleon.py --pop 1000 --gen 100 --mut 0.25 --abl
 | `--mut` | 0.20 | Mutation rate (DNA change probability). |
 | `--seed`| `None` | Path to vault dir to seed population. |
 | `--ablation` | `Off` | Enable "Indicator Ablation" (Dynamic pruning of weak signals). |
+| `--min-cagr` | `20.0` | Minimum CAGR % threshold for saving to the vault. |

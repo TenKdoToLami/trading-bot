@@ -41,6 +41,7 @@ python tests/run_evolution_v2_multi.py --pop 1000 --gen 100 --seed champions/v2_
 | `--seed` | `None` | Path to the vault directory for seed injection. |
 | `--push-mid` | `False` | Reward strategies that prefer SPY/2xSPY over flipping between 3x and CASH. |
 | `--no-ablation` | `False` | Disable "Indicator Ablation" (forces all indicators to stay active). |
+| `--min-cagr` | `35.0` | Minimum CAGR % threshold for saving to the vault. |
 
 
 
