@@ -9,7 +9,7 @@ V4 Chameleon is designed for **Regime Resilience**. It monitors market volatilit
 - **Ablation Ready**: Supports evolutionary pruning of useless indicators.
 
 ### 📈 Leverage States
-- **CASH / 1x / 3x**
+- **CASH / 1x / 2x / 3x**
 
 ---
 
@@ -18,7 +18,7 @@ V4 Chameleon is designed for **Regime Resilience**. It monitors market volatilit
 ### 📊 Audit & Behavioral Analysis
 ```bash
 # Institutional Performance Report
-python tests/performance_audit.py champions/V4_CHAMELEON/genome.json
+python tests/performance_audit.py champions/v4_chameleon/genome.json
 ```
 
 ### 🌪️ Stress Testing
@@ -26,20 +26,23 @@ python tests/performance_audit.py champions/V4_CHAMELEON/genome.json
 # Cross-Regime Sweep (Rolling 5yr Windows). 
 # --promote: Update main genome.json with the best performer.
 # --top X: Retain only Top X most resilient genomes and prune the rest.
-python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault --promote --top 20
+python tests/vault_sweep.py --vault champions/v4_chameleon/vault --promote --top 20
 ```
 
 ### 🧬 Evolution
 Optimizes the adaptive logic tree using Gaussian Neuroevolution.
 ```bash
-# Adaptive Volatility Evolution
-python tests/run_evolution_v4.py --pop 40 --gen 15 --seed champions/V4_CHAMELEON/vault
+python tests/run_evolution_v4_chameleon.py --pop 1000 --gen 100 --mut 0.25 --ablation
+
+# High-Diversity Seeded Evolution
+python tests/run_evolution_v4_chameleon.py --pop 1000 --gen 100 --mut 0.25 --ablation --seed champions/v4_chameleon/vault
 ```
 
 #### ⚙️ Evolution Parameters
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--pop` | 40 | Population size (Lower for V4 due to higher computational cost). |
+| `--pop` | 40 | Population size. Recommend `100+` for diverse runs. |
 | `--gen` | 15 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate (regime switching probability). |
-| `--seed`| champions/V4_CHAMELEON/vault | Path to vault dir to seed population. |
+| `--mut` | 0.20 | Mutation rate (DNA change probability). |
+| `--seed`| `None` | Path to vault dir to seed population. |
+| `--ablation` | `Off` | Enable "Indicator Ablation" (Dynamic pruning of weak signals). |

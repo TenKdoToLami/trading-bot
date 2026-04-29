@@ -61,7 +61,7 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 | `python tests/run_evolution_v6_balancer.py` | **V6** | Probabilistic Softmax Allocator (Institutional Grade) |
 | `python tests/run_evolution_v5_sniper.py`   | **V5** | Tiered Entry Hunter (1x -> 2x -> 3x) |
 | `python tests/run_evolution_v4_precision.py`| **V4** | Precision 3-State AI (CASH/1x/3x) |
-| `python tests/run_evolution_v4.py`          | **V4** | Adaptive Chameleon (Volatility Regime Selection) |
+| `python tests/run_evolution_v4_chameleon.py`| **V4** | Adaptive Chameleon (Volatility Regime Selection) |
 | `python tests/run_evolution_v3_precision.py`| **V3** | Binary AI with Genetic Lookback Optimization |
 | `python tests/run_evolution_v2_multi.py`    | **V2** | Multi-Brain Multi-Regime Logic |
 | `python tests/run_evolution_v1_classic.py`  | **V1** | Classic Linear Weight-Sum (Baseline) |

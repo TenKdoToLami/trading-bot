@@ -16,9 +16,21 @@ def _init_worker(cache_file):
     global _worker_price_data, _worker_dates
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_dates = df.index
-    _worker_price_data = [row.to_dict() for _, row in df.iterrows()]
+    _worker_price_data = df.to_dict('records')
 
 def _evaluate_genome_worker(genome):
+    # ── STAGE 1: LITE SCREENING (Last ~4 years) ──
+    lite_window = 1000
+    lite_res = _execute_simulation(
+        strategy_type=ChameleonV4,
+        price_data_list=_worker_price_data[-lite_window:],
+        dates=_worker_dates[-lite_window:],
+        strategy_kwargs={'genome': genome}
+    )
+    if lite_res['metrics']['cagr'] <= 0:
+        return -500.0, genome, lite_res['metrics']
+
+    # ── STAGE 2: FULL AUDIT (30+ years) ──
     res = _execute_simulation(
         strategy_type=ChameleonV4,
         price_data_list=_worker_price_data,
@@ -29,17 +41,18 @@ def _evaluate_genome_worker(genome):
     cagr = metrics['cagr'] * 100
     max_dd = abs(metrics['max_dd']) * 100
     
-    # Fitness: Alpha-style (Returns - Drawdown Penalty)
-    fitness = cagr - (max_dd * 0.5)
-    if max_dd > 95: fitness = -9999
+    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
+    fitness = cagr - (max_dd * 0.15)
+    if max_dd >= 95.0: fitness -= 1000
     
     return fitness, genome, metrics
 
 class EvolutionEngineV4:
-    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None):
+    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
+        self.use_ablation = use_ablation
         
         self.bounds = {
             "vix_ema": (10, 100),
@@ -75,8 +88,17 @@ class EvolutionEngineV4:
             self.population.append(self._random_genome())
 
     def _random_genome(self):
-        return {k: random.uniform(mn, mx) if isinstance(mn, float) else random.randint(mn, mx) 
+        genome = {k: random.uniform(mn, mx) if isinstance(mn, float) else random.randint(mn, mx) 
                 for k, (mn, mx) in self.bounds.items()}
+        
+        if self.use_ablation:
+            # 60% chance for an indicator to stay ON by default in a random genome
+            genome['a'] = {
+                'vix': random.random() > 0.4,
+                'mom': random.random() > 0.4,
+                'rsi': random.random() > 0.4
+            }
+        return genome
 
     def _crossover(self, p1, p2):
         child = {}
@@ -92,15 +114,24 @@ class EvolutionEngineV4:
                     mutated[k] = max(mn, min(mx, mutated[k] + random.gauss(0, (mx-mn)*0.1)))
                 else:
                     mutated[k] = max(mn, min(mx, mutated[k] + random.randint(-5, 5)))
+        
+        if self.use_ablation:
+            if 'a' not in mutated:
+                # Retrofit missing mask (default all ON)
+                mutated['a'] = {'vix': True, 'mom': True, 'rsi': True}
+            
+            # Mutate the activation bits
+            for bit in mutated['a']:
+                if random.random() < self.mutation_rate:
+                    mutated['a'][bit] = not mutated['a'][bit]
+                    
         return mutated
 
     def run(self):
         max_workers = max(1, os.cpu_count() - 2)
-        best_overall_genome = None
+        print(f"Starting Evolution V4 Chameleon: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, ablation {'ON' if self.use_ablation else 'OFF'} (using {max_workers} cores)")
         
-        print(f"Starting V4 Chameleon Evolution: {self.generations} gens, pop {self.population_size}")
-        
-        vault_dir = "champions/V4_CHAMELEON/vault"
+        vault_dir = "champions/v4_chameleon/vault"
         os.makedirs(vault_dir, exist_ok=True)
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file,)) as executor:
