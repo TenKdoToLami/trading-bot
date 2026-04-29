@@ -12,8 +12,9 @@ from src.helpers.indicators import (
 class GenomeStrategy(BaseStrategy):
     NAME = "Genome Strategy"
 
-    def __init__(self, genome=None):
+    def __init__(self, genome=None, precalculated_features=None):
         self.genome = genome or self._default_genome()
+        self.nitro_features = precalculated_features
         self.reset()
 
     def _default_genome(self):
@@ -49,48 +50,50 @@ class GenomeStrategy(BaseStrategy):
 
     def on_data(self, date, price_data, prev_data):
         spy_price = price_data['close']
-        self.prices.append(spy_price)
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
-
+        
         # Lockout countdown
         if self.lock_counter > 0:
             self.lock_counter -= 1
 
-        # 1. Calculate Indicators
-        val_sma = sma(self.prices, 200)
-        
-        val_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
-        self.prev_ema = val_ema
-        
-        val_rsi = rsi(self.prices, 14, state=self.indicator_state)
-        val_macd_tuple = macd(self.prices, 12, 26, state=self.indicator_state)
-        val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
-        val_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
-        val_trix = trix(self.prices, 15, state=self.indicator_state)
-        val_slope = linear_regression_slope(self.prices, 20)
-        
-        val_vol = realized_volatility(self.prices, 20)
-        
-        val_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
-        self.prev_atr = val_atr
+        if self.nitro_features and date in self.nitro_features:
+            # NITRO MODE: Fast lookup
+            inputs = self.nitro_features[date]
+        else:
+            # LEGACY MODE: Calculate indicators on the fly
+            self.prices.append(spy_price)
+            self.highs.append(price_data['high'])
+            self.lows.append(price_data['low'])
 
-        # 2. Normalize Indicators [-1.0, 1.0] roughly
-        norm_sma = ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0
-        norm_ema = ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0
-        norm_rsi = ((val_rsi or 50) - 50) / 50.0
-        norm_macd = val_macd / spy_price * 100
-        norm_adx = ((val_adx or 25) - 25) / 25.0
-        norm_trix = val_trix or 0.0
-        norm_slope = (val_slope or 0.0) / spy_price * 1000
-        norm_vol = (val_vol or 0.15) * 5 # 20% vol -> 1.0
-        norm_atr = ((val_atr or 0.0) / spy_price) * 50
+            # 1. Calculate Indicators
+            val_sma = sma(self.prices, 200)
+            val_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
+            self.prev_ema = val_ema
+            val_rsi = rsi(self.prices, 14, state=self.indicator_state)
+            val_macd_tuple = macd(self.prices, 12, 26, state=self.indicator_state)
+            val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
+            val_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
+            val_trix = trix(self.prices, 15, state=self.indicator_state)
+            val_slope = linear_regression_slope(self.prices, 20)
+            val_vol = realized_volatility(self.prices, 20)
+            val_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
+            self.prev_atr = val_atr
 
-        inputs = {
-            'sma': norm_sma, 'ema': norm_ema, 'rsi': norm_rsi, 'macd': norm_macd,
-            'adx': norm_adx, 'trix': norm_trix, 'slope': norm_slope,
-            'vol': norm_vol, 'atr': norm_atr
-        }
+            # 2. Normalize Indicators [-1.0, 1.0] roughly
+            norm_sma = ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0
+            norm_ema = ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0
+            norm_rsi = ((val_rsi or 50) - 50) / 50.0
+            norm_macd = val_macd / spy_price * 100
+            norm_adx = ((val_adx or 25) - 25) / 25.0
+            norm_trix = val_trix or 0.0
+            norm_slope = (val_slope or 0.0) / spy_price * 1000
+            norm_vol = (val_vol or 0.15) * 5
+            norm_atr = ((val_atr or 0.0) / spy_price) * 50
+
+            inputs = {
+                'sma': norm_sma, 'ema': norm_ema, 'rsi': norm_rsi, 'macd': norm_macd,
+                'adx': norm_adx, 'trix': norm_trix, 'slope': norm_slope,
+                'vol': norm_vol, 'atr': norm_atr
+            }
 
         # 3. Calculate Panic Score (with ablation)
         pw = self.genome['panic_weights']
@@ -118,14 +121,11 @@ class GenomeStrategy(BaseStrategy):
 
         # 6. Apply holdings and lockout
         if new_holdings != self.last_holdings:
-            # If we are locked, we cannot rebalance EXCEPT if it's a panic override.
-            # Wait, user didn't specify panic override. But usually panic should override a lock.
-            # Let's let the panic override the lock! If new_holdings is CASH and we are panicking, allow it.
             is_panic = (new_holdings.get("CASH") == 1.0 and panic_score > self.genome['panic_threshold'])
-            
             if self.lock_counter == 0 or is_panic:
                 self.last_holdings = new_holdings
                 self.lock_counter = max(0, int(round(self.genome.get('lock_days', 0))))
                 return new_holdings
             
         return None
+

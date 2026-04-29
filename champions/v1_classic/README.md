@@ -33,10 +33,10 @@ python tests/vault_sweep.py --vault champions/v1_classic/vault --promote --top 2
 Breeds the optimal weight-sum brain using a Genetic Algorithm.
 ```bash
 # Standard Evolution run
-python tests/run_evolution_v1_classic.py --pop 500 --gen 100
+python tests/run_evolution_v1_classic.py --pop 1000 --gen 100 --ablation
 
 # Seeded Evolution (Refine using your best vaulted genomes)
-python tests/run_evolution_v1_classic.py --pop 500 --gen 100 --seed champions/v1_classic/vault
+python tests/run_evolution_v1_classic.py --pop 1000 --gen 100 --seed champions/v1_classic/vault
 ```
 
 #### ⚙️ Evolution Parameters

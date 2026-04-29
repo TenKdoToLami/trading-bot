@@ -16,15 +16,77 @@ from src.helpers.data_provider import load_spy_data
 
 _worker_price_data = None
 _worker_dates = None
+_worker_nitro_features = None
 
 
 def _init_worker(cache_file):
     """Called once per worker process to load data into process-local memory."""
-    global _worker_price_data, _worker_dates
+    global _worker_price_data, _worker_dates, _worker_nitro_features
     import pandas as pd
+    from src.helpers.indicators import (
+        sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
+    )
+
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_price_data = df[['open', 'high', 'low', 'close', 'volume']].to_dict('records')
     _worker_dates = df.index
+    
+    # ──────────────────────────────────────────────────────
+    # NITRO MODE: Pre-calculate all V1 features for the entire series
+    # ──────────────────────────────────────────────────────
+    print(f"  [Worker {os.getpid()}] Pre-calculating Nitro features...")
+    
+    nitro = {}
+    prices = []
+    highs = []
+    lows = []
+    
+    prev_ema = None
+    prev_atr = None
+    indicator_state = {}
+    
+    for i in range(len(_worker_price_data)):
+        row = _worker_price_data[i]
+        date = str(_worker_dates[i].date())
+        spy_price = row['close']
+        
+        prices.append(spy_price)
+        highs.append(row['high'])
+        lows.append(row['low'])
+
+        # 1. Calculate Indicators
+        val_sma = sma(prices, 200)
+        val_ema = ema(prices, 50, prev_ema=prev_ema)
+        prev_ema = val_ema
+        val_rsi = rsi(prices, 14, state=indicator_state)
+        val_macd_tuple = macd(prices, 12, 26, state=indicator_state)
+        val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
+        val_adx = adx(highs, lows, prices, 14, state=indicator_state)
+        val_trix = trix(prices, 15, state=indicator_state)
+        val_slope = linear_regression_slope(prices, 20)
+        val_vol = realized_volatility(prices, 20)
+        val_atr = atr(highs, lows, prices, 14, prev_atr=prev_atr)
+        prev_atr = val_atr
+
+        # 2. Normalize Indicators
+        norm_sma = ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0
+        norm_ema = ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0
+        norm_rsi = ((val_rsi or 50) - 50) / 50.0
+        norm_macd = val_macd / spy_price * 100
+        norm_adx = ((val_adx or 25) - 25) / 25.0
+        norm_trix = val_trix or 0.0
+        norm_slope = (val_slope or 0.0) / spy_price * 1000
+        norm_vol = (val_vol or 0.15) * 5
+        norm_atr = ((val_atr or 0.0) / spy_price) * 50
+
+        nitro[date] = {
+            'sma': norm_sma, 'ema': norm_ema, 'rsi': norm_rsi, 'macd': norm_macd,
+            'adx': norm_adx, 'trix': norm_trix, 'slope': norm_slope,
+            'vol': norm_vol, 'atr': norm_atr
+        }
+    
+    _worker_nitro_features = nitro
+    print(f"  [Worker {os.getpid()}] Nitro features ready ({len(nitro)} days).")
 
 
 def _evaluate_genome_worker(genome):
@@ -33,19 +95,24 @@ def _evaluate_genome_worker(genome):
         strategy_type=GenomeStrategy,
         price_data_list=_worker_price_data,
         dates=_worker_dates,
-        strategy_kwargs={'genome': genome}
+        strategy_kwargs={'genome': genome, 'precalculated_features': _worker_nitro_features}
     )
     
     metrics = res['metrics']
     cagr = metrics['cagr'] * 100
     max_dd = abs(metrics['max_dd']) * 100
     
-    # Fitness: Pure returns, penalize total blowouts
-    if max_dd >= 98.0:
-        fitness = -9999
-    else:
-        fitness = cagr
-
+    # ──────────────────────────────────────────────────────
+    # RISK-ADJUSTED FITNESS (Institutional Standard)
+    # Penalizes drawdown while rewarding raw returns.
+    # Formula: CAGR - (MaxDD * 0.15)
+    # ──────────────────────────────────────────────────────
+    fitness = cagr - (max_dd * 0.15)
+    
+    # Extreme Blowout Protection
+    if max_dd >= 95.0:
+        fitness -= 1000  # Severe penalty for near-total loss
+    
     return fitness, genome, metrics
 
 
@@ -218,7 +285,7 @@ class EvolutionEngineV1Classic:
         best_overall_fitness = -9999
         best_overall_metrics = None
 
-        print(f"Starting V1 Classic evolution: {self.generations} generations, pop size {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}")
+        print(f"Starting V1 Classic evolution: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, ablation {'ON' if self.use_ablation else 'OFF'}")
         
         with concurrent.futures.ProcessPoolExecutor(
             initializer=_init_worker,
@@ -251,10 +318,12 @@ class EvolutionEngineV1Classic:
                 trades = best_metrics['num_rebalances']
                 
                 elapsed = time.time() - start_time
-                print(f"Gen {gen+1:02d} | Best Fitness: {best_fitness:6.2f} | CAGR: {cagr:6.2f}% | MaxDD: {dd:6.2f}% | Trades: {trades} | Time: {elapsed:.1f}s")
+                num_elites = max(2, int(self.population_size * 0.2))
+                
+                print(f"Gen {gen+1:03d}/{self.generations:03d} | Fit: {best_fitness:6.2f} | CAGR: {cagr:6.2f}% | MaxDD: {dd:6.2f}% | Trades: {trades} | Time: {elapsed:.1f}s")
                 
                 # --- PURE GA SELECTION ---
-                elites = [x[1] for x in scored_population[: max(2, int(self.population_size * 0.2))]]
+                elites = [x[1] for x in scored_population[:num_elites]]
                 new_population = list(elites) 
                 while len(new_population) < self.population_size:
                     p1, p2 = random.choice(elites), random.choice(elites)
