@@ -264,11 +264,11 @@ def hma(prices: list, period: int):
     Formula: WMA(2*WMA(n/2) - WMA(n), sqrt(n))
     Extremely fast and eliminates lag.
     """
-    if len(prices) < period:
+    sqrt_period = int(math.sqrt(period))
+    if len(prices) < period + sqrt_period:
         return None
 
     half_period = period // 2
-    sqrt_period = int(math.sqrt(period))
     
     # HMA Optimization: Only calculate inner WMAs for the required sqrt_period window
     inner_values = []

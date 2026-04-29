@@ -240,7 +240,7 @@ class EvolutionEngine:
         best_overall_fitness = -9999
         best_overall_metrics = None
 
-        print(f"Starting evolution: {self.generations} generations, pop size {self.population_size}")
+        print(f"Starting evolution: {self.generations} generations, pop size {self.population_size}, mutation {self.mutation_rate}")
         
         # Create a PERSISTENT process pool with worker-local data
         with concurrent.futures.ProcessPoolExecutor(

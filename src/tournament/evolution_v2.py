@@ -169,8 +169,9 @@ class EvolutionEngineV2:
         best_overall_genome = None
 
         # Leave 4 cores free for system responsiveness
-        max_workers = max(1, os.cpu_count() - 4)
+        max_workers = max(1, (os.cpu_count() or 4) - 4)
         print(f"Starting Evolution V2: {self.generations} generations, pop {self.population_size} (using {max_workers} cores)")
+        print(f"  Ablation: {'ON' if self.use_ablation else 'OFF'} | Mutation: {self.mutation_rate} | Push-Mid: {self.push_mid_tiers}")
         
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers,

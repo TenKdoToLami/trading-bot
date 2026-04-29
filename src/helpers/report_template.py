@@ -254,30 +254,30 @@ REPORT_TEMPLATE = """
         </section>
 
         <section class="methodology">
-            <h2>Audit Methodology & Methodics</h2>
+            <h2>Audit Methodology & Transparency</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-label">Execution Engine</div>
+                    <div class="stat-label">1. Hardcoded Institutional Friction</div>
                     <div class="stat-sub" style="color: var(--text)">
-                        Signals are generated using <b>Day T</b> closing data. Execution occurs on <b>Day T+1</b> using the <b>Mid-Price</b> (Average of Open and Close). Friction of <b>5 bps slippage</b> + <b>1 bps commission</b> is applied to total turnover on every rebalance.
+                        No matter which script you run, "Real-World" costs are deducted from profits: <b>5 bps slippage</b> + <b>1 bps commission</b> (0.06% total per turnover). This forces the AI to avoid over-trading (churn).
                     </div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Institutional Costs</div>
+                    <div class="stat-label">2. Standardized Expense Ratios</div>
                     <div class="stat-sub" style="color: var(--text)">
-                        Daily expense ratios are deducted: <b>0.03%</b> for SPY, <b>0.91%</b> for 2x/3x ETFs. <b>CASH</b> holdings earn a conservative <b>3.5%</b> annualized yield. Leverage costs are embedded in the ETF drag.
+                        Internal management fees are deducted daily: <b>0.03%</b> for SPY, <b>0.91%</b> for 2x/3x ETFs (UPRO/SSO). <b>CASH</b> holdings earn a <b>3.5%</b> annualized yield.
                     </div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Resilience Protocol</div>
+                    <div class="stat-label">3. Identical Leverage Math</div>
                     <div class="stat-sub" style="color: var(--text)">
-                        Runs 50 iterations per strategy across <b>random 10-year windows</b>. This identifies strategies that only performed well due to specific starting dates (e.g., starting exactly at a market bottom).
+                        The formula <code>(daily_spy_return * 3.0) - expenses</code> is identical in every tool. There is no "simpler" math for evolution; all results are <b>friction-adjusted</b> from day one.
                     </div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Synthetic Protocol</div>
+                    <div class="stat-label">4. Stress Protocols</div>
                     <div class="stat-sub" style="color: var(--text)">
-                        Uses <b>Block Bootstrapping</b> (21-day chunks) to create 50 "Parallel Universes." This tests if a strategy's edge is structural or if it relied on the specific sequence of historical events.
+                        Uses <b>Block Bootstrapping</b> and <b>Rolling Windows</b> to ensure the edge is structural and not a result of historical sequencing luck.
                     </div>
                 </div>
             </div>
