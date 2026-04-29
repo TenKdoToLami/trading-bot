@@ -1,53 +1,53 @@
 {
-  "panic_weights": {
-    "sma": -3.145337932383236,
-    "ema": 1.3909626983108767,
-    "rsi": -0.12691503334901408,
-    "macd": 0.3019759232271818,
-    "adx": -1.8259983880265709,
-    "trix": 0.22789640247607057,
-    "slope": -0.678656262195143,
-    "vol": -1.0524743449953782,
-    "atr": 2.147991194312756
-  },
-  "panic_active": {
-    "sma": true,
-    "ema": true,
-    "rsi": false,
-    "macd": false,
-    "adx": true,
-    "trix": true,
-    "slope": true,
-    "vol": false,
-    "atr": false
-  },
-  "base_weights": {
-    "sma": 1.4688731846311962,
-    "ema": -1.4605751096503692,
-    "rsi": 1.0230601055819974,
-    "macd": -0.3889767057574313,
-    "adx": -1.7920606866432898,
-    "trix": -1.4444871810417665,
-    "slope": -0.8747868139578104,
-    "vol": 2.4847486072005225,
-    "atr": 1.7559764279230725
-  },
-  "base_active": {
-    "sma": false,
-    "ema": true,
-    "rsi": true,
-    "macd": false,
-    "adx": true,
-    "trix": false,
-    "slope": false,
-    "vol": true,
-    "atr": true
-  },
-  "base_thresholds": {
-    "tier_1x": -0.8837568154077242,
-    "tier_2x": 0.4174830504484774,
-    "tier_3x": 0.4194239362620429
-  },
-  "panic_threshold": 2.2109984473744086,
-  "lock_days": 17.555276498693043
+    "panic_weights": {
+        "sma": 0.47668046721985086,
+        "ema": 1.1401650992911958,
+        "rsi": 2.9582695315742944,
+        "macd": -0.032699017917803275,
+        "adx": 0.7119843748459957,
+        "trix": -1.2157386991115169,
+        "slope": -0.6124301679093782,
+        "vol": -1.3863203665176118,
+        "atr": 1.4369409934238613
+    },
+    "panic_active": {
+        "sma": true,
+        "ema": true,
+        "rsi": true,
+        "macd": false,
+        "adx": true,
+        "trix": false,
+        "slope": false,
+        "vol": false,
+        "atr": true
+    },
+    "base_weights": {
+        "sma": 2.434169412595045,
+        "ema": -3.859188529405648,
+        "rsi": -2.221598039434832,
+        "macd": 0.6104343806570597,
+        "adx": 2.7114284977888774,
+        "trix": -0.2362287859773371,
+        "slope": 0.6625175969513114,
+        "vol": 1.4482545646926304,
+        "atr": 0.7286214569668528
+    },
+    "base_active": {
+        "sma": true,
+        "ema": false,
+        "rsi": true,
+        "macd": false,
+        "adx": true,
+        "trix": true,
+        "slope": true,
+        "vol": true,
+        "atr": false
+    },
+    "base_thresholds": {
+        "tier_1x": -0.3258993712117454,
+        "tier_2x": 0.07106814480177676,
+        "tier_3x": 0.1584190786875401
+    },
+    "panic_threshold": 2.860425771530465,
+    "lock_days": 1.9885652420558326
 }
