@@ -13,7 +13,7 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from strategies._genome_strategy import GenomeStrategy
-from strategies.genome_v2_strategy import GenomeV2Strategy
+from strategies.genome_v2_multi import GenomeV2Strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 

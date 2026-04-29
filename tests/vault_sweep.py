@@ -20,11 +20,11 @@ from src.helpers.data_provider import load_spy_data
 
 # Strategy Imports
 from strategies._genome_strategy import GenomeStrategy
-from strategies.genome_v2_strategy import GenomeV2Strategy
-from strategies.genome_v3_strategy import GenomeV3Strategy
-from strategies.gene_v4_chameleon import ChameleonV4
-from strategies.v5_sniper.genome import GenomeV5Sniper
-from strategies.v6_balancer.genome import GenomeV6
+from strategies.genome_v2_multi import GenomeV2Strategy
+from strategies.genome_v3_precision import GenomeV3Strategy
+from strategies.genome_v4_chameleon import ChameleonV4
+from strategies.genome_v5_sniper import GenomeV5Sniper
+from strategies.genome_v6_balancer import GenomeV6
 
 # ──────────────────────────────────────────────────────
 # Genome Identification

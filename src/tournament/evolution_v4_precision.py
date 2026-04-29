@@ -69,15 +69,21 @@ class EvolutionEngineV4Precision:
         if seed_vault and os.path.exists(seed_vault):
             print(f"Injecting seeds from: {seed_vault}...")
             seeds = []
-            for f in os.listdir(seed_vault):
+            vault_files = sorted(os.listdir(seed_vault), reverse=True)
+            for f in vault_files:
                 if f.endswith(".json"):
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
                             g = json.load(jf)
                             g['version'] = 4.0
                             seeds.append(g)
-                        except: continue
-            self.population.extend(seeds[:self.population_size])
+                        except Exception as e:
+                            print(f"  [Error] Skipping {f}: {e}")
+                            continue
+            
+            num_seeds = min(len(seeds), self.population_size)
+            self.population.extend(seeds[:num_seeds])
+            print(f"  SUCCESS: Loaded {num_seeds} V4 seeds into population.")
 
         while len(self.population) < self.population_size:
             self.population.append(self._random_genome())

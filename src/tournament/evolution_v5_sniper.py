@@ -69,7 +69,8 @@ class EvolutionEngineV5Sniper:
         if seed_vault and os.path.exists(seed_vault):
             print(f"Injecting seeds from: {seed_vault}...")
             seeds = []
-            for f in os.listdir(seed_vault):
+            vault_files = sorted(os.listdir(seed_vault), reverse=True)
+            for f in vault_files:
                 if f.endswith(".json"):
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
@@ -77,8 +78,13 @@ class EvolutionEngineV5Sniper:
                             # Only load if it's a valid V5 Tiered Sniper
                             if 'sniper' in g and 't_low' in g['sniper']:
                                 seeds.append(g)
-                        except: continue
-            self.population.extend(seeds[:self.population_size])
+                        except Exception as e:
+                            print(f"  [Error] Skipping {f}: {e}")
+                            continue
+            
+            num_seeds = min(len(seeds), self.population_size)
+            self.population.extend(seeds[:num_seeds])
+            print(f"  SUCCESS: Loaded {num_seeds} V5 seeds into population.")
 
         while len(self.population) < self.population_size:
             self.population.append(self._random_genome())

@@ -9,6 +9,8 @@ from strategies.genome_v6_balancer import GenomeV6
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
+_worker_price_data = None
+_worker_dates = None
 _worker_min_cagr = 0.0
 
 def _init_worker(cache_file, min_cagr):
@@ -65,16 +67,23 @@ class EvolutionEngineV6:
         if seed_vault and os.path.exists(seed_vault):
             print(f"Injecting seeds from: {seed_vault}...")
             seeds = []
-            for f in os.listdir(seed_vault):
+            # Sort files descending so higher CAGR (filenames) are processed first
+            vault_files = sorted(os.listdir(seed_vault), reverse=True)
+            for f in vault_files:
                 if f.endswith(".json"):
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
-                            # V6 is too different for auto-conversion usually, 
-                            # but we can try to load V6 genomes.
                             g = json.load(jf)
-                            if 'brains' in g: seeds.append(g)
-                        except: continue
-            self.population.extend(seeds[:self.population_size])
+                            # Basic validation: check for 'brains' key
+                            if 'brains' in g:
+                                seeds.append(g)
+                        except Exception as e:
+                            print(f"  [Error] Skipping {f}: {e}")
+                            continue
+            
+            num_seeds = min(len(seeds), self.population_size)
+            self.population.extend(seeds[:num_seeds])
+            print(f"  SUCCESS: Loaded {num_seeds} seeds into population.")
 
         while len(self.population) < self.population_size:
             self.population.append(self._random_genome())

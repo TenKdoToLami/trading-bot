@@ -4,7 +4,7 @@ import concurrent.futures
 import time
 import os
 
-from strategies.genome_v3_strategy import GenomeV3Strategy
+from strategies.genome_v3_precision import GenomeV3Strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
