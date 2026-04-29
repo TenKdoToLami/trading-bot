@@ -9,23 +9,57 @@ from strategies.genome_v4_chameleon import ChameleonV4
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-_worker_price_data = None
-_worker_dates = None
+_worker_features = None
 
 def _init_worker(cache_file):
-    global _worker_price_data, _worker_dates
+    global _worker_price_data, _worker_dates, _worker_features
+    import pandas as pd
+    import numpy as np
+    from src.helpers.indicators import rsi, linear_regression_slope
+
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-    _worker_dates = df.index
+    _worker_dates = [str(d.date()) for d in df.index]
     _worker_price_data = df.to_dict('records')
+    
+    print(f"  [Worker {os.getpid()}] Pre-calculating V4 Nitro Matrix...")
+    features = {}
+    
+    # 1. SMAs (Mom Period: 50-300)
+    for p in range(50, 301, 1):
+        features[f"sma_{p}"] = df['close'].rolling(p).mean().values
+        
+    # 2. VIX EMAs (Vix EMA: 10-100)
+    for p in range(10, 101, 1):
+        features[f"vix_ema_{p}"] = df['vix'].ewm(span=p, adjust=False).mean().values
+        
+    # 3. Slopes (Slope Period: 10-60)
+    # Slopes are slower, we use a vectorized approach or pre-loop
+    for p in range(10, 61, 2): # Stepping by 2 to save time/mem
+        slopes = [linear_regression_slope(df['close'].iloc[max(0, i-p+1):i+1].tolist(), p) for i in range(len(df))]
+        features[f"slope_{p}"] = np.array(slopes)
+        
+    # 4. RSIs (RSI Period: 2-30)
+    for p in range(2, 31, 1):
+        # We'll use a simplified RSI or pre-calculate it
+        deltas = df['close'].diff()
+        gain = (deltas.where(deltas > 0, 0)).rolling(window=p).mean()
+        loss = (-deltas.where(deltas < 0, 0)).rolling(window=p).mean()
+        rs = gain / loss
+        features[f"rsi_{p}"] = (100 - (100 / (1 + rs))).values
+
+    # Store features as a lookup by date string for the strategy
+    # BUT to save memory, we keep them as arrays and the strategy will use the index
+    _worker_features = features
 
 def _evaluate_genome_worker(genome):
     # ── STAGE 1: LITE SCREENING (Last ~4 years) ──
     lite_window = 1000
+    lite_offset = len(_worker_price_data) - lite_window
     lite_res = _execute_simulation(
         strategy_type=ChameleonV4,
         price_data_list=_worker_price_data[-lite_window:],
         dates=_worker_dates[-lite_window:],
-        strategy_kwargs={'genome': genome}
+        strategy_kwargs={'genome': genome, 'precalculated_features': _worker_features, 'index_offset': lite_offset}
     )
     if lite_res['metrics']['cagr'] <= 0:
         return -500.0, genome, lite_res['metrics']
@@ -35,7 +69,7 @@ def _evaluate_genome_worker(genome):
         strategy_type=ChameleonV4,
         price_data_list=_worker_price_data,
         dates=_worker_dates,
-        strategy_kwargs={'genome': genome}
+        strategy_kwargs={'genome': genome, 'precalculated_features': _worker_features, 'index_offset': 0}
     )
     metrics = res['metrics']
     cagr = metrics['cagr'] * 100
@@ -47,6 +81,7 @@ def _evaluate_genome_worker(genome):
     
     return fitness, genome, metrics
 
+class EvolutionEngineV4:
     def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
         self.population_size = population_size
         self.generations = generations
@@ -58,8 +93,12 @@ def _evaluate_genome_worker(genome):
             "vix_ema": (10, 100),
             "vol_stretch": (1.0, 3.0),
             "mom_period": (50, 300),
+            "slope_period": (10, 60),
+            "slope_threshold": (-1.0, 1.0),
             "rsi_period": (2, 30),
             "rsi_entry": (5, 45),
+            "rsi_exit": (60, 95),
+            "lev_bull": (1.0, 3.0),
             "lev_calm": (0.0, 3.0),
             "lev_stress": (0.0, 2.0),
             "lev_panic": (0.0, 1.0)
@@ -91,23 +130,39 @@ def _evaluate_genome_worker(genome):
         genome = {k: random.uniform(mn, mx) if isinstance(mn, float) else random.randint(mn, mx) 
                 for k, (mn, mx) in self.bounds.items()}
         
-        if self.use_ablation:
-            # 60% chance for an indicator to stay ON by default in a random genome
-            genome['a'] = {
-                'vix': random.random() > 0.4,
-                'mom': random.random() > 0.4,
-                'rsi': random.random() > 0.4
-            }
+        # Default ablation mask (60% ON)
+        genome['a'] = {
+            'vix': random.random() > 0.4,
+            'mom': random.random() > 0.4,
+            'rsi': random.random() > 0.4,
+            'slope': random.random() > 0.4
+        }
         return genome
 
     def _crossover(self, p1, p2):
         child = {}
         for k in self.bounds:
             child[k] = p1[k] if random.random() > 0.5 else p2[k]
+        
+        # Crossover for ablation mask
+        if 'a' in p1 and 'a' in p2:
+            child['a'] = {bit: (p1['a'][bit] if random.random() > 0.5 else p2['a'][bit]) for bit in p1['a']}
+        elif 'a' in p1: child['a'] = p1['a'].copy()
+        elif 'a' in p2: child['a'] = p2['a'].copy()
+            
         return child
 
     def _mutate(self, genome):
         mutated = dict(genome)
+        
+        # Retrofit V4.1 keys for legacy seeds
+        if "slope_period" not in mutated: mutated["slope_period"] = 20
+        if "slope_threshold" not in mutated: mutated["slope_threshold"] = 0.0
+        if "rsi_exit" not in mutated: mutated["rsi_exit"] = 85
+        if "lev_bull" not in mutated: mutated["lev_bull"] = 3.0
+        if "a" not in mutated: mutated["a"] = {"vix": True, "mom": True, "rsi": True, "slope": True}
+        if "slope" not in mutated["a"]: mutated["a"]["slope"] = True
+
         for k, (mn, mx) in self.bounds.items():
             if random.random() < self.mutation_rate:
                 if isinstance(mn, float):
@@ -115,12 +170,8 @@ def _evaluate_genome_worker(genome):
                 else:
                     mutated[k] = max(mn, min(mx, mutated[k] + random.randint(-5, 5)))
         
+        # Mutate the activation bits
         if self.use_ablation:
-            if 'a' not in mutated:
-                # Retrofit missing mask (default all ON)
-                mutated['a'] = {'vix': True, 'mom': True, 'rsi': True}
-            
-            # Mutate the activation bits
             for bit in mutated['a']:
                 if random.random() < self.mutation_rate:
                     mutated['a'][bit] = not mutated['a'][bit]

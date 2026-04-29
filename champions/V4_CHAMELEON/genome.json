@@ -1,10 +1,20 @@
 {
-    "vix_ema": 54,
-    "vol_stretch": 1.56,
-    "mom_period": 76,
-    "rsi_period": 20,
-    "rsi_entry": 12,
+    "vix_ema": 14,
+    "vol_stretch": 2.530520713099812,
+    "mom_period": 289,
+    "slope_period": 32,
+    "slope_threshold": 0.486427151143604,
+    "rsi_period": 25,
+    "rsi_entry": 24,
+    "rsi_exit": 80,
+    "lev_bull": 1.7004668272146468,
     "lev_calm": 3.0,
-    "lev_stress": 0.79,
-    "lev_panic": 0.37
+    "lev_stress": 1.0724827900729732,
+    "lev_panic": 0.47464036045610375,
+    "a": {
+        "vix": false,
+        "mom": true,
+        "rsi": true,
+        "slope": false
+    }
 }
