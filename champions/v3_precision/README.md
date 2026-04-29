@@ -33,12 +33,16 @@ python tests/vault_sweep.py --vault champions/v3_precision/vault --promote --top
 ### 🧬 Evolution
 ```bash
 # Cold Start Evolution
-python tests/run_evolution_v3_precision.py --pop 300 --gen 100
+python tests/run_evolution_v3_precision.py --pop 500 --gen 100
 
 # Seeded Evolution (Refine Champions)
-python tests/run_evolution_v3_precision.py --pop 300 --gen 50 --seed champions/v3_precision/vault
+python tests/run_evolution_v3_precision.py --pop 500 --gen 50 --mut 0.25 --seed champions/v3_precision/vault
 
-### 🧪 Special Modifiers
-- `--mutation 0.4`: Increase "Creative" mutation for exploration.
-- `--mutation 0.1`: Decrease mutation for fine-tuning a champion.
-```
+#### ⚙️ Evolution Parameters
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `--pop` | `50` | Population size (higher = more diversity). |
+| `--gen` | `20` | Number of generations to evolve. |
+| `--mut` | `0.15` | Mutation rate (DNA change probability). Use `0.25+` for seeding. |
+| `--seed` | `None` | Path to the vault directory for seed injection. |
+| `--ablation` | `False` | Enable "Indicator Ablation" (allows GA to disable weak indicators). |

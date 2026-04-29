@@ -25,6 +25,20 @@ def _init_worker(cache_file):
 
 
 def _evaluate_genome_worker(genome):
+    # ── STAGE 1: LITE SCREENING (Last ~4 years) ──
+    lite_window = 1000
+    lite_res = _execute_simulation(
+        strategy_type=GenomeV3Strategy,
+        price_data_list=_worker_price_data[-lite_window:],
+        dates=_worker_dates[-lite_window:],
+        strategy_kwargs={'genome': genome}
+    )
+    
+    # If the genome fails to stay profitable in the recent regime, kill it early
+    if lite_res['metrics']['cagr'] <= 0:
+        return -500.0, genome, lite_res['metrics']
+
+    # ── STAGE 2: FULL AUDIT (30+ years) ──
     res = _execute_simulation(
         strategy_type=GenomeV3Strategy,
         price_data_list=_worker_price_data,
@@ -32,15 +46,12 @@ def _evaluate_genome_worker(genome):
         strategy_kwargs={'genome': genome}
     )
     metrics = res['metrics']
-    cagr = metrics['cagr']
-    max_dd = abs(metrics['max_dd'])
+    cagr = metrics['cagr'] * 100
+    max_dd = abs(metrics['max_dd']) * 100
     
-    # ── High Alpha Focus ──
-    # Penalty of 10.0 means 1% of CAGR is worth 1% of MaxDD.
-    fitness = (cagr * 100) - (max_dd * 10)
-
-    # Absolute floor: avoid total liquidation (-95%)
-    if metrics['max_dd'] < -0.95: fitness = -9999
+    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
+    fitness = cagr - (max_dd * 0.15)
+    if max_dd >= 95.0: fitness -= 1000
     
     return fitness, genome, metrics
 
@@ -181,7 +192,7 @@ class EvolutionEngineV3:
         best_overall_genome = None
 
         max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V3: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f} (using {max_workers} cores)")
+        print(f"Starting Evolution V3: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, ablation {'ON' if self.use_ablation else 'OFF'} (using {max_workers} cores)")
         
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers,
