@@ -49,22 +49,19 @@ def _evaluate_genome_worker(genome):
     return fitness, genome, metrics
 
 
-class EvolutionEngine:
+class EvolutionEngineV1Classic:
     """
-    Genetic Algorithm Engine to breed the optimal GenomeStrategy.
-    
-    Optimized for speed:
-    - Worker processes load data once via initializer (no cross-process serialization of price data).
-    - Persistent process pool across all generations (no respawning overhead).
-    - Only the tiny genome dict (~1KB) is sent to each worker.
+    Genetic Algorithm Engine to breed the optimal V1 Classic GenomeStrategy.
     """
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.15, seed_vault=None, use_ablation=True):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
+        self.use_ablation = use_ablation
+        self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']
         
         # Load data once to ensure cache exists
-        print("Loading data for evolution...")
+        print("Loading data for V1 Classic evolution...")
         self.data = load_spy_data("1993-01-01", force_refresh=False)
         
         # Resolve the cache file path for workers
@@ -98,44 +95,23 @@ class EvolutionEngine:
             try:
                 with open(filepath, 'r') as f:
                     genome = json.load(f)
-                # Validate minimum structure
                 if 'panic_weights' in genome and 'base_weights' in genome:
-                    # Extract CAGR from filename for sorting
                     match = re.search(r'cagr_([\d.]+)', filename)
                     cagr = float(match.group(1)) if match else 0.0
                     seeds.append((cagr, genome))
             except Exception:
                 continue
         
-        # Sort by CAGR descending, return just the genomes
         seeds.sort(key=lambda x: x[0], reverse=True)
         return [g for _, g in seeds]
 
     def _random_genome(self):
         def _rand_weights():
-            return {
-                'sma': random.uniform(-2, 2),
-                'ema': random.uniform(-2, 2),
-                'rsi': random.uniform(-2, 2),
-                'macd': random.uniform(-2, 2),
-                'adx': random.uniform(-2, 2),
-                'trix': random.uniform(-2, 2),
-                'slope': random.uniform(-2, 2),
-                'vol': random.uniform(-2, 2),
-                'atr': random.uniform(-2, 2)
-            }
+            return {k: random.uniform(-2, 2) for k in self.indicators}
+        
         def _rand_active():
-            return {
-                'sma': random.random() > 0.5,
-                'ema': random.random() > 0.5,
-                'rsi': random.random() > 0.5,
-                'macd': random.random() > 0.5,
-                'adx': random.random() > 0.5,
-                'trix': random.random() > 0.5,
-                'slope': random.random() > 0.5,
-                'vol': random.random() > 0.5,
-                'atr': random.random() > 0.5
-            }
+            # If ablation is off, everything is active
+            return {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators}
         
         return {
             'panic_weights': _rand_weights(),
@@ -161,7 +137,7 @@ class EvolutionEngine:
             'base_thresholds': {}
         }
         
-        for key in p1['panic_weights']:
+        for key in self.indicators:
             child['panic_weights'][key] = p1['panic_weights'][key] if random.random() > 0.5 else p2['panic_weights'][key]
             child['panic_active'][key] = p1.get('panic_active', {}).get(key, True) if random.random() > 0.5 else p2.get('panic_active', {}).get(key, True)
             child['base_weights'][key] = p1['base_weights'][key] if random.random() > 0.5 else p2['base_weights'][key]
@@ -173,7 +149,7 @@ class EvolutionEngine:
         child['panic_threshold'] = p1['panic_threshold'] if random.random() > 0.5 else p2['panic_threshold']
         child['lock_days'] = p1['lock_days'] if random.random() > 0.5 else p2['lock_days']
         
-        # Repair thresholds to maintain tier_3x > tier_2x > tier_1x
+        # Repair thresholds
         t = child['base_thresholds']
         ordered = sorted([t['tier_1x'], t['tier_2x'], t['tier_3x']])
         child['base_thresholds'] = {
@@ -196,19 +172,20 @@ class EvolutionEngine:
         for group in ['panic', 'base']:
             w_group = f"{group}_weights"
             a_group = f"{group}_active"
-            for key, val in genome[w_group].items():
+            for key in self.indicators:
+                val = genome[w_group][key]
                 # Mutate weight
                 if random.random() < self.mutation_rate:
                     mutated[w_group][key] = val + random.gauss(0, 0.5)
                 else:
                     mutated[w_group][key] = val
                     
-                # Mutate active mask (Ablation toggle: 5% chance to flip)
+                # Mutate active mask (only if ablation is enabled)
                 current_active = genome.get(a_group, {}).get(key, True)
-                if random.random() < 0.05:
+                if self.use_ablation and random.random() < 0.05:
                     mutated[a_group][key] = not current_active
                 else:
-                    mutated[a_group][key] = current_active
+                    mutated[a_group][key] = current_active if self.use_ablation else True
                     
         for key, val in genome['base_thresholds'].items():
             if random.random() < self.mutation_rate:
@@ -241,9 +218,8 @@ class EvolutionEngine:
         best_overall_fitness = -9999
         best_overall_metrics = None
 
-        print(f"Starting evolution: {self.generations} generations, pop size {self.population_size}, mutation {self.mutation_rate}")
+        print(f"Starting V1 Classic evolution: {self.generations} generations, pop size {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}")
         
-        # Create a PERSISTENT process pool with worker-local data
         with concurrent.futures.ProcessPoolExecutor(
             initializer=_init_worker,
             initargs=(self.cache_file,)
@@ -251,14 +227,8 @@ class EvolutionEngine:
             
             for gen in range(self.generations):
                 start_time = time.time()
-                
-                # Evaluate population in parallel (only genome is serialized, not price data)
-                scored_population = []
                 futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
-                for future in concurrent.futures.as_completed(futures):
-                    scored_population.append(future.result())
-                
-                # Sort by fitness descending
+                scored_population = [f.result() for f in concurrent.futures.as_completed(futures)]
                 scored_population.sort(key=lambda x: x[0], reverse=True)
                 
                 best_fitness, best_genome, best_metrics = scored_population[0]
@@ -267,12 +237,11 @@ class EvolutionEngine:
                     best_overall_genome = best_genome
                     best_overall_metrics = best_metrics
                     
-                    # Save to vault when a new record is found
+                    # Save to vault
                     cagr_pct = best_overall_metrics['cagr'] * 100
                     dd_pct = best_overall_metrics['max_dd'] * 100
                     vault_dir = "champions/v1_classic/vault"
-                    if not os.path.exists(vault_dir):
-                        os.makedirs(vault_dir)
+                    os.makedirs(vault_dir, exist_ok=True)
                     filename = f"{vault_dir}/genome_cagr_{cagr_pct:.2f}_dd_{dd_pct:.2f}.json"
                     with open(filename, "w") as f:
                         json.dump(best_genome, f, indent=2)
@@ -287,17 +256,14 @@ class EvolutionEngine:
                 # --- PURE GA SELECTION ---
                 elites = [x[1] for x in scored_population[: max(2, int(self.population_size * 0.2))]]
                 new_population = list(elites) 
-                
                 while len(new_population) < self.population_size:
                     p1, p2 = random.choice(elites), random.choice(elites)
                     child = self._crossover(p1, p2)
                     new_population.append(self._mutate(child))
-                    
                 self.population = new_population
 
         print("\nEvolution Complete.")
         print(f"Best Overall CAGR: {best_overall_metrics['cagr']*100:.2f}%")
         print(f"Best Overall MaxDD: {best_overall_metrics['max_dd']*100:.2f}%")
         print(f"Results stored in vault.")
-        
         return best_overall_genome

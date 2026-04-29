@@ -30,7 +30,20 @@ python tests/vault_sweep.py --vault champions/v1_classic/vault --promote --top 2
 ```
 
 ### 🧬 Evolution
+Breeds the optimal weight-sum brain using a Genetic Algorithm.
 ```bash
 # Standard Evolution run
-python tests/run_evolution.py --pop 100 --gen 50
+python tests/run_evolution_v1_classic.py --pop 500 --gen 100
+
+# Seeded Evolution (Refine using your best vaulted genomes)
+python tests/run_evolution_v1_classic.py --pop 500 --gen 100 --seed champions/v1_classic/vault
 ```
+
+#### ⚙️ Evolution Parameters
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 30 | Population size. Higher = more diversity, slower generations. |
+| `--gen` | 10 | Number of generations to evolve. |
+| `--mut` | 0.15 | Mutation rate. Use `0.25 - 0.40` for exploration, `0.05` for fine-tuning. |
+| `--seed`| None | Path to a `vault/` directory to load initial winners from. |
+| `--ablation` | Off | **Feature Selection**: Disables indicators randomly to find the most robust subset. |

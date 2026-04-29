@@ -30,7 +30,16 @@ python tests/vault_sweep.py --vault champions/V4_CHAMELEON/vault --promote --top
 ```
 
 ### 🧬 Evolution
+Optimizes the adaptive logic tree using Gaussian Neuroevolution.
 ```bash
 # Adaptive Volatility Evolution
 python tests/run_evolution_v4.py --pop 40 --gen 15 --seed champions/V4_CHAMELEON/vault
 ```
+
+#### ⚙️ Evolution Parameters
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 40 | Population size (Lower for V4 due to higher computational cost). |
+| `--gen` | 15 | Number of generations. |
+| `--mut` | 0.20 | Mutation rate (regime switching probability). |
+| `--seed`| champions/V4_CHAMELEON/vault | Path to vault dir to seed population. |

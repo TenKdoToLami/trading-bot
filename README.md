@@ -38,6 +38,18 @@ python tests/run_tournament.py --no-report
 python tests/run_tournament.py --resilience --samples 20
 ```
 
+#### ⚙️ Tournament Parameters
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--strategy` | `None` | Case-insensitive strategy name. Supports comma-separated list. |
+| `--start` | `1993-01-01` | Backtest start date. |
+| `--end` | `Latest` | Backtest end date. |
+| `--refresh` | `Off` | Force re-download of SPY/VIX data from yfinance. |
+| `--no-report`| `Off` | Skip generation of Plotly/HTML reports. |
+| `--resilience`| `Off` | **Stress Test**: Samples random periods across 5-30yr buckets. |
+| `--samples` | `10` | Number of random samples per bucket in Resilience mode. |
+| `--no-audit` | `Off` | Skip the heavy Robustness/Synthetic data audit phase. |
+
 ---
 
 ## 🧬 Evolutionary Strategy Breeding
@@ -52,6 +64,7 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 | `python tests/run_evolution_v4.py`          | **V4** | Adaptive Chameleon (Volatility Regime Selection) |
 | `python tests/run_evolution_v3.py`          | **V3** | Binary AI with Genetic Lookback Optimization |
 | `python tests/run_evolution_v2.py`          | **V2** | Multi-Brain Tiered Logic |
+| `python tests/run_evolution_v1_classic.py`  | **V1** | Classic Linear Weight-Sum (Baseline) |
 
 ### Common Parameters
 | Flag | Default | Description |
