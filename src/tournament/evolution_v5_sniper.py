@@ -35,10 +35,6 @@ def _evaluate_genome_worker(genome):
     cagr = metrics['cagr']
     max_dd = abs(metrics['max_dd'])
     
-    # CAGR Threshold Enforcement
-    if cagr < _worker_min_cagr:
-        return -99999, genome, metrics
-        
     # Tiered Sniper Fitness: CAGR vs DD Balance
     fitness = (cagr * 100) - (max_dd * 15)
     

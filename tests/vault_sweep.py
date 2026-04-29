@@ -25,6 +25,7 @@ from strategies.genome_v3_precision import GenomeV3Strategy
 from strategies.genome_v4_chameleon import ChameleonV4
 from strategies.genome_v5_sniper import GenomeV5Sniper
 from strategies.genome_v6_balancer import GenomeV6
+from strategies.genome_v7_deep import GenomeV7Deep
 
 # ──────────────────────────────────────────────────────
 # Genome Identification
@@ -39,6 +40,8 @@ V6_BRAINS = {'cash', '1x', '2x', '3x'}
 
 def get_genome_version(genome: dict) -> int:
     """Detect genome version based on keys."""
+    if 'layers' in genome:
+        return 7
     if V6_BRAINS.issubset(genome.get('brains', {}).keys()):
         return 6
     if V5_KEYS.issubset(genome.keys()):
@@ -56,6 +59,8 @@ def get_genome_version(genome: dict) -> int:
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has a known genome structure."""
     ver = get_genome_version(genome)
+    if ver == 7:
+        return 'layers' in genome and len(genome['layers']) > 0
     if ver == 6:
         return 'brains' in genome and all('w' in genome['brains'][b] for b in V6_BRAINS)
     if ver == 5:
@@ -73,7 +78,8 @@ def validate_genome(genome: dict) -> bool:
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     """Run simulation on a slice using the correct strategy class."""
     ver = get_genome_version(genome)
-    if ver == 6: strat_type = GenomeV6
+    if ver == 7: strat_type = GenomeV7Deep
+    elif ver == 6: strat_type = GenomeV6
     elif ver == 5: strat_type = GenomeV5Sniper
     elif ver == 4: strat_type = ChameleonV4
     elif ver == 3: strat_type = GenomeV3Strategy

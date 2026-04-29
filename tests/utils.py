@@ -21,8 +21,12 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         with open(identifier, "r") as f:
             genome = json.load(f)
             
-        # --- PRIORITY 1: Modern Champions (V6, V5) ---
-        if "brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"]) or genome.get('version') == 6.0:
+        # --- PRIORITY 1: Modern Champions (V7, V6, V5) ---
+        if "layers" in genome or genome.get('version') == 7.0:
+            from strategies.genome_v7_deep import GenomeV7Deep
+            return GenomeV7Deep(genome=genome)
+            
+        elif "brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"]) or genome.get('version') == 6.0:
             from strategies.genome_v6_balancer import GenomeV6
             return GenomeV6(genome=genome)
             
