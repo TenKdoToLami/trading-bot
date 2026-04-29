@@ -11,7 +11,6 @@ from src.helpers.data_provider import load_spy_data
 
 _worker_price_data = None
 _worker_dates = None
-
 _worker_min_cagr = 0.0
 
 def _init_worker(cache_file, min_cagr):
@@ -20,8 +19,9 @@ def _init_worker(cache_file, min_cagr):
     _worker_min_cagr = min_cagr
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_dates = df.index
-    _worker_price_data = [row.to_dict() for _, row in df.iterrows()]
-    print(f"  [Worker {os.getpid()}] V5 Ready. Min CAGR: {_worker_min_cagr*100:.1f}%")
+    # Turbo I/O
+    _worker_price_data = df.to_dict('records')
+    print(f"  [Worker {os.getpid()}] V5-Sniper Ready. Min CAGR: {min_cagr:.1f}%")
 
 def _evaluate_genome_worker(genome):
     res = _execute_simulation(
@@ -32,13 +32,15 @@ def _evaluate_genome_worker(genome):
     )
     
     metrics = res['metrics']
-    cagr = metrics['cagr']
-    max_dd = abs(metrics['max_dd'])
+    cagr = metrics['cagr'] * 100
+    max_dd = abs(metrics['max_dd']) * 100
     
-    # Tiered Sniper Fitness: CAGR vs DD Balance
-    fitness = (cagr * 100) - (max_dd * 15)
+    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
+    fitness = cagr - (max_dd * 0.15)
     
-    if metrics['max_dd'] < -0.95: fitness = -99999
+    if max_dd >= 95.0: 
+        fitness -= 1000
+        
     return fitness, genome, metrics
 
 class EvolutionEngineV5Sniper:
@@ -56,14 +58,13 @@ class EvolutionEngineV5Sniper:
             'vol': (5, 60), 'atr': (5, 50)
         }
 
-        print("Loading master data for Evolution V5 Tiered Sniper...")
+        print("Loading master data for Evolution V5 Sniper...")
         self.data = load_spy_data("1993-01-01")
         from src.helpers.data_provider import CACHE_FILE
         self.cache_file = CACHE_FILE
         
         self.population = []
         if seed_vault and os.path.exists(seed_vault):
-            print(f"Injecting seeds from: {seed_vault}...")
             seeds = []
             vault_files = sorted(os.listdir(seed_vault), reverse=True)
             for f in vault_files:
@@ -71,16 +72,13 @@ class EvolutionEngineV5Sniper:
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
                             g = json.load(jf)
-                            # Only load if it's a valid V5 Tiered Sniper
-                            if 'sniper' in g and 't_low' in g['sniper']:
-                                seeds.append(g)
-                        except Exception as e:
-                            print(f"  [Error] Skipping {f}: {e}")
-                            continue
+                            g['version'] = 5.0
+                            seeds.append(g)
+                        except: continue
             
             num_seeds = min(len(seeds), self.population_size)
             self.population.extend(seeds[:num_seeds])
-            print(f"  SUCCESS: Loaded {num_seeds} V5 seeds into population.")
+            print(f"  SUCCESS: Injected {num_seeds} V5 seeds from vault.")
 
         while len(self.population) < self.population_size:
             self.population.append(self._random_genome())
@@ -101,7 +99,7 @@ class EvolutionEngineV5Sniper:
         }
 
     def _crossover(self, p1, p2):
-        res = {
+        child = {
             'sniper': {
                 'w': {k: (p1['sniper']['w'][k] if random.random() > 0.5 else p2['sniper']['w'][k]) for k in self.indicators},
                 'a': {k: (p1['sniper']['a'][k] if random.random() > 0.5 else p2['sniper']['a'][k]) for k in self.indicators},
@@ -112,20 +110,15 @@ class EvolutionEngineV5Sniper:
             'lock_days': p1['lock_days'] if random.random() > 0.5 else p2['lock_days'],
             'version': 5.0
         }
-        # Enforce t_high > t_low
-        if res['sniper']['t_high'] < res['sniper']['t_low']:
-            res['sniper']['t_high'], res['sniper']['t_low'] = res['sniper']['t_low'], res['sniper']['t_high']
-        if res['sniper']['t_high'] == res['sniper']['t_low']:
-            res['sniper']['t_high'] += 0.5
-        return res
+        return child
 
     def _mutate(self, genome):
         mutated = {
             'sniper': {
                 'w': {k: (v + random.gauss(0, 0.8) if random.random() < self.mutation_rate else v) for k, v in genome['sniper']['w'].items()},
                 'a': {k: (not v if random.random() < 0.05 else v) for k, v in genome['sniper']['a'].items()},
-                't_low': genome['sniper']['t_low'] + random.gauss(0, 0.8) if random.random() < self.mutation_rate else genome['sniper']['t_low'],
-                't_high': genome['sniper']['t_high'] + random.gauss(0, 0.8) if random.random() < self.mutation_rate else genome['sniper']['t_high'],
+                't_low': genome['sniper']['t_low'] + random.gauss(0, 0.5) if random.random() < self.mutation_rate else genome['sniper']['t_low'],
+                't_high': genome['sniper']['t_high'] + random.gauss(0, 0.5) if random.random() < self.mutation_rate else genome['sniper']['t_high'],
                 'lookbacks': {}
             },
             'lock_days': max(1, min(20, genome['lock_days'] + random.gauss(0, 2))) if random.random() < self.mutation_rate else genome['lock_days'],
@@ -133,37 +126,45 @@ class EvolutionEngineV5Sniper:
         }
         for k, v in genome['sniper']['lookbacks'].items():
             mn, mx = self.lb_bounds[k]
-            new_v = v + int(random.gauss(0, (mx-mn)*0.15)) if random.random() < self.mutation_rate else v
+            new_v = v + int(random.gauss(0, (mx-mn)*0.1)) if random.random() < self.mutation_rate else v
             mutated['sniper']['lookbacks'][k] = max(mn, min(mx, new_v))
-        
-        # Repair thresholds
-        if mutated['sniper']['t_high'] < mutated['sniper']['t_low']:
+            
+        # Maintain threshold order
+        if mutated['sniper']['t_high'] <= mutated['sniper']['t_low']:
             mutated['sniper']['t_high'] = mutated['sniper']['t_low'] + 0.5
-        
-        mutated['sniper']['lookbacks']['macd_s'] = mutated['sniper']['lookbacks']['macd_f'] + 1
+            
         return mutated
 
     def run(self):
-        best_overall_fitness = -9999
-        best_overall_genome = None
-        max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V5 Sniper: {self.generations} generations, pop {self.population_size}, ablation {'ON' if self.use_ablation else 'OFF'}, mutation {self.mutation_rate:.2f}, MinCAGR: {self.min_cagr*100:.1f}%")
+        max_workers = max(1, os.cpu_count() - 2)
+        print(f"Starting Evolution V5 Sniper: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, MinCAGR: {self.min_cagr:.1f}%")
         
+        vault_dir = "champions/v5_sniper/vault"
+        os.makedirs(vault_dir, exist_ok=True)
+        best_overall_genome = None
+
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file, self.min_cagr)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
                 scored = [f.result() for f in concurrent.futures.as_completed(futures)]
                 scored.sort(key=lambda x: x[0], reverse=True)
+                
                 best_fit, best_genome, best_metrics = scored[0]
-                
+                best_overall_genome = best_genome
                 elapsed = time.time() - start_time
-                print(f"V5-Snipe Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")
                 
-                # --- PURE GA SELECTION ---
+                print(f"Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:5.2f}% | DD: {best_metrics['max_dd']*100:5.2f}% | Time: {elapsed:.1f}s")
+                
+                # Save to vault
+                if (best_metrics['cagr'] * 100) >= self.min_cagr:
+                    v_path = os.path.join(vault_dir, f"v5s_cagr_{best_metrics['cagr']*100:.2f}_dd_{best_metrics['max_dd']*100:.2f}.json")
+                    with open(v_path, 'w') as f:
+                        json.dump(best_genome, f, indent=4)
+                
+                # Selection
                 elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]
                 new_pop = list(elites)
-                
                 while len(new_pop) < self.population_size:
                     p1, p2 = random.choice(elites), random.choice(elites)
                     child = self._crossover(p1, p2)

@@ -4,6 +4,7 @@ import concurrent.futures
 import time
 import os
 import numpy as np
+import pandas as pd
 
 from strategies.genome_v7_deep import GenomeV7Deep
 from src.tournament.runner import _execute_simulation
@@ -19,8 +20,9 @@ def _init_worker(cache_file, min_cagr):
     _worker_min_cagr = min_cagr
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_dates = df.index
-    _worker_price_data = [row.to_dict() for _, row in df.iterrows()]
-    print(f"  [Worker {os.getpid()}] V7 Deep Ready. Min CAGR: {_worker_min_cagr*100:.1f}%")
+    # Turbo I/O
+    _worker_price_data = df.to_dict('records')
+    print(f"  [Worker {os.getpid()}] V7-Deep Ready. Min CAGR: {min_cagr:.1f}%")
 
 def _evaluate_genome_worker(genome):
     res = _execute_simulation(
@@ -30,13 +32,15 @@ def _evaluate_genome_worker(genome):
         strategy_kwargs={'genome': genome}
     )
     metrics = res['metrics']
-    cagr = metrics['cagr']
-    max_dd = abs(metrics['max_dd'])
+    cagr = metrics['cagr'] * 100
+    max_dd = abs(metrics['max_dd']) * 100
     
-    # Standard Alpha Fitness (balanced risk penalty)
-    fitness = (cagr * 100) - (max_dd * 15)
+    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
+    fitness = cagr - (max_dd * 0.15)
     
-    if metrics['max_dd'] < -0.95: fitness = -99999
+    if max_dd >= 95.0: 
+        fitness -= 1000
+        
     return fitness, genome, metrics
 
 class EvolutionEngineV7:
@@ -52,14 +56,13 @@ class EvolutionEngineV7:
             'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)
         }
 
-        print("Loading master data for Evolution V7 Deep Brain...")
+        print("Loading master data for Evolution V7 Deep...")
         self.data = load_spy_data("1993-01-01")
         from src.helpers.data_provider import CACHE_FILE
         self.cache_file = CACHE_FILE
         
         self.population = []
         if seed_vault and os.path.exists(seed_vault):
-            print(f"Injecting seeds from: {seed_vault}...")
             seeds = []
             vault_files = sorted(os.listdir(seed_vault), reverse=True)
             for f in vault_files:
@@ -73,13 +76,13 @@ class EvolutionEngineV7:
             
             num_seeds = min(len(seeds), self.population_size)
             self.population.extend(seeds[:num_seeds])
-            print(f"  SUCCESS: Loaded {num_seeds} V7 seeds.")
+            print(f"  SUCCESS: Injected {num_seeds} V7 seeds from vault.")
 
         while len(self.population) < self.population_size:
             self.population.append(self._random_genome())
 
     def _random_genome(self):
-        # Input 13 -> Hidden 24 -> Output 4
+        # Neural Topology: Input 13 -> Hidden 24 -> Output 4
         return {
             'version': 7.0,
             'layers': [
@@ -103,7 +106,6 @@ class EvolutionEngineV7:
             'lookbacks': {k: (p1['lookbacks'][k] if random.random() > 0.5 else p2['lookbacks'][k]) for k in self.lb_bounds},
             'lock_days': p1['lock_days'] if random.random() > 0.5 else p2['lock_days']
         }
-        # Layer-wise crossover (Brain surgery)
         for i in range(len(p1['layers'])):
             if random.random() > 0.5:
                 child['layers'].append(p1['layers'][i])
@@ -112,72 +114,70 @@ class EvolutionEngineV7:
         return child
 
     def _mutate(self, genome):
-        mutated = json.loads(json.dumps(genome)) # Deep copy
+        mutated = json.loads(json.dumps(genome))
         
-        # 1. Mutate Neural Weights (Matrix Noise)
         for layer in mutated['layers']:
             w = np.array(layer['w'])
             b = np.array(layer['b'])
             
             if random.random() < self.mutation_rate:
-                # Add Gaussian noise
+                # Gaussian Neuroevolution
                 w += np.random.normal(0, 0.05, w.shape)
                 b += np.random.normal(0, 0.02, b.shape)
             
-            # Element-wise rare spikes (Jitter)
-            if random.random() < 0.1:
+            if random.random() < 0.1: # Rare structural jitter
                 mask = np.random.random(w.shape) < 0.05
                 w[mask] += np.random.normal(0, 0.5, w[mask].shape)
                 
             layer['w'] = w.tolist()
             layer['b'] = b.tolist()
 
-        # 2. Mutate Lookbacks
         for k, v in mutated['lookbacks'].items():
             if random.random() < self.mutation_rate:
                 mn, mx = self.lb_bounds[k]
                 new_v = v + int(random.gauss(0, (mx-mn)*0.1))
                 mutated['lookbacks'][k] = max(mn, min(mx, new_v))
         
-        mutated['lookbacks']['macd_s'] = mutated['lookbacks']['macd_f'] + 1
+        # Enforce MACD consistency
+        if 'macd_f' in mutated['lookbacks'] and 'macd_s' in mutated['lookbacks']:
+            if mutated['lookbacks']['macd_s'] <= mutated['lookbacks']['macd_f']:
+                mutated['lookbacks']['macd_s'] = mutated['lookbacks']['macd_f'] + 1
         
-        # 3. Mutate Lock-days
         if random.random() < self.mutation_rate:
             mutated['lock_days'] = max(1, min(14, mutated['lock_days'] + random.gauss(0, 1)))
             
         return mutated
 
     def run(self):
-        best_overall_fitness = -99999
-        best_overall_genome = None
-        max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V7 Deep: {self.generations} generations, pop {self.population_size}")
-        print(f"  Mutation: {self.mutation_rate} | MinCAGR: {self.min_cagr*100:.1f}%")
+        max_workers = max(1, os.cpu_count() - 2)
+        print(f"Starting Evolution V7 Deep: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, MinCAGR: {self.min_cagr:.1f}%")
         
+        vault_dir = "champions/v7_deep/vault"
+        os.makedirs(vault_dir, exist_ok=True)
+        best_overall_genome = None
+
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file, self.min_cagr)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
                 scored = [f.result() for f in concurrent.futures.as_completed(futures)]
                 scored.sort(key=lambda x: x[0], reverse=True)
+                
                 best_fit, best_genome, best_metrics = scored[0]
-                
-                if best_fit > best_overall_fitness:
-                    best_overall_fitness = best_fit
-                    best_overall_genome = best_genome
-                    if best_metrics['cagr'] >= self.min_cagr:
-                        vault_dir = "champions/v7_deep/vault"
-                        if not os.path.exists(vault_dir): os.makedirs(vault_dir)
-                        c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
-                        with open(f"{vault_dir}/v7d_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
-                            json.dump(best_genome, f, indent=2)
+                best_overall_genome = best_genome
                 elapsed = time.time() - start_time
-                print(f"V7-Deep Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")
                 
-                # --- PURE GA SELECTION ---
+                print(f"Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:5.2f}% | DD: {best_metrics['max_dd']*100:5.2f}% | Time: {elapsed:.1f}s")
+                
+                # Save to vault
+                if (best_metrics['cagr'] * 100) >= self.min_cagr:
+                    v_path = os.path.join(vault_dir, f"v7d_cagr_{best_metrics['cagr']*100:.2f}_dd_{best_metrics['max_dd']*100:.2f}.json")
+                    with open(v_path, 'w') as f:
+                        json.dump(best_genome, f, indent=4)
+                
+                # Selection
                 elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]
                 new_pop = list(elites)
-                
                 while len(new_pop) < self.population_size:
                     p1, p2 = random.choice(elites), random.choice(elites)
                     child = self._crossover(p1, p2)

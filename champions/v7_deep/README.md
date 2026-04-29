@@ -1,15 +1,16 @@
-# V7 Deep — Neuroevolutionary Brain
+# V7 Deep — Neuroevolutionary Logic
 
 ## 🧠 Strategy Logic
-V7 replaces the linear weight-sum approach with a **Deep Multi-Layer Perceptron (MLP)**. This is the first "Truly Intelligent" version of the bot, capable of complex logic.
+V7 Deep uses a **Multi-Layer Perceptron (MLP)** neural network evolved via Gaussian Neuroevolution. Unlike traditional weighted-brain strategies, V7 evolves high-dimensional non-linear relationships between 11 market signals to determine the optimal leverage state.
 
-### ⚙️ The Deep Brain
-- **Architecture**: 13 Inputs -> 24 Hidden Neurons (ReLU) -> 4 Output Neurons.
-- **Decision Engine**: The network processes all indicators simultaneously and outputs a "Confidence Score" for each tier (CASH, 1x, 2x, 3x). The highest score dictates the portfolio.
-- **Non-Linearity**: Because it uses ReLU activation functions, it can learn non-linear patterns (e.g., "Momentum is only good if Volatility is decreasing").
+### ⚙️ Decision Engine
+- **Non-Linear Inference**: Captures complex market regimes that simple weighted sums might miss.
+- **Genetic Topology**: Eevolves the weights and biases of the hidden layers.
+- **Indicator Ablation**: Supports evolutionary pruning of input signals directly from the neural network's input vector.
+- **Institutional Guardrails**: Includes evolved "Decision Thresholds" to control the activation sensitivity of the network.
 
 ### 📈 Leverage States
-- **CASH / 1x / 2x / 3x**
+- **CASH / 1x / 2x / 3x** (Neural-scaled allocation)
 
 ---
 
@@ -20,32 +21,32 @@ V7 replaces the linear weight-sum approach with a **Deep Multi-Layer Perceptron 
 # Institutional Performance Report
 python tests/performance_audit.py champions/v7_deep/genome.json
 
-# Behavioral X-Ray (Logic DNA)
+# Behavioral X-Ray (Allocation DNA)
 python tests/genome_xray.py champions/v7_deep/genome.json
 ```
 
-### 🧬 Genetic Evolution (Neuroevolution)
-Since V7 uses a neural network, it is trained using **Neuroevolution**.
+### 🌪️ Stress Testing
 ```bash
-# Blind Start (Highly Recommended for V7 to find new logic)
-python tests/run_evolution_v7_deep.py --pop 500 --gen 100 --mut 0.35
+# Cross-Regime Sweep (Rolling 5yr Windows)
+python tests/vault_sweep.py --vault champions/v7_deep/vault --promote --top 20
+```
 
-# Seeded Evolution (Refinement)
-python tests/run_evolution_v7_deep.py --seed champions/v7_deep/vault --pop 100 --gen 50
+### 🧬 Evolution
+Optimizes neural network weights using **Gaussian Neuroevolution**.
+```bash
+# Standard high-diversity run
+python tests/run_evolution_v7_deep.py --pop 500 --gen 100 --ablation
+
+# Seeded Evolution (Refine using your best neural genomes)
+python tests/run_evolution_v7_deep.py --pop 300 --gen 50 --ablation --seed champions/v7_deep/vault
 ```
 
 #### ⚙️ Evolution Parameters
-| Parameter | Default | Description |
-| :--- | :--- | :--- |
-| `--pop` | `100` | Population size (MLPs need higher diversity, suggest 200+). |
-| `--gen` | `50` | Generations. |
-| `--mut` | `0.20` | Mutation rate (Gaussian noise on matrices). |
-| `--min-cagr`| `0.30` | Vault threshold (only saves "Quality" results). |
-
-### 🌪️ Stress Testing
-```bash
-# Cross-Regime Sweep (Rolling 5yr Windows). 
-# --promote: Update main genome.json with the best performer.
-# --top X: Retain only Top X most resilient genomes and prune the rest.
-python tests/vault_sweep.py --vault champions/v7_deep/vault --promote --top 20
-```
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 100 | Population size. Recommend `500+` for MLPs. |
+| `--gen` | 50 | Number of generations. |
+| `--mut` | 0.20 | Mutation rate (Gaussian noise applied to weights). |
+| `--seed`| `None` | Path to vault dir for seed injection. |
+| `--ablation` | `Off` | Enable **Indicator Ablation** (Network learns to ignore weak inputs). |
+| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |

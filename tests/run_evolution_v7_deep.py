@@ -2,26 +2,32 @@ import argparse
 import sys
 import os
 
-# Add project root to Python path
+# Add project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.tournament.evolution_v7_deep import EvolutionEngineV7
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Genome V7 — Deep Brain Evolution Engine")
-    parser.add_argument("--pop", type=int, default=100, help="Population size")
-    parser.add_argument("--gen", type=int, default=50, help="Generations")
-    parser.add_argument("--mut", type=float, default=0.20, help="Mutation rate")
-    parser.add_argument("--seed", type=str, default=None, help="Directory to load seed genomes from")
-    parser.add_argument("--min-cagr", type=float, default=0.30, help="Minimum CAGR to save to vault")
+def main():
+    parser = argparse.ArgumentParser(description="Run Neuroevolution for V7 Deep")
+    parser.add_argument("--pop", type=int, default=300, help="Population size")
+    parser.add_argument("--gen", type=int, default=100, help="Number of generations")
+    parser.add_argument("--mut", type=float, default=0.2, help="Mutation rate")
+    parser.add_argument("--seed", type=str, default=None, help="Path to seed vault")
+    parser.add_argument("--ablation", action="store_true", help="Enable indicator ablation")
+    parser.add_argument("--min-cagr", type=float, default=30.0, help="Minimum CAGR threshold for vault saving")
     
     args = parser.parse_args()
-
+    
     engine = EvolutionEngineV7(
-        population_size=args.pop, 
-        generations=args.gen, 
+        population_size=args.pop,
+        generations=args.gen,
         mutation_rate=args.mut,
         seed_vault=args.seed,
+        use_ablation=args.ablation,
         min_cagr=args.min_cagr
     )
+    
     engine.run()
+
+if __name__ == "__main__":
+    main()

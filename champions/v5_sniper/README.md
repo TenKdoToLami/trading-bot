@@ -1,16 +1,18 @@
-# V5 Sniper — Tiered Entry Specialist
+# V5 Sniper — High-Fidelity Mean Reversion
 
 ## 🧠 Strategy Logic
-V5 Sniper is designed to be **Always Invested**. It removes the "Cash" state entirely to avoid the risk of being out of the market during sudden rallies. Instead, it uses **Tiered Leverage** to scale conviction.
+V5 Sniper is a **Precision Mean-Reversion** engine. Unlike the trend-following logic of V1-V3, the Sniper focuses on identifying overextended market conditions using RSI, ADX, and Realized Volatility to "Snipe" entries and exits with high accuracy.
 
 ### ⚙️ Decision Engine
-- **State Hunter**: Evaluates a single "Sniper Brain" to determine the conviction level.
-- **Dynamic Thresholds**: Evolves two thresholds (`t_low` and `t_high`) to define the boundaries between tiers.
+- **RSI Snapback**: Evolved thresholds for deep-value entry during bull regimes.
+- **Vol-Adaptive Exit**: Dynamically tightens exit criteria as realized volatility spikes.
+- **Genetic Lookbacks**: All indicator lookbacks are evolved to match the specific "Sniper" frequency.
+- **Ablation Mode**: Supports evolutionary pruning of weak signals for better generalization.
 
 ### 📈 Leverage States
-- **1x SPY (Baseline)**: The default state when the brain is unconvicted or cautious.
-- **2x SPY (Moderate Conviction)**: Triggered when the brain score crosses `t_low`.
-- **3x SPY (High Conviction)**: Triggered when the brain score crosses `t_high`.
+- **CASH / 1x / 2x / 3x** (Precision-scaled exposure)
+
+---
 
 ## 🚀 Execution Commands
 
@@ -25,21 +27,25 @@ python tests/genome_xray.py champions/v5_sniper/genome.json
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows). 
-# --promote: Update main genome.json with the best performer.
-# --top X: Retain only Top X most resilient genomes and prune the rest.
+# Cross-Regime Sweep (Rolling 5yr Windows)
 python tests/vault_sweep.py --vault champions/v5_sniper/vault --promote --top 20
 ```
 
 ### 🧬 Evolution
 ```bash
-# Cold Start Evolution
-python tests/run_evolution_v5_sniper.py --pop 300 --gen 100
+# Standard Evolution run
+python tests/run_evolution_v5_sniper.py --pop 1000 --gen 100 --ablation
 
-# Seeded Evolution (Refine Champions)
-python tests/run_evolution_v5_sniper.py --pop 300 --gen 50 --seed champions/v5_sniper/vault
+# Seeded Evolution (Refine from vault)
+python tests/run_evolution_v5_sniper.py --pop 1000 --gen 100 --ablation --seed champions/v5_sniper/vault
+```
 
-### 🧪 Special Modifiers
-- `--mutation 0.4`: Increase "Creative" mutation for exploration.
-- `--min-cagr 0.30`: **Vault-Lock**. Evolution proceeds freely, but disk saves (vault and genome.json) are blocked unless the 30% CAGR target is met.
-- `--ablation`: Enable **Ablation Mode**. Allows the AI to evolve "False" states for indicators, effectively pruning its own logic tree for better generalization.
+#### ⚙️ Evolution Parameters
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pop` | 300 | Population size. |
+| `--gen` | 100 | Number of generations. |
+| `--mut` | 0.20 | Mutation rate. Use `0.40` for aggressive exploration. |
+| `--seed`| `None` | Path to vault dir for seed injection. |
+| `--ablation` | `Off` | Enable **Indicator Ablation** (AI prunes its own logic tree). |
+| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
