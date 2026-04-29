@@ -66,9 +66,8 @@ class EvolutionEngineV7DeepFluid:
                     with open(os.path.join(seed_vault, f), "r") as jf:
                         try:
                             g = json.load(jf)
-                            # Can seed from V7 Deep (version 7.0) or V7 Fluid (7.2)
                             if 'layers' in g and len(g['layers'][1]['b']) == 4:
-                                g['version'] = 7.2 # Upgrade version
+                                g['version'] = 7.2
                                 seeds.append(g)
                         except: continue
             
@@ -159,15 +158,18 @@ class EvolutionEngineV7DeepFluid:
                         c, d = best_metrics['cagr']*100, best_metrics['max_dd']*100
                         with open(f"{vault_dir}/v7df_cagr_{c:.2f}_dd_{d:.2f}.json", "w") as f:
                             json.dump(best_genome, f, indent=2)
-                        save_path = "champions/v7_deep_fluid/genome.json"
-                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                        with open(save_path, "w") as f: json.dump(best_genome, f, indent=2)
                 
                 elapsed = time.time() - start_time
                 print(f"V7-Fluid Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")
+                
+                # --- PURE GA SELECTION ---
                 elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]
                 new_pop = list(elites)
+                
                 while len(new_pop) < self.population_size:
-                    new_pop.append(self._mutate(self._crossover(random.choice(elites), random.choice(elites))))
+                    p1, p2 = random.choice(elites), random.choice(elites)
+                    child = self._crossover(p1, p2)
+                    new_pop.append(self._mutate(child))
+                
                 self.population = new_pop
         return best_overall_genome

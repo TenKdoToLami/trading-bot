@@ -3,6 +3,7 @@ import json
 import concurrent.futures
 import time
 import os
+import numpy as np
 
 from strategies._genome_strategy import GenomeStrategy
 from src.tournament.runner import _execute_simulation
@@ -283,32 +284,20 @@ class EvolutionEngine:
                 elapsed = time.time() - start_time
                 print(f"Gen {gen+1:02d} | Best Fitness: {best_fitness:6.2f} | CAGR: {cagr:6.2f}% | MaxDD: {dd:6.2f}% | Trades: {trades} | Time: {elapsed:.1f}s")
                 
-                # Selection: keep top 20%
+                # --- PURE GA SELECTION ---
                 elites = [x[1] for x in scored_population[: max(2, int(self.population_size * 0.2))]]
-                
-                # Breed new generation
-                new_population = list(elites) # Carry over elites (Elitism)
+                new_population = list(elites) 
                 
                 while len(new_population) < self.population_size:
-                    # Tournament selection for parents
-                    p1 = random.choice(elites)
-                    p2 = random.choice(elites)
-                    
+                    p1, p2 = random.choice(elites), random.choice(elites)
                     child = self._crossover(p1, p2)
-                    child = self._mutate(child)
-                    new_population.append(child)
+                    new_population.append(self._mutate(child))
                     
                 self.population = new_population
 
         print("\nEvolution Complete.")
         print(f"Best Overall CAGR: {best_overall_metrics['cagr']*100:.2f}%")
         print(f"Best Overall MaxDD: {best_overall_metrics['max_dd']*100:.2f}%")
-        
-        # Save to file
-        save_path = "champions/v1_classic/genome.json"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "w") as f:
-            json.dump(best_overall_genome, f, indent=2)
-        print(f"Saved best genome to {save_path}")
+        print(f"Results stored in vault.")
         
         return best_overall_genome
