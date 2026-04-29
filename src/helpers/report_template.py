@@ -60,9 +60,11 @@ REPORT_TEMPLATE = """
             padding: 24px;
             border-radius: 20px;
             margin-bottom: 40px;
+            position: relative;
+            z-index: 1; /* Lower than table tooltips */
         }
 
-        section { margin-bottom: 60px; }
+        section { margin-bottom: 60px; position: relative; z-index: 5; }
         section h2 { font-family: 'Outfit', sans-serif; margin-bottom: 20px; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
 
         table {
@@ -71,7 +73,9 @@ REPORT_TEMPLATE = """
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 16px;
-            overflow: hidden;
+            /* overflow: hidden; Removed to prevent tooltip clipping */
+            position: relative;
+            z-index: 10;
         }
         th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); }
         th { 
@@ -127,21 +131,23 @@ REPORT_TEMPLATE = """
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            background: #1e293b;
+            background: #111827;
             color: #fff;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            width: 250px;
-            white-space: normal;
-            z-index: 100;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            width: 280px;
+            white-space: pre-wrap;
+            z-index: 9999; /* Ensure it is above EVERYTHING */
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8), 0 0 20px var(--accent-glow);
+            margin-bottom: 12px;
             text-transform: none;
             font-family: 'Inter', sans-serif;
-            font-weight: 400;
+            font-weight: 500;
             letter-spacing: 0;
+            pointer-events: none;
+            line-height: 1.6;
         }
 
         .badge {
@@ -246,6 +252,73 @@ REPORT_TEMPLATE = """
                 <tbody id="syntheticTableBody"></tbody>
             </table>
         </section>
+
+        <section class="methodology">
+            <h2>Audit Methodology & Methodics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Execution Engine</div>
+                    <div class="stat-sub" style="color: var(--text)">
+                        Signals are generated using <b>Day T</b> closing data. Execution occurs on <b>Day T+1</b> using the <b>Mid-Price</b> (Average of Open and Close). Friction of <b>5 bps slippage</b> + <b>1 bps commission</b> is applied to total turnover on every rebalance.
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Institutional Costs</div>
+                    <div class="stat-sub" style="color: var(--text)">
+                        Daily expense ratios are deducted: <b>0.03%</b> for SPY, <b>0.91%</b> for 2x/3x ETFs. <b>CASH</b> holdings earn a conservative <b>3.5%</b> annualized yield. Leverage costs are embedded in the ETF drag.
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Resilience Protocol</div>
+                    <div class="stat-sub" style="color: var(--text)">
+                        Runs 50 iterations per strategy across <b>random 10-year windows</b>. This identifies strategies that only performed well due to specific starting dates (e.g., starting exactly at a market bottom).
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Synthetic Protocol</div>
+                    <div class="stat-sub" style="color: var(--text)">
+                        Uses <b>Block Bootstrapping</b> (21-day chunks) to create 50 "Parallel Universes." This tests if a strategy's edge is structural or if it relied on the specific sequence of historical events.
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="stat-label" style="margin-bottom: 15px;">Audit Parameters (Institutional Friction)</div>
+                <table style="font-size: 0.85rem; border: none; background: none;">
+                    <thead>
+                        <tr style="background: none; border-bottom: 1px solid var(--border);">
+                            <th style="padding: 8px; border: none;">Parameter</th>
+                            <th style="padding: 8px; border: none;">Value</th>
+                            <th style="padding: 8px; border: none;">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Slippage</td><td style="color: var(--danger)">0.05% (5 bps)</td><td>Applied to total turnover volume per trade.</td></tr>
+                        <tr><td>Commission</td><td style="color: var(--danger)">0.01% (1 bps)</td><td>Platform/Brokerage execution fee per trade.</td></tr>
+                        <tr><td>SPY Expense</td><td style="color: var(--danger)">0.03% Annual</td><td>Standard management fee for 1x exposure.</td></tr>
+                        <tr><td>UPRO/SSO Expense</td><td style="color: var(--danger)">0.91% Annual</td><td>Standard management fee for 2x/3x leverage.</td></tr>
+                        <tr><td>Cash Yield</td><td style="color: var(--success)">3.50% Annual</td><td>Risk-free rate earned on idle capital.</td></tr>
+                        <tr><td>Leverage Cost</td><td style="color: var(--text-dim)">Variable</td><td>Embedded in daily ETF tracking error.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="chart-container">
+                <div class="stat-label" style="margin-bottom: 15px;">Metric Definitions</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; font-size: 0.9rem;">
+                    <div>
+                        <p><b>CAGR:</b> Compound Annual Growth Rate. The geometric mean return that provides the same total return if the strategy had grown at a steady rate.</p>
+                        <p style="margin-top:10px"><b>Sharpe Ratio:</b> Risk-adjusted return. Measures excess return per unit of volatility. Above 1.0 is considered "Good", above 2.0 is "Elite".</p>
+                        <p style="margin-top:10px"><b>Profit Factor:</b> The ratio of Gross Profits to Gross Losses. A value of 1.5+ indicates a strong structural edge.</p>
+                    </div>
+                    <div>
+                        <p><b>Max Drawdown:</b> The peak-to-trough decline during a specific period. Measures the "Maximum Pain" a trader must endure.</p>
+                        <p style="margin-top:10px"><b>Calmar Ratio:</b> CAGR divided by Max Drawdown. Focuses on the trade-off between absolute return and absolute risk.</p>
+                        <p style="margin-top:10px"><b>Stability/Robustness:</b> The percentage of the historical CAGR that was maintained during the Audit stress tests.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -270,7 +343,7 @@ REPORT_TEMPLATE = """
                 const m = item.metrics; const a = m.allocation_pct;
                 
                 // Tooltip text for residency
-                const resTooltip = `3x: ${(a['3xSPY']*100).toFixed(1)}% | 2x: ${(a['2xSPY']*100).toFixed(1)}% | 1x: ${(a['SPY']*100).toFixed(1)}% | Cash: ${(a['CASH']*100).toFixed(1)}%`;
+                const resTooltip = `Asset Residency DNA:&#10;------------------&#10;3x SPY:  ${(a['3xSPY']*100).toFixed(1)}%&#10;2x SPY:  ${(a['2xSPY']*100).toFixed(1)}%&#10;1x SPY:  ${(a['SPY']*100).toFixed(1)}%&#10;CASH:    ${(a['CASH']*100).toFixed(1)}%`;
                 
                 return `<tr>
                     <td class="strat-name">${item.name}</td>
@@ -284,11 +357,13 @@ REPORT_TEMPLATE = """
                     <td>${m.avg_leverage.toFixed(2)}x</td>
                     <td>${(m.num_rebalances / (item.curve.dates.length / 252)).toFixed(1)}</td>
                     <td>
-                        <div class="residency-bar info-icon" data-tooltip="${resTooltip}" style="width: 140px; height: 12px; border-radius: 6px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.1)">
-                            <div class="res-upro" style="width: ${a['3xSPY']*100}%"></div>
-                            <div class="res-sso" style="width: ${a['2xSPY']*100}%"></div>
-                            <div class="res-spy" style="width: ${a['SPY']*100}%"></div>
-                            <div class="res-cash" style="width: ${a['CASH']*100}%"></div>
+                        <div class="info-icon" data-tooltip="${resTooltip}" style="background:none; width:auto; height:auto; display:inline-block; border-radius:0;">
+                            <div class="residency-bar" style="width: 140px; height: 12px; border-radius: 6px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.1); display: flex; overflow: hidden;">
+                                <div class="res-upro" title="3x SPY: ${(a['3xSPY']*100).toFixed(1)}%" style="width: ${a['3xSPY']*100}%"></div>
+                                <div class="res-sso" title="2x SPY: ${(a['2xSPY']*100).toFixed(1)}%" style="width: ${a['2xSPY']*100}%"></div>
+                                <div class="res-spy" title="1x SPY: ${(a['SPY']*100).toFixed(1)}%" style="width: ${a['SPY']*100}%"></div>
+                                <div class="res-cash" title="CASH: ${(a['CASH']*100).toFixed(1)}%" style="width: ${a['CASH']*100}%"></div>
+                            </div>
                         </div>
                     </td>
                 </tr>`;

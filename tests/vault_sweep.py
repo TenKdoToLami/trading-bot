@@ -162,11 +162,13 @@ def print_leaderboard(results, top_n=3):
         m = "★" if i < top_n else " "
         print(f"{m}{i+1:<3} {row['name']:<40} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['n']:>3}")
     print("="*110)
+    return leaderboard
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--samples", type=int, default=10)
-    parser.add_argument("--vault", type=str, default="vault")
+    parser.add_argument("--samples", type=int, default=10, help="Number of random periods to test per duration bucket")
+    parser.add_argument("--vault", type=str, default="vault", help="Path to the vault directory containing genomes")
+    parser.add_argument("--promote", action="store_true", help="Replace genome.json in parent directory with the best performer")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -179,9 +181,12 @@ if __name__ == "__main__":
         for f in sorted(os.listdir(vault_dir)):
             if f.endswith('.json'):
                 with open(os.path.join(vault_dir, f), 'r') as jf:
-                    g = json.load(jf)
-                    if validate_genome(g): genomes.append((f, g))
-                    else: print(f"  SKIP (invalid): {f}")
+                    try:
+                        g = json.load(jf)
+                        if validate_genome(g): genomes.append((f, g))
+                        else: print(f"  SKIP (invalid): {f}")
+                    except Exception as e:
+                        print(f"  ERROR loading {f}: {e}")
     
     if not genomes:
         print("  No valid genomes found.")
@@ -189,4 +194,21 @@ if __name__ == "__main__":
 
     data = load_spy_data("1993-01-01")
     results = run_sweep(genomes, data, samples_per_bucket=args.samples)
-    print_leaderboard(results)
+    leaderboard = print_leaderboard(results)
+
+    if args.promote and leaderboard:
+        best_genome_name = leaderboard[0]['name']
+        best_genome_path = os.path.join(vault_dir, best_genome_name)
+        target_path = os.path.join(os.path.dirname(vault_dir), "genome.json")
+        
+        print(f"\n  [PROMOTE] Replacing {os.path.basename(target_path)} with {best_genome_name}...")
+        
+        try:
+            with open(best_genome_path, 'r') as src:
+                best_data = json.load(src)
+            with open(target_path, 'w') as dst:
+                json.dump(best_data, dst, indent=4)
+            print(f"  SUCCESS: {target_path} updated.")
+        except Exception as e:
+            print(f"  FAILED to promote genome: {e}")
+

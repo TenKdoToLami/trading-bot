@@ -25,8 +25,8 @@ python tests/genome_xray.py champions/v5_sniper/genome.json
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v5_sniper/vault
+# Cross-Regime Sweep (Rolling 5yr Windows). Use --promote to update champion.
+python tests/vault_sweep.py --vault champions/v5_sniper/vault --promote
 ```
 
 ### 🧬 Evolution

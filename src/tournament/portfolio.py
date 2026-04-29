@@ -17,11 +17,15 @@ class Portfolio:
     its allocation, and apply_daily_return() every trading day.
     """
 
-    # Annualized cost/yield assumptions
-    EXPENSE_2X = 0.0120   # 2x leveraged ETF expense ratio
-    EXPENSE_3X = 0.0150   # 3x leveraged ETF expense ratio
-    CASH_YIELD = 0.03     # Risk-free rate (cash/bonds)
-    SPY_EXPENSE = 0.0     # SPY itself (negligible)
+    # Annualized Institutional Cost/Yield assumptions
+    EXPENSE_SPY = 0.0003  # 0.03% (VOO/SPY standard)
+    EXPENSE_2X  = 0.0091  # 0.91% (SSO standard)
+    EXPENSE_3X  = 0.0091  # 0.91% (UPRO standard)
+    CASH_YIELD  = 0.0350  # 3.50% (Conservative historical avg risk-free rate)
+    
+    # Execution Friction
+    SLIPPAGE_BPS = 0.0005 # 5 bps (0.05%) per trade
+    COMMISSION   = 0.0001 # 1 bps (0.01%) or flat fee equivalent
 
     def __init__(self, initial_equity: float = 1.0):
         self.initial_equity = initial_equity
@@ -41,11 +45,19 @@ class Portfolio:
 
     def rebalance(self, date: str, new_holdings: dict):
         """
-        Update allocation weights.
+        Update allocation weights. Applies slippage and commission to turnover.
         """
         if new_holdings == self.holdings:
             return
             
+        # Calculate turnover (Total traded volume)
+        all_assets = set(list(self.holdings.keys()) + list(new_holdings.keys()))
+        turnover = sum(abs(new_holdings.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
+        
+        # Apply friction to equity
+        friction_cost = turnover * (self.SLIPPAGE_BPS + self.COMMISSION)
+        self.equity *= (1.0 - friction_cost)
+        
         self.holdings = dict(new_holdings)
         self.rebalance_log.append((date, dict(new_holdings)))
 
@@ -59,7 +71,7 @@ class Portfolio:
                               (e.g. 0.01 = +1%).
         """
         asset_returns = {
-            "SPY":   spy_daily_return,
+            "SPY":   spy_daily_return - (self.EXPENSE_SPY / 252),
             "2xSPY": (spy_daily_return * 2.0) - (self.EXPENSE_2X / 252),
             "3xSPY": (spy_daily_return * 3.0) - (self.EXPENSE_3X / 252),
             "CASH":  self.CASH_YIELD / 252,

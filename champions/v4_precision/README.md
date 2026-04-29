@@ -25,8 +25,8 @@ python tests/genome_xray.py champions/v4_precision/genome.json
 
 ### 🌪️ Stress Testing
 ```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v4_precision/vault
+# Cross-Regime Sweep (Rolling 5yr Windows). Use --promote to update champion.
+python tests/vault_sweep.py --vault champions/v4_precision/vault --promote
 ```
 
 ### 🧬 Evolution
