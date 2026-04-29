@@ -26,6 +26,8 @@ from strategies.genome_v4_chameleon import ChameleonV4
 from strategies.genome_v5_sniper import GenomeV5Sniper
 from strategies.genome_v6_balancer import GenomeV6
 from strategies.genome_v7_deep import GenomeV7Deep
+from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
+from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
 
 # ──────────────────────────────────────────────────────
 # Genome Identification
@@ -78,7 +80,12 @@ def validate_genome(genome: dict) -> bool:
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     """Run simulation on a slice using the correct strategy class."""
     ver = get_genome_version(genome)
-    if ver == 7: strat_type = GenomeV7Deep
+    if ver == 7:
+        # Check sub-version for V7
+        v = genome.get('version', 7.0)
+        if v == 7.2: strat_type = GenomeV7DeepFluid
+        elif v == 7.1: strat_type = GenomeV7DeepBinary
+        else: strat_type = GenomeV7Deep
     elif ver == 6: strat_type = GenomeV6
     elif ver == 5: strat_type = GenomeV5Sniper
     elif ver == 4: strat_type = ChameleonV4

@@ -248,7 +248,13 @@ class TournamentRunner:
                                 
                             strat_cls = None
                             
-                            if version == 7.0:
+                            if version == 7.2:
+                                from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
+                                strat_cls = GenomeV7DeepFluid
+                            elif version == 7.1:
+                                from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
+                                strat_cls = GenomeV7DeepBinary
+                            elif version == 7.0:
                                 from strategies.genome_v7_deep import GenomeV7Deep
                                 strat_cls = GenomeV7Deep
                             elif version == 6.0:
