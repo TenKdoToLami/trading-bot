@@ -22,7 +22,11 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             genome = json.load(f)
             
         # --- PRIORITY 1: Modern Champions (V7, V6, V5) ---
-        if "layers" in genome or genome.get('version') == 7.0:
+        if genome.get('version') == 9.0 or "layers" in genome and len(genome['layers'][1]['w'][0]) == 4:
+            from strategies.genome_v9_confidence import GenomeV9Confidence
+            return GenomeV9Confidence(genome=genome)
+            
+        elif "layers" in genome or genome.get('version') == 7.0:
             from strategies.genome_v7_deep import GenomeV7Deep
             return GenomeV7Deep(genome=genome)
             

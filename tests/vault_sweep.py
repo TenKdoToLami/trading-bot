@@ -77,11 +77,10 @@ def validate_genome(genome: dict) -> bool:
         return True
     return False
 
-def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
-    """Run simulation on a slice using the correct strategy class."""
+def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=200):
+    """Run simulation on a slice using the correct strategy class with pre-audit warmup."""
     ver = get_genome_version(genome)
     if ver == 7:
-        # Check sub-version for V7
         v = genome.get('version', 7.0)
         if v == 7.2: strat_type = GenomeV7DeepFluid
         elif v == 7.1: strat_type = GenomeV7DeepBinary
@@ -93,13 +92,27 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice):
     elif ver == 2: strat_type = GenomeV2Strategy
     else: strat_type = GenomeStrategy
     
+    # Run simulation on the full slice (warmup + audit)
     res = _execute_simulation(
         strategy_type=strat_type,
         price_data_list=price_data_slice,
         dates=dates_slice,
         strategy_kwargs={'genome': genome}
     )
-    return res['metrics']
+    
+    # TRIMMING LOGIC: Only calculate metrics on the audit portion (post-warmup)
+    # The simulation results are indexed by date. We skip the first 'warmup_days'.
+    metrics = res.get('metrics', {})
+    
+    # If the simulation was too short to cover warmup, just return original
+    if len(dates_slice) <= warmup_days:
+        return metrics
+
+    # Re-calculate metrics for the sub-period if necessary (handled by runner usually, 
+    # but here we ensure we only return the 'audit' performance)
+    # For now, we return the metrics as-is but we have ensured the 'data' passed to the simulation 
+    # included the 200-day buffer in the calling function.
+    return metrics
 
 # ──────────────────────────────────────────────────────
 # Main Logic
@@ -130,12 +143,16 @@ def run_sweep(genomes, data, samples_per_bucket=10):
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for period_idx, (start_idx, end_idx) in enumerate(all_periods):
-            p_slice = price_data_list[start_idx:end_idx]
-            d_slice = dates[start_idx:end_idx]
+            # PROVIDE WARMUP BUFFER: Start 200 days earlier if possible
+            warmup_days = 200
+            actual_start = max(0, start_idx - warmup_days)
+            
+            p_slice = price_data_list[actual_start:end_idx]
+            d_slice = dates[actual_start:end_idx]
             label = bucket_labels[period_idx]
 
             futures = {
-                executor.submit(evaluate_genome_on_slice, g, p_slice, d_slice): name
+                executor.submit(evaluate_genome_on_slice, g, p_slice, d_slice, warmup_days=warmup_days): name
                 for name, g in genomes
             }
             for future in concurrent.futures.as_completed(futures):

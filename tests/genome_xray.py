@@ -145,6 +145,89 @@ def run_xray(identifier: str):
             pct = count / sum(transitions.values()) * 100
             print(f"  {frm:<12} -> {to:<15} {count:>8,} {pct:>14.1f}%")
 
+    # ── 5. DNA X-Ray (Feature Importance) ──
+    if hasattr(strategy, 'genome') and strategy.genome:
+        print(f"\n  {'DNA X-RAY (FEATURE IMPORTANCE)':-<{W-4}}")
+        genome = strategy.genome
+        version = genome.get('version', 1.0)
+        
+        # Structural Detection (for legacy genomes missing version keys)
+        if 'bull' in genome and 'panic' in genome:
+            version = 4.0
+        elif 'brains' in genome:
+            version = 6.0
+        elif 'panic' in genome and ('3x' in genome or '2x' in genome):
+            version = 2.0
+        elif 'base_weights' in genome or 'panic_weights' in genome:
+            version = 1.1
+        
+        importance = {}
+        
+        # FEATURE LISTS
+        V1_FEATURES = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']
+        V9_FEATURES = ['SMA Dist', 'EMA Dist', 'RSI', 'MACD', 'ADX', 'TRIX', 'Slope', 'Vol', 'ATR', 'VIX', 'Yield Curve', 'MFI', 'BBW']
+        
+        try:
+            if version >= 7.0: # Neural (V7, V9)
+                w1 = np.array(genome['layers'][0]['w'])
+                # Sum absolute weights connecting each input to all hidden neurons
+                scores = np.sum(np.abs(w1), axis=1)
+                for i, score in enumerate(scores):
+                    name = V9_FEATURES[i] if i < len(V9_FEATURES) else f"Input_{i}"
+                    importance[name] = score
+            
+            elif version == 6.0: # Balancer
+                for brain_name in ['cash', '1x', '2x', '3x']:
+                    if brain_name in genome['brains']:
+                        w = genome['brains'][brain_name].get('w', {})
+                        for feature, val in w.items():
+                            importance[feature] = importance.get(feature, 0) + abs(val)
+
+            elif version == 2.0: # V2 Multi-Brain
+                for module in ['panic', '1x', '2x', '3x']:
+                    if module in genome:
+                        w = genome[module].get('w', {})
+                        for feature, val in w.items():
+                            importance[feature] = importance.get(feature, 0) + abs(val)
+
+            elif version in [3.0, 4.0]: # Precision
+                for module in ['bull', 'panic']:
+                    if module in genome:
+                        w = genome[module].get('w', {})
+                        for feature, val in w.items():
+                            importance[feature] = importance.get(feature, 0) + abs(val)
+
+            elif version == 5.0: # Sniper
+                if 'sniper' in genome:
+                    w = genome['sniper'].get('w', {})
+                    for feature, val in w.items():
+                        importance[feature] = importance.get(feature, 0) + abs(val)
+                    
+            elif version == 1.1: # V1 Classic
+                for key in ['base_weights', 'panic_weights']:
+                    if key in genome:
+                        w = genome[key]
+                        for k, v in w.items():
+                            importance[k] = importance.get(k, 0) + abs(v)
+
+            if importance:
+                sorted_imp = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+                max_score = sorted_imp[0][1] if sorted_imp else 1
+                for name, score in sorted_imp[:8]:
+                    pct = (score / max_score) * 100
+                    bar = "█" * int(pct / 5)
+                    print(f"  {name:<15} {score:>10.2f}  {bar}")
+                
+                # Show key hyperparameters
+                print(f"  {'-' * (W - 4)}")
+                if 'hysteresis' in genome: print(f"  {'Hysteresis':<15} {genome['hysteresis']:>10.3f}")
+                if 'lock_days' in genome: print(f"  {'Lock Days':<15} {genome['lock_days']:>10.1f}")
+                if 'smoothing' in genome: print(f"  {'Smoothing':<15} {genome['smoothing']:>10.3f}")
+                if 'temp' in genome: print(f"  {'Softmax Temp':<15} {genome['temp']:>10.3f}")
+
+        except Exception as e:
+            print(f"  [DNA Error] Could not parse weights: {e}")
+
     print(f"\n{'=' * W}\n")
 
 if __name__ == "__main__":

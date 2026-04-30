@@ -240,7 +240,8 @@ class TournamentRunner:
                                     version = 1.1 
                                 else:
                                     folder_name = os.path.basename(root).lower()
-                                    if "v6" in folder_name: version = 6.0
+                                    if "v9" in folder_name: version = 9.0
+                                    elif "v6" in folder_name: version = 6.0
                                     elif "v5" in folder_name: version = 5.0
                                     elif "v4" in folder_name: version = 4.0
                                     elif "v3" in folder_name: version = 3.0
@@ -248,7 +249,10 @@ class TournamentRunner:
                                 
                             strat_cls = None
                             
-                            if version == 7.2:
+                            if version == 9.0:
+                                from strategies.genome_v9_confidence import GenomeV9Confidence
+                                strat_cls = GenomeV9Confidence
+                            elif version == 7.2:
                                 from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
                                 strat_cls = GenomeV7DeepFluid
                             elif version == 7.1:
