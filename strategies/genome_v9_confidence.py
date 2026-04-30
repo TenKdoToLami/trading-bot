@@ -141,6 +141,16 @@ class GenomeV9Confidence(BaseStrategy):
         
         hysteresis = self.genome.get('hysteresis', 0.15)
         
+        # 6. Prepare Telemetry
+        telemetry = {
+            "conf_cash": float(self.smoothed_scores[0]),
+            "conf_1x": float(self.smoothed_scores[1]),
+            "conf_2x": float(self.smoothed_scores[2]),
+            "conf_3x": float(self.smoothed_scores[3]),
+            "best_conf": float(best_conf),
+            "current_conf": float(current_conf)
+        }
+
         # Only switch if the best state is significantly better than current state
         # AND we are not locked
         if best_state_idx != self.current_state_idx:
@@ -148,6 +158,6 @@ class GenomeV9Confidence(BaseStrategy):
                 self.current_state_idx = best_state_idx
                 self.current_holdings = self.state_map[best_state_idx]
                 self.lock_counter = int(round(self.genome.get('lock_days', 3.0)))
-                return self.current_holdings
+                return self.current_holdings, telemetry
                 
-        return None # No change
+        return self.current_holdings, telemetry # Return current even if no change to keep telemetry flowing

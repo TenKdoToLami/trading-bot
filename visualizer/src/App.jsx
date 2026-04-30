@@ -20,6 +20,55 @@ function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
+const MonthlyPerformanceGrid = ({ monthlyReturns }) => {
+  if (!monthlyReturns || monthlyReturns.length === 0) return null;
+
+  const years = [...new Set(monthlyReturns.map(m => m.month.split('-')[0]))].sort((a, b) => b - a);
+  const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const getReturnColor = (ret) => {
+    if (ret > 5) return 'bg-emerald-500/80 text-emerald-50';
+    if (ret > 2) return 'bg-emerald-500/40 text-emerald-100';
+    if (ret > 0) return 'bg-emerald-500/20 text-emerald-200';
+    if (ret < -5) return 'bg-rose-500/80 text-rose-50';
+    if (ret < -2) return 'bg-rose-500/40 text-rose-100';
+    if (ret < 0) return 'bg-rose-500/20 text-rose-200';
+    return 'bg-slate-800 text-slate-500';
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-separate border-spacing-1">
+        <thead>
+          <tr>
+            <th className="p-1 text-[10px] text-slate-500 uppercase font-bold text-left">Year</th>
+            {monthLabels.map(m => (
+              <th key={m} className="p-1 text-[10px] text-slate-500 uppercase font-bold text-center">{m}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {years.map(year => (
+            <tr key={year}>
+              <td className="p-1 text-xs font-mono font-bold text-slate-300 border-r border-slate-800 pr-2">{year}</td>
+              {months.map(month => {
+                const data = monthlyReturns.find(m => m.month === `${year}-${month}`);
+                const ret = data ? data.return : null;
+                return (
+                  <td key={month} className={cn("p-2 text-[10px] font-mono font-bold text-center rounded-sm", getReturnColor(ret))}>
+                    {ret !== null ? `${ret > 0 ? '+' : ''}${ret.toFixed(1)}%` : '-'}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const COLORS = [
   "#6366f1", "#10b981", "#ef4444", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#14b8a6"
 ];
@@ -601,12 +650,144 @@ export default function App() {
                     <span>Decision Engine Anatomy</span>
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Logic & Feature DNA</span>
                   </h3>
+                  
+                  {/* Structural Hyperparameters */}
+                  {inspectionStrategy.parameters && Object.keys(inspectionStrategy.parameters).length > 0 && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                      {Object.entries(inspectionStrategy.parameters).map(([key, val]) => {
+                        const info = {
+                          "Hysteresis": {
+                            what: "Decision Buffer",
+                            for: "Prevents 'flip-flopping' on noisy signals.",
+                            how: "Diff required between state probabilities.",
+                            common: "0.10 - 0.25"
+                          },
+                          "Smoothing": {
+                            what: "Confidence Filter",
+                            for: "Smoothing high-frequency neural jitters.",
+                            how: "Exp. Moving Average of Softmax outputs.",
+                            common: "0.15 - 0.40"
+                          },
+                          "Lock Days": {
+                            what: "Minimum Holding Period",
+                            for: "Enforcing patience and reducing friction.",
+                            how: "Integer counter blocking state changes.",
+                            common: "1 - 5 days"
+                          },
+                          "Simple Moving Average": {
+                            what: "Arithmetic Price Average",
+                            for: "Identifying primary long-term trend direction.",
+                            how: "Sum of prices over N days divided by N.",
+                            common: "50, 100, 200 days"
+                          },
+                          "Exponential Moving Average": {
+                            what: "Weight-Decaying Average",
+                            for: "Capturing trend changes faster than a standard SMA.",
+                            how: "N-day decay giving more weight to recent price.",
+                            common: "10, 20, 50 days"
+                          },
+                          "Relative Strength Index": {
+                            what: "Momentum Oscillator",
+                            for: "Spotting over-extended 'Panic' or 'Euphoia' states.",
+                            how: "Ratio of average gains to average losses.",
+                            common: "14 (Standard), 30+ (Macro)"
+                          },
+                          "MACD Fast Period": {
+                            what: "Momentum Velocity",
+                            for: "Detecting changes in trend strength and direction.",
+                            how: "Short-window EMA for the MACD line calculation.",
+                            common: "12 days (Standard)"
+                          },
+                          "MACD Slow Period": {
+                            what: "Trend Baseline",
+                            for: "Providing a baseline for the momentum signal.",
+                            how: "Long-window EMA used in the MACD difference.",
+                            common: "26 days (Standard)"
+                          },
+                          "Average Directional Index": {
+                            what: "Trend Intensity Metric",
+                            for: "Determining if market is trending or sideways.",
+                            how: "Derived from expansion of price range over period.",
+                            common: "14 - 25 days"
+                          },
+                          "Triple Exponential Average": {
+                            what: "Triple-Smoothed Momentum",
+                            for: "Detecting trend changes while ignoring market noise.",
+                            how: "Triple EMA of the logarithmic price.",
+                            common: "15 - 30 days"
+                          },
+                          "LR Slope Period": {
+                            what: "Trend Velocity Measure",
+                            for: "Quantifying how fast the price is moving.",
+                            how: "Slope of the best-fit linear regression line.",
+                            common: "10 - 30 days"
+                          },
+                          "Realized Volatility": {
+                            what: "Historical Risk Measure",
+                            for: "Scaling position size or switching to safety.",
+                            how: "Standard deviation of log-returns over window.",
+                            common: "20, 60, 252 days"
+                          },
+                          "Average True Range": {
+                            what: "True Volatility Range",
+                            for: "Setting stop-losses or vol-adjusted leverage.",
+                            how: "Average of (High-Low) including price gaps.",
+                            common: "14 days"
+                          },
+                          "Money Flow Index": {
+                            what: "Volume-Weighted RSI",
+                            for: "Confirming trends using actual dollar-flow.",
+                            how: "RSI logic applied to Typical Price * Volume.",
+                            common: "14 days"
+                          },
+                          "Bollinger Bands Period": {
+                            what: "Statistical Channel Window",
+                            for: "Identifying extreme price extensions/reversals.",
+                            how: "Standard deviation bands around a SMA.",
+                            common: "20 days"
+                          }
+                        }[key] || { what: "Strategy Parameter", for: "Custom structural logic", how: "Genome-defined logic", common: "N/A" };
+
+                        return (
+                          <div 
+                            key={key} 
+                            className="group relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-accent/50 hover:bg-accent/5 transition-all cursor-help"
+                          >
+                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1">{key}</p>
+                            <p className="text-sm font-mono font-bold text-accent">{val}</p>
+                            
+                            {/* Detailed Multi-Field Tooltip */}
+                            <div className="absolute bottom-full left-0 mb-3 w-64 p-4 bg-slate-950 border border-slate-700 rounded-2xl shadow-3xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-300 z-50 scale-95 group-hover:scale-100">
+                              <div className="flex flex-col gap-3">
+                                <div>
+                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">What is it</p>
+                                  <p className="text-[11px] text-emerald-400 font-bold">{info.what}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Tactical Purpose</p>
+                                  <p className="text-[10px] text-slate-300 leading-tight">{info.for}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Calculation</p>
+                                  <p className="text-[10px] text-slate-400 italic font-mono">{info.how}</p>
+                                </div>
+                                <div className="pt-2 border-t border-white/5">
+                                  <p className="text-[9px] text-accent/80 font-bold">Common Range: {info.common}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {inspectionStrategy.indicators && inspectionStrategy.indicators.length > 0 ? (
                     <div className="h-96">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
                           layout="vertical" 
-                          data={inspectionStrategy.indicators.sort((a,b) => b.priority - a.priority)}
+                          data={[...inspectionStrategy.indicators].sort((a,b) => b.priority - a.priority)}
                           margin={{ left: 40, right: 40 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
@@ -654,6 +835,41 @@ export default function App() {
                       <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Logic transparency not available for this strategy</p>
                     </div>
                   )}
+                </section>
+
+                <section className="glass rounded-3xl p-8">
+                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                    <span>Neural Regime Mix (Monthly Aggregated)</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Smoothed Decision Environment</span>
+                  </h3>
+                  {inspectionStrategy.telemetry && inspectionStrategy.telemetry.monthly_avg ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={inspectionStrategy.telemetry.monthly_avg}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="month" hide />
+                          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} unit="%" />
+                          <RechartsTooltip content={<CustomChartTooltip />} />
+                          <Bar dataKey="3x" stackId="1" fill="#ef4444" fillOpacity={0.6} />
+                          <Bar dataKey="2x" stackId="1" fill="#10b981" fillOpacity={0.6} />
+                          <Bar dataKey="1x" stackId="1" fill="#3b82f6" fillOpacity={0.6} />
+                          <Bar dataKey="Cash" stackId="1" fill="#64748b" fillOpacity={0.6} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-48 flex items-center justify-center border-2 border-dashed border-white/5 rounded-2xl">
+                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Confidence telemetry only available for neural strategies</p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="glass rounded-3xl p-8">
+                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                    <span>Monthly Returns Matrix</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Institutional Alpha Audit</span>
+                  </h3>
+                  <MonthlyPerformanceGrid monthlyReturns={inspectionStrategy.metrics.monthly_returns} />
                 </section>
 
                 <section className="glass rounded-3xl p-8 flex flex-col gap-6">

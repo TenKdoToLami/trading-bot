@@ -54,11 +54,17 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
         # 3. Generate signal for tomorrow
         result = strategy.on_data(date_str, row, prev_row)
         if result is not None:
-            pending_holdings = result
+            if isinstance(result, tuple) and len(result) == 2:
+                pending_holdings, telemetry = result
+                if telemetry:
+                    portfolio.log_telemetry(date_str, telemetry)
+            else:
+                pending_holdings = result
             
     return {
         "metrics": portfolio.get_metrics(),
         "history": portfolio.get_history(),
+        "telemetry": getattr(portfolio, 'telemetry', {}),
         "portfolio": portfolio
     }
 
@@ -478,21 +484,70 @@ class TournamentRunner:
             strat_obj = next((s for s in strategies if s.NAME == name), None)
             genome = getattr(strat_obj, 'genome', None)
             indicators = []
+            report_params = {}
+
             if genome and 'layers' in genome:
                 try:
                     # Neural Sensitivity (V9, V8, etc) - calculate absolute importance from layer 1
                     w1 = np.array(genome['layers'][0]['w'])
                     importance = np.sum(np.abs(w1), axis=1)
-                    # Standard input mapping for V9 Confidence
-                    names = ["SMA Cross", "EMA Trend", "RSI (O/B)", "MACD", "ADX Strength", "TRIX", "LR Slope", "RealVol", "ATR", "MFI", "BB Band", "Vol Z", "Rel. Trend"]
+                    
+                    lb = genome.get('lookbacks', {})
+                    # Dynamic naming with lookback values
+                    names = [
+                        f"SMA ({lb.get('sma', '?')})",
+                        f"EMA ({lb.get('ema', '?')})",
+                        f"RSI ({lb.get('rsi', '?')})",
+                        f"MACD ({lb.get('macd_f', '?')}/{lb.get('macd_s', '?')})",
+                        f"ADX ({lb.get('adx', '?')})",
+                        f"TRIX ({lb.get('trix', '?')})",
+                        f"LR Slope ({lb.get('slope', '?')})",
+                        f"Volatility ({lb.get('vol', '?')})",
+                        f"ATR ({lb.get('atr', '?')})",
+                        f"MFI ({lb.get('mfi', '?')})",
+                        f"BB Band ({lb.get('bb', '?')})",
+                        "Volume Z",
+                        "Macro Trend"
+                    ]
                     indicators = [{"name": names[i], "priority": float(importance[i])} for i in range(min(len(names), len(importance)))]
+                    
+                    # Store raw lookbacks for display
+                    report_params = {
+                        "Hysteresis": f"{genome.get('hysteresis', 0):.3f}",
+                        "Smoothing": f"{genome.get('smoothing', 0):.3f}",
+                        "Lock Days": genome.get('lock_days', 0),
+                        "Genome Version": genome.get('version', 9.0)
+                    }
+                    
+                    # Map shortcuts to full descriptive names
+                    lb_map = {
+                        "sma": "Simple Moving Average",
+                        "ema": "Exponential Moving Average",
+                        "rsi": "Relative Strength Index",
+                        "macd_f": "MACD Fast Period",
+                        "macd_s": "MACD Slow Period",
+                        "adx": "Average Directional Index",
+                        "trix": "Triple Exponential Average",
+                        "slope": "LR Slope Period",
+                        "vol": "Realized Volatility",
+                        "atr": "Average True Range",
+                        "mfi": "Money Flow Index",
+                        "bb": "Bollinger Bands Period"
+                    }
+                    
+                    # Add lookbacks to parameters grid
+                    for key, full_name in lb_map.items():
+                        if key in lb:
+                            report_params[full_name] = lb[key]
+                            
                 except:
-                    pass
-            elif genome and 'indicators' in genome:
-                indicators = genome['indicators']
+                    report_params = {}
             elif genome and 'weights' in genome:
                 # Fallback for V7: list active weights as indicators
                 indicators = [{"name": k, "priority": abs(v)} for k, v in genome['weights'].items()]
+                report_params = {"Threshold": genome.get('threshold', 0)}
+            else:
+                report_params = {}
 
             report_data.append({
                 "name": name,
@@ -501,7 +556,9 @@ class TournamentRunner:
                 "synthetic": strat_audits[name].get('synthetic'),
                 "genome": genome,
                 "indicators": indicators,
+                "parameters": report_params,
                 "history": res.get("history"),
+                "telemetry": res.get("telemetry"),
                 "curve": {
                     "dates": [str(d.date()) if hasattr(d, 'date') else str(d) for d, _ in res["portfolio"].equity_curve],
                     "equities": [float(e) for _, e in res["portfolio"].equity_curve]

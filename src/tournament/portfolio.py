@@ -229,3 +229,13 @@ class Portfolio:
             
         return history
 
+    def log_telemetry(self, date: str, data: dict):
+        """Logs internal strategy metrics for deep-dive auditing."""
+        if not hasattr(self, 'telemetry'):
+            self.telemetry = {}
+        
+        for k, v in data.items():
+            if k not in self.telemetry:
+                self.telemetry[k] = []
+            self.telemetry[k].append(v)
+

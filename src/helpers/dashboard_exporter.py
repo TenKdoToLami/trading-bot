@@ -27,32 +27,72 @@ def export_to_dashboard(report_data, output_path="visualizer/public/data.json"):
                 strategy['history']['leverage'] = strategy['history']['leverage'][::5]
                 strategy['history']['regime'] = strategy['history']['regime'][::5]
                 
-        # Calculate Yearly Returns for the bar chart
+            # Subsample telemetry history (Confidences, etc)
+            if 'telemetry' in strategy:
+                for key in strategy['telemetry']:
+                    strategy['telemetry'][key] = strategy['telemetry'][key][::5]
+                
+        # Calculate Yearly & Monthly Returns
         if 'curve' in strategy:
             dates = strategy['curve']['dates']
             equities = strategy['curve']['equities']
-            yearly = {}
+            
+            # Monthly grouping
+            monthly_data = {}
             for d, e in zip(dates, equities):
-                year = d[:4]
-                if year not in yearly:
-                    yearly[year] = [e]
+                month_key = d[:7] # YYYY-MM
+                if month_key not in monthly_data:
+                    monthly_data[month_key] = [e]
                 else:
-                    yearly[year].append(e)
+                    monthly_data[month_key].append(e)
             
-            yearly_returns = []
-            years = sorted(yearly.keys())
-            for i in range(len(years)):
-                y = years[i]
-                start_val = yearly[y][0]
-                end_val = yearly[y][-1]
-                # For more accuracy, use the end of the previous year
+            # Monthly Returns
+            monthly_returns = []
+            m_keys = sorted(monthly_data.keys())
+            for i in range(len(m_keys)):
+                key = m_keys[i]
+                start_val = monthly_data[key][0]
+                end_val = monthly_data[key][-1]
                 if i > 0:
-                    start_val = yearly[years[i-1]][-1]
-                
+                    start_val = monthly_data[m_keys[i-1]][-1]
                 ret = (end_val / start_val) - 1
-                yearly_returns.append({"year": y, "return": round(ret * 100, 2)})
-            strategy['metrics']['yearly_returns'] = yearly_returns
+                monthly_returns.append({"month": key, "return": round(ret * 100, 2)})
+            strategy['metrics']['monthly_returns'] = monthly_returns
+
+            # Yearly Aggregation from monthly
+            yearly = {}
+            for m in monthly_returns:
+                y = m['month'][:4]
+                if y not in yearly: yearly[y] = []
+                yearly[y].append(m['return'])
             
+            strategy['metrics']['yearly_returns'] = [
+                {"year": y, "return": round(sum(rets), 2)} for y, rets in sorted(yearly.items())
+            ]
+
+            # Monthly Confidence Aggregation
+            if 'telemetry' in strategy and 'conf_3x' in strategy['telemetry']:
+                tel = strategy['telemetry']
+                conf_monthly = {}
+                for i, d in enumerate(dates):
+                    month_key = d[:7]
+                    if month_key not in conf_monthly:
+                        conf_monthly[month_key] = {"3x": [], "2x": [], "1x": [], "Cash": []}
+                    conf_monthly[month_key]["3x"].append(tel['conf_3x'][i])
+                    conf_monthly[month_key]["2x"].append(tel['conf_2x'][i])
+                    conf_monthly[month_key]["1x"].append(tel['conf_1x'][i])
+                    conf_monthly[month_key]["Cash"].append(tel['conf_cash'][i])
+                
+                strategy['telemetry']['monthly_avg'] = [
+                    {
+                        "month": k,
+                        "3x": float(np.mean(v["3x"])) * 100,
+                        "2x": float(np.mean(v["2x"])) * 100,
+                        "1x": float(np.mean(v["1x"])) * 100,
+                        "Cash": float(np.mean(v["Cash"])) * 100
+                    } for k, v in sorted(conf_monthly.items())
+                ]
+
             # Calculate rolling 1yr volatility (252 days)
             daily_rets = np.diff(equities) / equities[:-1]
             rolling_vol = []
