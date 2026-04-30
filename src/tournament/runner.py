@@ -178,12 +178,11 @@ class TournamentRunner:
         n = n.replace("Champion ", "")
         n = n.replace("Genome ", "")
         n = n.replace("Strategy", "")
-        
         # Remove extra underscores and fix spacing
         n = n.replace("_", " ").strip()
         
         if category == "CHAMP":
-            return f"[CHAMP] {n}"
+            return f"[Champ] {n}"
         if category == "BASE":
             return f"[BASE] {n}"
         if genome:
@@ -306,8 +305,8 @@ class TournamentRunner:
                                     # Convert v6_balancer -> Champion V6 (Balancer)
                                     parts = folder_name.split("_")
                                     ver = parts[0].upper() # V6
-                                    name = " ".join(p.capitalize() for p in parts[1:]) # Balancer
-                                    s.NAME = f"Champion {ver} ({name})"
+                                    display_name = " ".join(p.capitalize() for p in parts[1:]) # Balancer
+                                    s.NAME = self._clean_name(f"{ver} ({display_name})", "CHAMP")
                                 else:
                                     # Fallback for other JSONs
                                     label = f.replace(".json", "")

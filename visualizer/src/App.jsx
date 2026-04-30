@@ -141,7 +141,8 @@ export default function App() {
       .then(res => res.json())
       .then(json => {
         setData(json);
-        setSelectedNames(json.slice(0, 3).map(s => s.name));
+        const defaultSelected = json.filter(s => s.name.includes('[BASE]')).map(s => s.name);
+        setSelectedNames(defaultSelected.length ? defaultSelected : json.slice(0, 3).map(s => s.name));
         setLoading(false);
       })
       .catch(err => {
@@ -150,7 +151,8 @@ export default function App() {
           .then(res => res.json())
           .then(json => {
             setData(json);
-            setSelectedNames(json.slice(0, 3).map(s => s.name));
+            const defaultSelected = json.filter(s => s.name.includes('[BASE]')).map(s => s.name);
+            setSelectedNames(defaultSelected.length ? defaultSelected : json.slice(0, 3).map(s => s.name));
             setLoading(false);
           });
       });
