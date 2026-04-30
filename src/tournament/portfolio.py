@@ -212,3 +212,20 @@ class Portfolio:
             "drawdowns": dd.tolist()
         }
 
+    def get_history(self) -> dict:
+        """Returns time-series history of leverage and asset allocations."""
+        leverage_map = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
+        history = {
+            "leverage": [],
+            "regime": [] # The primary asset (highest weight)
+        }
+        for _, holdings in self.holdings_log:
+            lev = sum(holdings.get(a, 0.0) * leverage_map[a] for a in leverage_map)
+            history["leverage"].append(float(lev))
+            
+            # Find the primary asset
+            primary = max(holdings.items(), key=lambda x: x[1])[0]
+            history["regime"].append(primary)
+            
+        return history
+

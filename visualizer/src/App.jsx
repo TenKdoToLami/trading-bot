@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
-  Legend, AreaChart, Area, BarChart, Bar, Cell
+  Legend, AreaChart, Area, BarChart, Bar, Cell, ReferenceArea
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -46,6 +46,17 @@ const getRegimeColor = (name) => {
 const CustomChartTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
+    
+    // Determine unit based on payload keys
+    const isPercentage = payload.some(p => p.name.includes('DD') || p.name.includes('Vol') || p.name.includes('%') || p.name.includes('Growth'));
+    const isLeverage = payload.some(p => p.name.includes('Leverage'));
+    
+    const formatValue = (v) => {
+      if (isLeverage) return `${v.toFixed(1)}x`;
+      if (isPercentage) return `${v.toFixed(1)}%`;
+      return `${((v - 1) * 100).toLocaleString()}%`; // Default to Log/Growth %
+    };
+
     return (
       <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-xl p-4 shadow-2xl min-w-[200px]">
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">{label}</p>
@@ -57,7 +68,7 @@ const CustomChartTooltip = ({ active, payload, label }) => {
                 <span className="text-xs font-semibold text-slate-300">{entry.name}</span>
               </div>
               <span className="text-xs font-mono font-bold" style={{ color: getRegimeColor(entry.name) }}>
-                ${entry.value > 1000 ? (entry.value / 1000).toFixed(1) + 'k' : entry.value.toFixed(0)}
+                {formatValue(entry.value)}
               </span>
             </div>
           ))}
@@ -415,7 +426,7 @@ export default function App() {
                  />
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              <div className="flex flex-col gap-8">
                 <section className="glass rounded-3xl p-8">
                   <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
                     <span>Drawdown Intensity vs SPY</span>
@@ -499,6 +510,92 @@ export default function App() {
                     </ResponsiveContainer>
                   </div>
                 </section>
+
+                <section className="glass rounded-3xl p-8">
+                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                    <span>Regime-Aware Log Performance</span>
+                    <div className="flex gap-4 text-[8px] font-bold uppercase tracking-widest opacity-60">
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-danger/20 border border-danger/40"/> 3x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-success/20 border border-success/40"/> 2x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-info/20 border border-info/40"/> 1x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-slate-800/20 border border-slate-700/40"/> CASH</span>
+                    </div>
+                  </h3>
+                  <div className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
+                        date: d,
+                        equity: inspectionStrategy.curve.equities[i],
+                        spy_equity: spyData?.curve.equities[i]
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis dataKey="date" hide />
+                        <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${((v - 1) * 100).toLocaleString()}%`} />
+                        <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
+                        
+                        {/* Regime Highlights */}
+                        {(() => {
+                          const dates = inspectionStrategy.curve.dates;
+                          const regimes = inspectionStrategy.history?.regime;
+                          if (!dates || !regimes) return null;
+                          const spans = [];
+                          let currentStart = dates[0];
+                          let currentRegime = regimes[0];
+                          for (let i = 1; i < dates.length; i++) {
+                            if (regimes[i] !== currentRegime) {
+                              spans.push({ x1: currentStart, x2: dates[i], regime: currentRegime });
+                              currentStart = dates[i];
+                              currentRegime = regimes[i];
+                            }
+                          }
+                          spans.push({ x1: currentStart, x2: dates[dates.length - 1], regime: currentRegime });
+                          
+                          const colors = {
+                            '3xSPY': 'rgba(239, 68, 68, 0.35)',
+                            '2xSPY': 'rgba(16, 185, 129, 0.35)',
+                            'SPY': 'rgba(59, 130, 246, 0.35)',
+                            'CASH': 'rgba(71, 85, 105, 0.45)'
+                          };
+                          
+                          return spans.map((s, idx) => (
+                            <ReferenceArea key={idx} x1={s.x1} x2={s.x2} fill={colors[s.regime] || 'transparent'} stroke="none" />
+                          ));
+                        })()}
+                        
+                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(inspectionStrategy.name)} fill={`${getRegimeColor(inspectionStrategy.name)}1A`} strokeWidth={3} />
+                        <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+
+                <section className="glass rounded-3xl p-8">
+                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                    <span>Leverage Development History</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Dynamic Exposure Audit</span>
+                  </h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
+                        date: d,
+                        leverage: inspectionStrategy.history?.leverage[i] || 0
+                      }))}>
+                        <defs>
+                          <linearGradient id="levGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis dataKey="date" hide />
+                        <YAxis domain={[0, 3.5]} tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${v.toFixed(1)}x`} />
+                        <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
+                        <Area type="stepAfter" name="Leverage" dataKey="leverage" stroke="#6366f1" fill="url(#levGradient)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+
                 <section className="glass rounded-3xl p-8 flex flex-col gap-6">
                   <h3 className="text-xl font-outfit font-bold text-white">Cross-Regime Robustness Audit</h3>
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -557,7 +654,7 @@ export default function App() {
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} minTickGap={120} />
-                      <YAxis scale={scaleMode === 'log' ? "log" : "auto"} domain={scaleMode === 'log' ? ['auto', 'auto'] : [0, 'auto']} axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} tickFormatter={v => `$${v > 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
+                      <YAxis scale={scaleMode === 'log' ? "log" : "auto"} domain={scaleMode === 'log' ? ['auto', 'auto'] : [1, 'auto']} axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} tickFormatter={v => `${((v-1)*100).toFixed(0)}%`} />
                       <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '30px' }} />
                       {selectedNames.map((name, i) => (

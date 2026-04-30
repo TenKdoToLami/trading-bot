@@ -22,6 +22,11 @@ def export_to_dashboard(report_data, output_path="visualizer/public/data.json"):
             if 'drawdowns' in strategy.get('metrics', {}):
                 strategy['metrics']['drawdowns'] = strategy['metrics']['drawdowns'][::5]
                 
+            # Subsample leverage and regime history
+            if 'history' in strategy:
+                strategy['history']['leverage'] = strategy['history']['leverage'][::5]
+                strategy['history']['regime'] = strategy['history']['regime'][::5]
+                
         # Calculate Yearly Returns for the bar chart
         if 'curve' in strategy:
             dates = strategy['curve']['dates']

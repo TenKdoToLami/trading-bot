@@ -58,6 +58,7 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
             
     return {
         "metrics": portfolio.get_metrics(),
+        "history": portfolio.get_history(),
         "portfolio": portfolio
     }
 
@@ -489,6 +490,7 @@ class TournamentRunner:
                 "synthetic": strat_audits[name].get('synthetic'),
                 "genome": genome,
                 "indicators": indicators,
+                "history": res.get("history"),
                 "curve": {
                     "dates": [str(d.date()) if hasattr(d, 'date') else str(d) for d, _ in res["portfolio"].equity_curve],
                     "equities": [float(e) for _, e in res["portfolio"].equity_curve]
