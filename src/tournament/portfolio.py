@@ -176,6 +176,22 @@ class Portfolio:
         # Calmar Ratio
         calmar = cagr / abs(max_dd) if max_dd != 0 else 0.0
         
+        # Sortino Ratio (Downside volatility)
+        downside_rets = daily_rets[daily_rets < 0]
+        downside_vol = np.std(downside_rets) * np.sqrt(252) if len(downside_rets) > 0 else 0.0
+        sortino = (ann_ret - 0.03) / downside_vol if downside_vol > 0 else 0.0
+        
+        # Omega Ratio (threshold 0%)
+        gains = np.sum(daily_rets[daily_rets > 0])
+        losses = np.sum(np.abs(daily_rets[daily_rets < 0]))
+        omega = (gains / losses) if losses > 0 else 1.0
+        
+        # Expectancy (Average return per day)
+        expectancy = np.mean(daily_rets)
+        
+        # Multiplier (Total Return + 1, e.g. 1445.5x)
+        multiplier = equities[-1] / equities[0]
+        
         return {
             "cagr": cagr,
             "sharpe": sharpe,
@@ -188,6 +204,11 @@ class Portfolio:
             "allocation_pct": allocation_pct,
             "win_rate": win_rate,
             "profit_factor": profit_factor,
-            "calmar": calmar
+            "calmar": calmar,
+            "sortino": sortino,
+            "omega": omega,
+            "expectancy": expectancy,
+            "multiplier": multiplier,
+            "drawdowns": dd.tolist()
         }
 

@@ -18,6 +18,7 @@ import numpy as np
 
 from src.helpers.data_provider import load_spy_data
 from src.tournament.portfolio import Portfolio
+from src.helpers.dashboard_exporter import export_to_dashboard
 from strategies.base import BaseStrategy
 
 def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None):
@@ -133,6 +134,7 @@ def _run_audit_batch(strategy_type, full_records, full_dates, strategy_kwargs, i
         "avg_dd": float(np.mean([m['max_dd'] * 100 for m in results])),
         "med_dd": float(np.median([m['max_dd'] * 100 for m in results])),
         "avg_sharpe": float(np.mean([m['sharpe'] for m in results])),
+        "avg_volatility": float(np.mean([m['volatility'] * 100 for m in results])),
         "avg_trades": float(np.mean([m['trades_per_year'] for m in results]))
     }
 
@@ -399,31 +401,21 @@ class TournamentRunner:
         if skip_audits:
             print("\n[AUDIT] Skipping robustness & synthetic tests as requested.")
         else:
-            # Performance Optimization: 50 iterations is enough for a strong statistical hint
             ITERS = 50 
             print(f"\n[AUDIT] Starting Parallel Robustness & Synthetic tests ({ITERS} iterations per mode)...")
-            print(f"  Note: Using deterministic seeding for fair & fast synthetic testing.")
-
-            # Performance Optimization: Convert DataFrame to lightweight list ONCE
-            # This prevents the 'OSError: handle is closed' by avoiding heavy Pandas serialization
             audit_records = self.data.to_dict('records')
             audit_dates = self.data.index.tolist()
             
-            # 1. Schedule all audit tasks (Using lightweight records list)
             start_time = time.time()
             workers = max(1, (os.cpu_count() or 2) // 2)
             with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
                 future_to_strat = {}
                 for name, res in self.results.items():
                     strat_obj = next(s for s in strategies if s.NAME == name)
-                    strat_type = type(strat_obj)
                     strat_kwargs = {'genome': strat_obj.genome} if hasattr(strat_obj, 'genome') else {}
-                    
-                    # Tag futures with start time
                     t0 = time.time()
-                    f_res = executor.submit(_run_audit_batch, strat_type, audit_records, audit_dates, strat_kwargs, ITERS, 'resilience')
-                    f_syn = executor.submit(_run_audit_batch, strat_type, audit_records, audit_dates, strat_kwargs, ITERS, 'synthetic')
-                    
+                    f_res = executor.submit(_run_audit_batch, type(strat_obj), audit_records, audit_dates, strat_kwargs, ITERS, 'resilience')
+                    f_syn = executor.submit(_run_audit_batch, type(strat_obj), audit_records, audit_dates, strat_kwargs, ITERS, 'synthetic')
                     future_to_strat[f_res] = (name, 'resilience', t0)
                     future_to_strat[f_syn] = (name, 'synthetic', t0)
 
@@ -438,18 +430,65 @@ class TournamentRunner:
                         print(f"  Error in {mode} audit for {name}: {e}")
                     
                     completed += 1
-                    # Show individual task completion time and strategy name
-                    if completed % 5 == 0 or completed == total:
+                    if completed % 10 == 0 or completed == total:
                         elapsed = time.time() - start_time
-                        print(f"  [{completed}/{total}] {name} ({mode}) finished in {duration:.1f}s | Total: {elapsed:.1f}s")
+                        print(f"  [{completed}/{total}] Audit progress... ({elapsed:.1f}s total)")
 
-        # 2. Assemble final report
+        # 2. Assemble final report with Relative Metrics
+        spy_strat_name = next((n for n in self.results.keys() if "B&H SPY" in n), None)
+        spy_rets = None
+        if spy_strat_name:
+            spy_res = self.results[spy_strat_name]
+            spy_eq = np.array([e for _, e in spy_res["portfolio"].equity_curve])
+            spy_rets = np.diff(spy_eq) / spy_eq[:-1]
+
         for name, res in self.results.items():
+            metrics = res["metrics"].copy()
+            
+            # Beta, Alpha, Treynor, Information Ratio
+            if spy_rets is not None and "B&H SPY" not in name:
+                strat_eq = np.array([e for _, e in res["portfolio"].equity_curve])
+                strat_rets = np.diff(strat_eq) / strat_eq[:-1]
+                
+                min_len = min(len(spy_rets), len(strat_rets))
+                s_rets = strat_rets[:min_len]
+                m_rets = spy_rets[:min_len]
+                
+                covariance = np.cov(s_rets, m_rets)[0][1]
+                variance = np.var(m_rets)
+                beta = covariance / variance if variance > 0 else 1.0
+                
+                m_ann_ret = np.mean(m_rets) * 252
+                s_ann_ret = np.mean(s_rets) * 252
+                alpha = s_ann_ret - (0.03 + beta * (m_ann_ret - 0.03))
+                
+                treynor = (s_ann_ret - 0.03) / beta if beta != 0 else 0.0
+                
+                active_ret = s_rets - m_rets
+                tracking_error = np.std(active_ret) * np.sqrt(252)
+                info_ratio = (s_ann_ret - m_ann_ret) / tracking_error if tracking_error > 0 else 0.0
+                
+                metrics['beta'] = float(beta)
+                metrics['alpha'] = float(alpha)
+                metrics['treynor'] = float(treynor)
+                metrics['information_ratio'] = float(info_ratio)
+
+            # Assemble JSON
+            genome = res.get('genome')
+            indicators = []
+            if genome and 'indicators' in genome:
+                indicators = genome['indicators']
+            elif genome and 'weights' in genome:
+                # Fallback for V7: list active weights as indicators
+                indicators = [{"name": k, "priority": abs(v)} for k, v in genome['weights'].items()]
+
             report_data.append({
                 "name": name,
-                "metrics": res["metrics"],
+                "metrics": metrics,
                 "resilience": strat_audits[name].get('resilience'),
                 "synthetic": strat_audits[name].get('synthetic'),
+                "genome": genome,
+                "indicators": indicators,
                 "curve": {
                     "dates": [str(d.date()) if hasattr(d, 'date') else str(d) for d, _ in res["portfolio"].equity_curve],
                     "equities": [float(e) for _, e in res["portfolio"].equity_curve]
@@ -459,3 +498,4 @@ class TournamentRunner:
         html = REPORT_TEMPLATE.replace("{{ DATA_JSON }}", json.dumps(report_data))
         with open(output_path, "w", encoding="utf-8") as f: f.write(html)
         print(f"\n[REPORT] Interactive tournament audit generated: {output_path}")
+        export_to_dashboard(report_data)

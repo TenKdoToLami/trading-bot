@@ -104,10 +104,10 @@ def main():
                 results = {}
                 for s in to_run:
                     print(f"  Running: {s.NAME}...", end="", flush=True)
-                    res = runner.run_strategy(s)
-                    results[s.NAME] = res
+                    # Correctly call run_single which populates runner.results
+                    runner.run_single(s.NAME)
+                    res = runner.results[s.NAME]
                     print(f" CAGR: {res['metrics']['cagr']*100:.2f}%")
-                runner.results = results
             else:
                 # Single strategy (existing logic)
                 runner.run_single(target_names[0])

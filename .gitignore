@@ -1,18 +1,42 @@
-config/.env
-logs/*.log
-visualizer/data.js
-visualizer/config.js
+# Python artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# Data & Simulation (Ignore local caches and large raw data)
 data/*.db
 data/*.json
 data/*.csv
+!data/master_history.csv  # Keep ground truth if small enough (optional)
+
+# Strategy Vaults & Evolutionary Metadata
+vault*/
+best_genome*.json
+evolution_log*.txt
+
+# Dashboard & Visualizer
+visualizer/node_modules/
+visualizer/dist/
+visualizer/public/data.json  # Ignore live data to prevent constant commit noise
 results/
-node_modules/
+
+# Editor / System
+.vscode/
+.idea/
 .DS_Store
-vault/
-vault_v2/
-vault_v3/
-best_genome.json
-best_genome_v2.json
-best_genome_v3.json
+*.swp
+*.swo
+
+# Local Secrets
+config/.env
+.env.local
