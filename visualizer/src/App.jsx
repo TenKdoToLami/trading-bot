@@ -14,6 +14,7 @@ import { twMerge } from 'tailwind-merge';
 // Internal Components
 import { RiskGaugeCard } from './components/RiskGaugeCard';
 import { AuditCard } from './components/AuditCard';
+import { LeverageBar } from './components/LeverageBar';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -22,6 +23,50 @@ function cn(...inputs) {
 const COLORS = [
   "#6366f1", "#10b981", "#ef4444", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#14b8a6"
 ];
+
+const REGIME_COLORS = {
+  '3x': '#ef4444', // Red
+  '2x': '#10b981', // Green
+  '1x': '#3b82f6', // Blue
+  'SPY': '#3b82f6', // Default SPY is 1x
+  'CASH': '#475569', // Grey
+  'DEFAULT': '#6366f1' // Indigo Accent
+};
+
+const getRegimeColor = (name) => {
+  if (!name) return REGIME_COLORS.DEFAULT;
+  const upper = name.toUpperCase();
+  if (upper.includes('3X')) return REGIME_COLORS['3x'];
+  if (upper.includes('2X')) return REGIME_COLORS['2x'];
+  if (upper.includes('SPY')) return REGIME_COLORS['1x'];
+  if (upper.includes('CASH')) return REGIME_COLORS.CASH;
+  return REGIME_COLORS.DEFAULT;
+};
+
+const CustomChartTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-xl p-4 shadow-2xl min-w-[200px]">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">{label}</p>
+        <div className="space-y-2">
+          {sortedPayload.map((entry, index) => (
+            <div key={index} className="flex justify-between items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getRegimeColor(entry.name) }} />
+                <span className="text-xs font-semibold text-slate-300">{entry.name}</span>
+              </div>
+              <span className="text-xs font-mono font-bold" style={{ color: getRegimeColor(entry.name) }}>
+                ${entry.value > 1000 ? (entry.value / 1000).toFixed(1) + 'k' : entry.value.toFixed(0)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -127,7 +172,7 @@ export default function App() {
                 )}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <div className={cn("w-2 h-2 rounded-full", selectedNames.includes(strat.name) ? "bg-accent" : "bg-slate-700")} />
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getRegimeColor(strat.name) }} />
                   <span className="truncate">{strat.name}</span>
                 </div>
                 {selectedNames.includes(strat.name) && <Check className="w-3 h-3 text-accent shrink-0" />}
@@ -386,10 +431,10 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
                         <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
-                        <RechartsTooltip contentStyle={customTooltipStyle} itemStyle={{ color: '#fff' }} allowEscapeViewBox={{ x: false, y: false }} />
+                        <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
-                        <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke="#ef4444" fill="rgba(239, 68, 68, 0.15)" strokeWidth={2} />
-                        <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke="#475569" fill="rgba(71, 85, 105, 0.05)" strokeWidth={1} />
+                        <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke={getRegimeColor(inspectionStrategy.name)} fill={`${getRegimeColor(inspectionStrategy.name)}26`} strokeWidth={2} />
+                        <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke={REGIME_COLORS.SPY} fill={`${REGIME_COLORS.SPY}0D`} strokeWidth={1} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -406,10 +451,10 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
                         <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
-                        <RechartsTooltip contentStyle={customTooltipStyle} itemStyle={{ color: '#fff' }} allowEscapeViewBox={{ x: false, y: false }} />
+                        <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
-                        <Line type="monotone" name="Portfolio Vol" dataKey="vol" stroke="#6366f1" dot={false} strokeWidth={2} isAnimationActive={false} />
-                        <Line type="monotone" name="SPY Vol" dataKey="spy_vol" stroke="#475569" dot={false} strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
+                        <Line type="monotone" name="Portfolio Vol" dataKey="vol" stroke={getRegimeColor(inspectionStrategy.name)} dot={false} strokeWidth={2} isAnimationActive={false} />
+                        <Line type="monotone" name="SPY Vol" dataKey="spy_vol" stroke={REGIME_COLORS.SPY} dot={false} strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -429,10 +474,10 @@ export default function App() {
                         <Legend />
                         <Bar dataKey="return" name="Portfolio %">
                           {inspectionStrategy.metrics.yearly_returns.map((entry, index) => (
-                            <Cell key={index} fill={entry.return >= 0 ? "rgba(16, 185, 129, 0.8)" : "rgba(239, 68, 68, 0.8)"} />
+                            <Cell key={index} fill={entry.return >= 0 ? `${getRegimeColor(inspectionStrategy.name)}CC` : "#ef4444CC"} />
                           ))}
                         </Bar>
-                        <Bar dataKey="spy_return" name="SPY %" fill="rgba(71, 85, 105, 0.3)" />
+                        <Bar dataKey="spy_return" name="SPY %" fill={`${REGIME_COLORS.SPY}4D`} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -496,10 +541,10 @@ export default function App() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} minTickGap={120} />
                       <YAxis scale={scaleMode === 'log' ? "log" : "auto"} domain={scaleMode === 'log' ? ['auto', 'auto'] : [0, 'auto']} axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} tickFormatter={v => `$${v > 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
-                      <RechartsTooltip contentStyle={customTooltipStyle} itemStyle={{ color: '#fff' }} allowEscapeViewBox={{ x: false, y: false }} />
+                      <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '30px' }} />
                       {selectedNames.map((name, i) => (
-                        <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={name.includes('B&H') ? 1.5 : 3} strokeDasharray={name.includes('B&H') ? "5 5" : ""} dot={false} isAnimationActive={false} />
+                        <Line key={name} type="monotone" dataKey={name} stroke={getRegimeColor(name)} strokeWidth={name.includes('B&H') ? 1.5 : 3} strokeDasharray={name.includes('B&H') ? "5 5" : ""} dot={false} isAnimationActive={false} />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -513,34 +558,39 @@ export default function App() {
                   <table className="w-full text-sm text-left border-collapse">
                     <thead className="bg-white/5 text-[10px] uppercase tracking-widest font-bold text-slate-500">
                       <tr>
-                        <th className="px-10 py-6">Comparison</th>
-                        <th className="px-6 py-6">Strategy Identity</th>
-                        <th className="px-6 py-6">CAGR</th>
-                        <th className="px-6 py-6">Sharpe</th>
-                        <th className="px-6 py-6">Max DD</th>
-                        <th className="px-6 py-6">Leverage Profile</th>
+                        <th className="px-10 py-6">Strategy Identity</th>
+                        <th className="px-6 py-6 text-center">CAGR</th>
+                        <th className="px-6 py-6 text-center">Sharpe</th>
+                        <th className="px-6 py-6 text-center">Calmar</th>
+                        <th className="px-6 py-6 text-center">Volat.</th>
+                        <th className="px-6 py-6 text-center">Max DD</th>
+                        <th className="px-6 py-6 text-center">Pivots/Yr</th>
+                        <th className="px-6 py-6">
+                          <div className="flex flex-col gap-1">
+                            <span>Leverage Profile</span>
+                            <div className="flex gap-2 text-[8px] font-bold uppercase tracking-tighter opacity-70">
+                              <span className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-danger"/> 3x</span>
+                              <span className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-success"/> 2x</span>
+                              <span className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-info"/> 1x</span>
+                              <span className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-600"/> CASH</span>
+                            </div>
+                          </div>
+                        </th>
                         <th className="px-6 py-6 text-right pr-10">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.sort((a,b) => b.metrics.cagr - a.metrics.cagr).map((strat, i) => (
                         <tr key={strat.name} className={cn("border-b border-border transition-all hover:bg-white/[0.04] group", selectedNames.includes(strat.name) ? "bg-accent/[0.05]" : "")}>
-                          <td className="px-10 py-6">
-                            <button onClick={() => toggleStrategy(strat.name)} className={cn("w-6 h-6 rounded-lg border flex items-center justify-center transition-all", selectedNames.includes(strat.name) ? "bg-accent border-accent text-white shadow-lg shadow-accent/20" : "border-slate-700 hover:border-slate-500")}>
-                              {selectedNames.includes(strat.name) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4 text-slate-600 group-hover:text-slate-400" />}
-                            </button>
-                          </td>
-                          <td className="px-6 py-6 font-semibold text-slate-200">{strat.name}</td>
-                          <td className="px-6 py-6 font-outfit font-bold text-success text-lg">{(strat.metrics.cagr * 100).toFixed(2)}%</td>
-                          <td className="px-6 py-6 text-slate-400 font-medium">{strat.metrics.sharpe.toFixed(2)}</td>
-                          <td className="px-6 py-6 text-danger font-medium">{(strat.metrics.max_dd * 100).toFixed(1)}%</td>
+                          <td className="px-10 py-6 font-semibold text-slate-200">{strat.name}</td>
+                          <td className="px-6 py-6 font-outfit font-bold text-success text-lg text-center">{(strat.metrics.cagr * 100).toFixed(1)}%</td>
+                          <td className="px-6 py-6 text-slate-400 font-medium text-center">{strat.metrics.sharpe.toFixed(2)}</td>
+                          <td className="px-6 py-6 text-accent font-medium text-center">{strat.metrics.calmar?.toFixed(2) || 'N/A'}</td>
+                          <td className="px-6 py-6 text-slate-500 font-medium text-center">{(strat.metrics.volatility * 100).toFixed(1)}%</td>
+                          <td className="px-6 py-6 text-danger font-medium text-center">{(strat.metrics.max_dd * 100).toFixed(1)}%</td>
+                          <td className="px-6 py-6 text-slate-500 font-medium text-center">{strat.metrics.trades_per_year?.toFixed(1)}</td>
                           <td className="px-6 py-6">
-                            <div className="flex h-3 w-32 bg-white/5 rounded-full overflow-hidden p-[1px] border border-white/5">
-                              <div style={{ width: `${(strat.metrics.allocation_pct?.['3xSPY'] || 0) * 100}%` }} className="bg-danger h-full" />
-                              <div style={{ width: `${(strat.metrics.allocation_pct?.['2xSPY'] || 0) * 100}%` }} className="bg-orange-500 h-full" />
-                              <div style={{ width: `${(strat.metrics.allocation_pct?.['SPY'] || 0) * 100}%` }} className="bg-info h-full" />
-                              <div style={{ width: `${(strat.metrics.allocation_pct?.['CASH'] || 0) * 100}%` }} className="bg-slate-600 h-full" />
-                            </div>
+                            <LeverageBar allocation={strat.metrics.allocation_pct} />
                           </td>
                           <td className="px-6 py-6 text-right pr-10">
                             <button onClick={() => setInspectionStrategy(strat)} className="px-6 py-2 rounded-xl bg-white/5 border border-border text-xs font-bold hover:bg-accent hover:border-accent hover:text-white transition-all shadow-sm">Inspect Audit</button>
