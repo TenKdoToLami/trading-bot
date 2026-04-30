@@ -21,13 +21,19 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         with open(identifier, "r") as f:
             genome = json.load(f)
             
-        # --- PRIORITY 1: Modern Champions (V7, V6, V5) ---
-        if genome.get('version') == 9.0 or "layers" in genome and len(genome['layers'][1]['w'][0]) == 4:
+        # --- PRIORITY 1: Modern Champions (V9, V7, V6, V5) ---
+        if genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
             from strategies.genome_v9_confidence import GenomeV9Confidence
             return GenomeV9Confidence(genome=genome)
             
-        elif "layers" in genome or genome.get('version') == 7.0:
+        elif "layers" in genome or genome.get('version') in [7.0, 7.1, 7.2]:
             from strategies.genome_v7_deep import GenomeV7Deep
+            from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
+            from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
+            
+            v = genome.get('version', 7.0)
+            if v == 7.2: return GenomeV7DeepFluid(genome=genome)
+            if v == 7.1: return GenomeV7DeepBinary(genome=genome)
             return GenomeV7Deep(genome=genome)
             
         elif "brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"]) or genome.get('version') == 6.0:

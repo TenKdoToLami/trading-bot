@@ -28,6 +28,7 @@ from strategies.genome_v6_balancer import GenomeV6
 from strategies.genome_v7_deep import GenomeV7Deep
 from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
 from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
+from strategies.genome_v9_confidence import GenomeV9Confidence
 
 # ──────────────────────────────────────────────────────
 # Genome Identification
@@ -42,6 +43,8 @@ V6_BRAINS = {'cash', '1x', '2x', '3x'}
 
 def get_genome_version(genome: dict) -> int:
     """Detect genome version based on keys."""
+    if genome.get('version') == 9.0 or 'hysteresis' in genome:
+        return 9
     if 'layers' in genome:
         return 7
     if V6_BRAINS.issubset(genome.get('brains', {}).keys()):
@@ -61,6 +64,8 @@ def get_genome_version(genome: dict) -> int:
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has a known genome structure."""
     ver = get_genome_version(genome)
+    if ver == 9:
+        return 'layers' in genome and len(genome['layers']) > 0
     if ver == 7:
         return 'layers' in genome and len(genome['layers']) > 0
     if ver == 6:
@@ -80,7 +85,9 @@ def validate_genome(genome: dict) -> bool:
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=200):
     """Run simulation on a slice using the correct strategy class with pre-audit warmup."""
     ver = get_genome_version(genome)
-    if ver == 7:
+    if ver == 9:
+        strat_type = GenomeV9Confidence
+    elif ver == 7:
         v = genome.get('version', 7.0)
         if v == 7.2: strat_type = GenomeV7DeepFluid
         elif v == 7.1: strat_type = GenomeV7DeepBinary
@@ -189,7 +196,7 @@ def print_leaderboard(results, top_n=3):
     print(f"  {'#':<3} {'Genome':<40} | {'AvgCAGR':>8} | {'MedCAGR':>8} | {'AvgShp':>7} | {'AvgDD':>8} | {'WorstDD':>8} | {'N':>3}")
     print("-" * 110)
     for i, row in enumerate(leaderboard):
-        m = "★" if i < top_n else " "
+        m = "*" if i < top_n else " "
         print(f"{m}{i+1:<3} {row['name']:<40} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['n']:>3}")
     print("="*110)
     return leaderboard
