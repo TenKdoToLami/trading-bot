@@ -428,13 +428,23 @@ export default function App() {
                         dd: (inspectionStrategy.metrics.drawdowns?.[i] || 0) * 100,
                         spy_dd: (spyData?.metrics.drawdowns?.[i] || 0) * 100
                       }))}>
+                        <defs>
+                          <linearGradient id="ddGradient" x1="0" y1="0" x2="1" y2="0">
+                            {inspectionStrategy.curve.dates.map((_, i, arr) => {
+                              const dd = (inspectionStrategy.metrics.drawdowns?.[i] || 0);
+                              const spy_dd = (spyData?.metrics.drawdowns?.[i] || 0);
+                              const color = dd >= spy_dd ? "#10b981" : "#ef4444"; // Green if better (less negative), Red if worse
+                              return <stop key={i} offset={`${(i / arr.length) * 100}%`} stopColor={color} />;
+                            })}
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
                         <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
-                        <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke={getRegimeColor(inspectionStrategy.name)} fill={`${getRegimeColor(inspectionStrategy.name)}26`} strokeWidth={2} />
-                        <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke={REGIME_COLORS.SPY} fill={`${REGIME_COLORS.SPY}0D`} strokeWidth={1} />
+                        <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke="url(#ddGradient)" fill="rgba(255, 255, 255, 0.05)" strokeWidth={2} />
+                        <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke="#475569" fill="rgba(71, 85, 105, 0.02)" strokeWidth={1} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -473,9 +483,16 @@ export default function App() {
                         <RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={customTooltipStyle} itemStyle={{ color: '#fff' }} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
                         <Bar dataKey="return" name="Portfolio %">
-                          {inspectionStrategy.metrics.yearly_returns.map((entry, index) => (
-                            <Cell key={index} fill={entry.return >= 0 ? `${getRegimeColor(inspectionStrategy.name)}CC` : "#ef4444CC"} />
-                          ))}
+                          {inspectionStrategy.metrics.yearly_returns.map((entry, index) => {
+                            const spyReturn = spyData?.metrics.yearly_returns.find(s => s.year === entry.year)?.return || 0;
+                            const isBeatingSpy = entry.return > spyReturn;
+                            return (
+                              <Cell 
+                                key={index} 
+                                fill={isBeatingSpy ? "rgba(16, 185, 129, 0.8)" : "rgba(239, 68, 68, 0.8)"} 
+                              />
+                            );
+                          })}
                         </Bar>
                         <Bar dataKey="spy_return" name="SPY %" fill={`${REGIME_COLORS.SPY}4D`} />
                       </BarChart>
