@@ -27,7 +27,8 @@ evolution_log*.txt
 # Dashboard & Visualizer
 visualizer/node_modules/
 visualizer/dist/
-visualizer/public/data.json  # Generated live in CI/CD pipeline
+# Generated live in CI/CD pipeline
+visualizer/public/data.json
 results/
 
 # Editor / System
