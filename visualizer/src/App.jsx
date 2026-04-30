@@ -596,6 +596,66 @@ export default function App() {
                   </div>
                 </section>
 
+                <section className="glass rounded-3xl p-8">
+                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                    <span>Decision Engine Anatomy</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Logic & Feature DNA</span>
+                  </h3>
+                  {inspectionStrategy.indicators && inspectionStrategy.indicators.length > 0 ? (
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          layout="vertical" 
+                          data={inspectionStrategy.indicators.sort((a,b) => b.priority - a.priority)}
+                          margin={{ left: 40, right: 40 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            width={100} 
+                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} 
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <RechartsTooltip 
+                            cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className="bg-slate-900 border border-slate-700 p-2 rounded-lg shadow-xl">
+                                    <p className="text-[10px] font-bold text-accent uppercase">{payload[0].payload.name}</p>
+                                    <p className="text-xs font-mono text-white">Sensitivity: {payload[0].value.toFixed(2)}</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar 
+                            dataKey="priority" 
+                            radius={[0, 4, 4, 0]}
+                            fill="url(#barGradient)"
+                          >
+                            <Cell fill="rgba(99, 102, 241, 0.8)" />
+                            {inspectionStrategy.indicators.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} 
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-48 flex items-center justify-center border-2 border-dashed border-white/5 rounded-2xl">
+                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Logic transparency not available for this strategy</p>
+                    </div>
+                  )}
+                </section>
+
                 <section className="glass rounded-3xl p-8 flex flex-col gap-6">
                   <h3 className="text-xl font-outfit font-bold text-white">Cross-Regime Robustness Audit</h3>
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">

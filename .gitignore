@@ -27,7 +27,7 @@ evolution_log*.txt
 # Dashboard & Visualizer
 visualizer/node_modules/
 visualizer/dist/
-visualizer/public/data.json  # Ignore live data to prevent constant commit noise
+visualizer/public/data.json  # Generated live in CI/CD pipeline
 results/
 
 # Editor / System

@@ -475,9 +475,20 @@ class TournamentRunner:
                 metrics['information_ratio'] = float(info_ratio)
 
             # Assemble JSON
-            genome = res.get('genome')
+            strat_obj = next((s for s in strategies if s.NAME == name), None)
+            genome = getattr(strat_obj, 'genome', None)
             indicators = []
-            if genome and 'indicators' in genome:
+            if genome and 'layers' in genome:
+                try:
+                    # Neural Sensitivity (V9, V8, etc) - calculate absolute importance from layer 1
+                    w1 = np.array(genome['layers'][0]['w'])
+                    importance = np.sum(np.abs(w1), axis=1)
+                    # Standard input mapping for V9 Confidence
+                    names = ["SMA Cross", "EMA Trend", "RSI (O/B)", "MACD", "ADX Strength", "TRIX", "LR Slope", "RealVol", "ATR", "MFI", "BB Band", "Vol Z", "Rel. Trend"]
+                    indicators = [{"name": names[i], "priority": float(importance[i])} for i in range(min(len(names), len(importance)))]
+                except:
+                    pass
+            elif genome and 'indicators' in genome:
                 indicators = genome['indicators']
             elif genome and 'weights' in genome:
                 # Fallback for V7: list active weights as indicators
