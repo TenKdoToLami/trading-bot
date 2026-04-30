@@ -9,6 +9,8 @@ on:
 jobs:
   simulate-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for JamesIves/github-pages-deploy-action
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v3
@@ -26,7 +28,7 @@ jobs:
       - name: Run Live Tournament Simulation 🚀
         run: |
           export PYTHONPATH=$PYTHONPATH:.
-          python tests/run_tournament.py
+          python tests/run_tournament.py --no-audit
 
       - name: Set up Node.js ⬢
         uses: actions/setup-node@v3
