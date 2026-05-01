@@ -514,9 +514,15 @@ class TournamentRunner:
                         # Some versions return Dict[str, float], others Dict[str, Dict[str, float]]
                         for k, v in tel_imp.items():
                             if isinstance(v, dict):
-                                weight = v.get('weight', 0)
                                 panic_w = v.get('panic')
-                                bull_w = v.get('bull')
+                                bull_w = v.get('bull') or v.get('3x') or v.get('conf_3x')
+                                
+                                # Priority is max intensity across all brains
+                                weight = v.get('weight')
+                                if weight is None:
+                                    # Fallback: Max of all specific brain weights
+                                    weight = max([val for val in v.values() if isinstance(val, (int, float))] or [0])
+                                
                                 period = v.get('period', 0)
                             else:
                                 weight = v

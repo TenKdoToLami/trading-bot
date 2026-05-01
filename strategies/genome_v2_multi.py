@@ -97,27 +97,70 @@ class GenomeV2Strategy(BaseStrategy):
             brain = self.genome[brain_key]
             return sum(brain['w'][k] * inputs[k] for k in brain['w'] if brain['a'].get(k, True))
 
-        # A. Check Panic First
-        if _get_score('panic') > self.genome['panic']['t']:
+        score_panic = _get_score('panic')
+        score_3x = _get_score('3x')
+        score_2x = _get_score('2x')
+        score_1x = _get_score('1x')
+
+        # Logic Branching
+        if score_panic > self.genome['panic']['t']:
             new_holdings = {"CASH": 1.0}
-        
-        # B. Check Tiers in descending order of aggression
-        elif _get_score('3x') > self.genome['3x']['t']:
+        elif score_3x > self.genome['3x']['t']:
             new_holdings = {"3xSPY": 1.0}
-        elif _get_score('2x') > self.genome['2x']['t']:
+        elif score_2x > self.genome['2x']['t']:
             new_holdings = {"2xSPY": 1.0}
-        elif _get_score('1x') > self.genome['1x']['t']:
+        elif score_1x > self.genome['1x']['t']:
             new_holdings = {"SPY": 1.0}
         else:
             new_holdings = {"CASH": 1.0}
 
-        # 4. Apply lockout
+        # 4. Telemetry (Softmax Conviction Fight)
+        import numpy as np
+        m_panic = score_panic - self.genome['panic']['t']
+        m_3x = score_3x - self.genome['3x']['t']
+        m_2x = score_2x - self.genome['2x']['t']
+        m_1x = score_1x - self.genome['1x']['t']
+        
+        e_p = np.exp(m_panic)
+        e_3 = np.exp(m_3x)
+        e_2 = np.exp(m_2x)
+        e_1 = np.exp(m_1x)
+        e_n = np.exp(0) # Neutral Baseline
+        denom = e_p + e_3 + e_2 + e_1 + e_n
+
+        telemetry = {
+            "conf_cash": float(e_p / denom),
+            "conf_3x": float(e_3 / denom),
+            "conf_2x": float(e_2 / denom),
+            "conf_1x": float(e_1 / denom),
+            "score_panic": float(score_panic),
+            "score_3x": float(score_3x),
+            "score_2x": float(score_2x),
+            "score_1x": float(score_1x),
+            "threshold_panic": float(self.genome['panic']['t']),
+            "threshold_3x": float(self.genome['3x']['t']),
+            "threshold_2x": float(self.genome['2x']['t']),
+            "threshold_1x": float(self.genome['1x']['t'])
+        }
+
+        # Feature Importance for Anatomy
+        importance = {}
+        for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']:
+            importance[k] = {
+                "panic": float(abs(self.genome['panic']['w'].get(k, 0))),
+                "3x": float(abs(self.genome['3x']['w'].get(k, 0))),
+                "2x": float(abs(self.genome['2x']['w'].get(k, 0))),
+                "1x": float(abs(self.genome['1x']['w'].get(k, 0)))
+            }
+        telemetry["importance"] = importance
+
+        # 5. Apply lockout
         if new_holdings != self.last_holdings:
-            is_panic = (new_holdings.get("CASH") == 1.0 and _get_score('panic') > self.genome['panic']['t'])
+            is_panic = (new_holdings.get("CASH") == 1.0 and score_panic > self.genome['panic']['t'])
             if self.lock_counter == 0 or is_panic:
                 self.last_holdings = new_holdings
                 self.lock_counter = max(0, int(round(self.genome.get('lock_days', 0))))
-                return new_holdings
+                return new_holdings, telemetry
             
-        return None
+        return self.last_holdings, telemetry
 

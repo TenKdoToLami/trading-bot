@@ -93,19 +93,53 @@ def export_to_dashboard(report_data, output_path="visualizer/public/data.json"):
                     } for k, v in sorted(conf_monthly.items())
                 ]
 
-                # Signal Trace for Precision strategies (subsampled 5-day)
+                # Signal Trace for Neural strategies (subsampled 5-day)
                 if 'score_panic' in tel:
                     trace = []
                     step = 5
                     for i in range(0, len(dates), step):
-                        trace.append({
+                        point = {
                             "date": dates[i],
                             "p_score": float(tel['score_panic'][i]),
                             "p_thresh": float(tel.get('threshold_panic', [0]*len(dates))[i]),
-                            "b_score": float(tel['score_bull'][i]),
-                            "b_thresh": float(tel.get('threshold_bull', [0]*len(dates))[i])
-                        })
+                            "b_score": float(tel.get('score_bull', tel.get('score_3x', [0]*len(dates)))[i]),
+                            "b_thresh": float(tel.get('threshold_bull', tel.get('threshold_3x', [0]*len(dates)))[i]),
+                        }
+                        # Add V2 Multi-Brain Specifics
+                        if 'score_2x' in tel:
+                            point["s2_score"] = float(tel['score_2x'][i])
+                            point["s2_thresh"] = float(tel.get('threshold_2x', [0]*len(dates))[i])
+                        if 'score_1x' in tel:
+                            point["s1_score"] = float(tel['score_1x'][i])
+                            point["s1_thresh"] = float(tel.get('threshold_1x', [0]*len(dates))[i])
+                            
+                        trace.append(point)
                     strategy['telemetry']['signal_trace'] = trace
+
+            # Special Case: V1/V2 Regime Matrix (Bucket-based)
+            genome = strategy.get('genome')
+            if genome and "bounds_p" in genome and "weights_p" in genome:
+                bounds = genome["bounds_p"]
+                weights = genome["weights_p"]
+                matrix = []
+                for i in range(len(weights)):
+                    if i == 0:
+                        label = f"VIX < {bounds[0]}"
+                    elif i < len(bounds):
+                        label = f"{bounds[i-1]} - {bounds[i]}"
+                    else:
+                        label = f"VIX > {bounds[-1]}"
+                        
+                    w = weights[i]
+                    matrix.append({
+                        "label": label,
+                        "cash": w[0],
+                        "spy": w[1],
+                        "triple": w[2]
+                    })
+                if 'telemetry' not in strategy:
+                    strategy['telemetry'] = {}
+                strategy['telemetry']['regime_matrix'] = matrix
 
             # Calculate rolling 1yr volatility (252 days)
             daily_rets = np.diff(equities) / equities[:-1]

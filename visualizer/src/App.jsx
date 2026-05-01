@@ -151,6 +151,241 @@ const CustomChartTooltip = ({ active, payload, label }) => {
   }
   return null;
 };
+const RegimeDistributionTable = ({ allocation }) => {
+  if (!allocation) return null;
+  
+  const tiers = [
+    { key: 'CASH', label: 'Cash (0x)', color: '#ef4444', bg: 'bg-rose-500/20' },
+    { key: 'SPY', label: 'Neutral (1x)', color: '#3b82f6', bg: 'bg-blue-500/20' },
+    { key: '2xSPY', label: 'Aggressive (2x)', color: '#6366f1', bg: 'bg-indigo-500/20' },
+    { key: '3xSPY', label: 'Extreme (3x)', color: '#10b981', bg: 'bg-emerald-500/20' }
+  ];
+
+  return (
+    <div className="bg-slate-900/40 rounded-3xl p-8 border border-white/5 backdrop-blur-xl">
+      <h3 className="text-xl font-outfit font-bold mb-8 flex items-center justify-between text-white">
+        <span>Regime Presence Distribution</span>
+        <span className="text-[10px] text-accent font-bold uppercase tracking-widest opacity-60">Historical Exposure Analysis</span>
+      </h3>
+      <div className="space-y-6">
+        {tiers.map(tier => {
+          const pct = (allocation[tier.key] || 0) * 100;
+          return (
+            <div key={tier.key} className="space-y-3">
+              <div className="flex justify-between items-end">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tier.color }}></div>
+                  <span className="text-sm font-bold text-slate-300 tracking-tight">{tier.label}</span>
+                </div>
+                <span className="text-lg font-mono font-black text-white">{pct.toFixed(1)}%</span>
+              </div>
+              <div className="h-2.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className={`h-full transition-all duration-1000 ease-out relative`}
+                  style={{ width: `${pct}%`, backgroundColor: `${tier.color}4D` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-8 pt-8 border-t border-white/5 flex gap-12">
+         <div>
+            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Dominant State</div>
+            <div className="text-lg font-black text-accent">
+              {tiers.reduce((prev, current) => ((allocation[prev.key] || 0) > (allocation[current.key] || 0)) ? prev : current).label.split(' ')[0]}
+            </div>
+         </div>
+         <div>
+            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Tail Risk Zone</div>
+            <div className="text-lg font-black text-rose-500">
+              {((allocation['CASH'] || 0) * 100).toFixed(1)}%
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const RegimeMatrix = ({ matrix }) => {
+  if (!matrix || matrix.length === 0) return null;
+
+  return (
+    <section className="glass rounded-3xl p-8 mb-8">
+      <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+        <span>Volatility Regime Matrix (VIX Buckets)</span>
+        <span className="text-[10px] text-accent font-bold uppercase tracking-widest opacity-60">Bucket-Based Allocation</span>
+      </h3>
+      <div className="grid grid-cols-4 gap-1 bg-white/10 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+        {/* Header */}
+        <div className="p-4 bg-slate-900/80 text-slate-500 text-[10px] font-bold uppercase tracking-widest">Zone</div>
+        <div className="p-4 bg-slate-900/80 text-rose-500 text-[10px] font-bold uppercase tracking-widest text-center">Cash (0x)</div>
+        <div className="p-4 bg-slate-900/80 text-blue-500 text-[10px] font-bold uppercase tracking-widest text-center">SPY (1x)</div>
+        <div className="p-4 bg-slate-900/80 text-emerald-500 text-[10px] font-bold uppercase tracking-widest text-center">3x SPY (Bull)</div>
+
+        {/* Rows */}
+        {matrix.map((row, idx) => (
+          <React.Fragment key={idx}>
+            <div className="p-5 bg-white/5 text-white text-sm font-bold border-t border-white/5">{row.label}</div>
+            <div 
+              className="p-5 flex items-center justify-center text-lg font-black border-t border-white/5 transition-all hover:brightness-125"
+              style={{ backgroundColor: `rgba(239, 68, 68, ${row.cash * 0.4 + 0.05})`, color: row.cash > 0.5 ? '#fff' : '#ef4444' }}
+            >
+              {Math.round(row.cash * 100)}%
+            </div>
+            <div 
+              className="p-5 flex items-center justify-center text-lg font-black border-t border-white/5 transition-all hover:brightness-125"
+              style={{ backgroundColor: `rgba(59, 130, 246, ${row.spy * 0.4 + 0.05})`, color: row.spy > 0.5 ? '#fff' : '#3b82f6' }}
+            >
+              {Math.round(row.spy * 100)}%
+            </div>
+            <div 
+              className="p-5 flex items-center justify-center text-lg font-black border-t border-white/5 transition-all hover:brightness-125"
+              style={{ backgroundColor: `rgba(16, 185, 129, ${row.triple * 0.4 + 0.05})`, color: row.triple > 0.5 ? '#fff' : '#10b981' }}
+            >
+              {Math.round(row.triple * 100)}%
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+      <div className="mt-6 flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/5">
+        <Info className="w-4 h-4 text-accent" />
+        <p className="text-[11px] text-slate-400 font-medium leading-relaxed italic">
+          This matrix represents the fixed allocation rules of the V1/V2 series. The strategy automatically pivots between these rows based on real-time VIX volatility readings, overlaid with a primary trend filter.
+        </p>
+      </div>
+    </section>
+  );
+};
+
+const IndicatorSensitivityTable = ({ indicators }) => {
+  if (!indicators || indicators.length === 0) return null;
+
+  // Sort by priority (max of bull or panic)
+  const sorted = [...indicators].sort((a, b) => {
+    const maxA = a.priority || 0;
+    const maxB = b.priority || 0;
+    return maxB - maxA;
+  });
+
+  const maxWeight = Math.max(...sorted.map(i => i.priority), 0.001);
+
+  return (
+    <div className="space-y-4">
+      {sorted.map((ind, idx) => {
+        const isDual = ind.panic_priority !== undefined;
+        const pct = (ind.priority / maxWeight) * 100;
+        
+        return (
+          <div key={idx} className="group flex items-center gap-6">
+            {/* Label & Meta */}
+            <div className="w-48 shrink-0">
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-white group-hover:text-accent transition-colors truncate">
+                  {ind.name}
+                </span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">
+                  {isDual ? "Multi-Brain Driver" : "Neural Vector"}
+                </span>
+              </div>
+            </div>
+
+            {/* Bar Track */}
+            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 relative group-hover:border-white/10 transition-all">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 1, delay: idx * 0.05, ease: "circOut" }}
+                className={cn(
+                  "h-full relative",
+                  isDual ? "bg-gradient-to-r from-amber-500/40 to-amber-500" : "bg-gradient-to-r from-accent/40 to-accent"
+                )}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+              </motion.div>
+            </div>
+
+            {/* Value */}
+            <div className="w-16 text-right">
+              <span className="text-[10px] font-mono font-black text-slate-400 group-hover:text-white transition-colors">
+                {ind.priority.toFixed(3)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const NeuralDecisionMatrix = ({ strategy }) => {
+  const trace = strategy.telemetry?.signal_trace;
+  if (!trace) return null;
+
+  const rows = [
+    { label: 'Panic State', brain: 'Panic Brain', key: 'p', color: 'text-rose-500', bg: 'bg-rose-500/10', target: 'CASH (0x)' },
+    { label: 'Extreme Bull', brain: 'Bull Brain', key: 'b', color: 'text-emerald-500', bg: 'bg-emerald-500/10', target: '3x SPY' },
+    { label: 'Aggressive', brain: '2x Brain', key: 's2', color: 'text-blue-500', bg: 'bg-blue-500/10', target: '2x SPY' },
+    { label: 'Neutral', brain: '1x Brain', key: 's1', color: 'text-slate-400', bg: 'bg-slate-400/10', target: '1x SPY' }
+  ].filter(r => trace[0][`${r.key}_score`] !== undefined);
+
+  return (
+    <section className="glass rounded-3xl p-8 mb-8">
+      <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+        <span>Neural Decision Matrix</span>
+        <span className="text-[10px] text-accent font-bold uppercase tracking-widest opacity-60">Rules of Engagement</span>
+      </h3>
+      <div className="overflow-hidden rounded-2xl border border-white/5 bg-slate-900/40">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-white/5">
+              <th className="p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Logic Tier</th>
+              <th className="p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Trigger Condition</th>
+              <th className="p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Brain Sensitivity</th>
+              <th className="p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Target Regime</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {rows.map((row, idx) => {
+              const thresh = trace[0][`${row.key}_thresh`] || 0;
+              return (
+                <tr key={idx} className="hover:bg-white/5 transition-colors group">
+                  <td className="p-4">
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-black ${row.color}`}>{row.label}</span>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase">{row.brain}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                      <span className="text-[10px] font-bold text-slate-400">Score &gt;</span>
+                      <span className="text-xs font-mono font-bold text-white">{thresh.toFixed(2)}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <div className="w-24 h-1.5 bg-white/5 rounded-full mx-auto overflow-hidden">
+                      <div 
+                        className={`h-full ${row.color.replace('text-', 'bg-')} opacity-60 transition-all duration-1000`} 
+                        style={{ width: `${Math.min(100, (1/thresh) * 50)}%` }}
+                      ></div>
+                    </div>
+                  </td>
+                  <td className="p-4 text-right">
+                    <span className="text-xs font-black text-white bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 group-hover:border-accent/40 transition-all">
+                      {row.target}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -702,143 +937,34 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="glass rounded-3xl p-8">
+                <section className="glass rounded-3xl p-8 mb-8">
                   <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
                     <span>Decision Engine Anatomy</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Logic & Feature DNA</span>
+                    <span className="text-[10px] text-accent font-bold uppercase tracking-widest opacity-60">Logic & Feature DNA</span>
                   </h3>
                   
-                  {/* Structural Hyperparameters */}
-                  {inspectionStrategy.parameters && Object.keys(inspectionStrategy.parameters).length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                      {Object.entries(inspectionStrategy.parameters).map(([key, val]) => {
-                        const info = {
-                          "Hysteresis": { what: "Decision Buffer", for: "Prevents 'flip-flopping' on noisy signals.", how: "Diff required between state probabilities.", common: "0.10 - 0.25" },
-                          "Smoothing": { what: "Confidence Filter", for: "Smoothing high-frequency neural jitters.", how: "Exp. Moving Average of Softmax outputs.", common: "0.15 - 0.40" },
-                          "Lock Days": { what: "Minimum Holding Period", for: "Enforcing patience and reducing friction.", how: "Integer counter blocking state changes.", common: "1 - 5 days" },
-                          "Simple Moving Average": { what: "Arithmetic Price Average", for: "Identifying primary long-term trend direction.", how: "Sum of prices over N days divided by N.", common: "50, 100, 200 days" },
-                          "Exponential Moving Average": { what: "Weight-Decaying Average", for: "Capturing trend changes faster than a standard SMA.", how: "N-day decay giving more weight to recent price.", common: "10, 20, 50 days" },
-                          "Relative Strength Index": { what: "Momentum Oscillator", for: "Spotting over-extended 'Panic' or 'Euphoia' states.", how: "Ratio of average gains to average losses.", common: "14 (Standard), 30+ (Macro)" },
-                          "MACD Fast Period": { what: "Momentum Velocity", for: "Detecting changes in trend strength and direction.", how: "Short-window EMA for the MACD line calculation.", common: "12 days (Standard)" },
-                          "MACD Slow Period": { what: "Trend Baseline", for: "Providing a baseline for the momentum signal.", how: "Long-window EMA used in the MACD difference.", common: "26 days (Standard)" },
-                          "Average Directional Index": { what: "Trend Intensity Metric", for: "Determining if market is trending or sideways.", how: "Derived from expansion of price range over period.", common: "14 - 25 days" },
-                          "Triple Exponential Average": { what: "Triple-Smoothed Momentum", for: "Detecting trend changes while ignoring market noise.", how: "Triple EMA of the logarithmic price.", common: "15 - 30 days" },
-                          "LR Slope Period": { what: "Trend Velocity Measure", for: "Quantifying how fast the price is moving.", how: "Slope of the best-fit linear regression line.", common: "10 - 30 days" },
-                          "Realized Volatility": { what: "Historical Risk Measure", for: "Scaling position size or switching to safety.", how: "Standard deviation of log-returns over window.", common: "20, 60, 252 days" },
-                          "Average True Range": { what: "True Volatility Range", for: "Setting stop-losses or vol-adjusted leverage.", how: "Average of (High-Low) including price gaps.", common: "14 days" },
-                          "Money Flow Index": { what: "Volume-Weighted RSI", for: "Confirming trends using actual dollar-flow.", how: "RSI logic applied to Typical Price * Volume.", common: "14 days" },
-                          "Bollinger Bands Period": { what: "Statistical Channel Window", for: "Identifying extreme price extensions/reversals.", how: "Standard deviation bands around a SMA.", common: "20 days" }
-                        }[key] || { 
-                          what: "Tactical Parameter", 
-                          for: "Specific strategy decision logic.", 
-                          how: "Genome-defined hyperparameter.", 
-                          common: "Varies by strategy version" 
-                        };
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Lock Days</div>
+                      <div className="text-2xl font-mono font-black text-white group-hover:text-accent transition-colors">
+                        {(inspectionStrategy.genome?.lock_days || 0).toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Genome Version</div>
+                      <div className="text-2xl font-mono font-black text-white group-hover:text-accent transition-colors">
+                        {inspectionStrategy.genome?.version || "1.0"}
+                      </div>
+                    </div>
+                  </div>
 
-                        return (
-                          <div 
-                            key={key} 
-                            className="group relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-accent/50 hover:bg-accent/5 transition-all cursor-help"
-                          >
-                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1">{key}</p>
-                            <p className="text-sm font-mono font-bold text-accent">{val}</p>
-                            <div className="absolute bottom-full left-0 mb-3 w-64 p-4 bg-slate-950 border border-slate-700 rounded-2xl shadow-3xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-300 z-50 scale-95 group-hover:scale-100">
-                              <div className="flex flex-col gap-3">
-                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">What is it</p><p className="text-[11px] text-emerald-400 font-bold">{info.what}</p></div>
-                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Tactical Purpose</p><p className="text-[10px] text-slate-300 leading-tight">{info.for}</p></div>
-                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Calculation</p><p className="text-[10px] text-slate-400 italic font-mono">{info.how}</p></div>
-                                <div className="pt-2 border-t border-white/5"><p className="text-[9px] text-accent/80 font-bold">Common Range: {info.common}</p></div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* Regime Presence Table */}
+                  <RegimeDistributionTable allocation={inspectionStrategy.metrics?.allocation_pct} />
 
-                  {inspectionStrategy.indicators && inspectionStrategy.indicators.length > 0 ? (
-                    <div className="h-[500px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
-                          layout="vertical" 
-                          data={[...inspectionStrategy.indicators].sort((a,b) => {
-                            const maxA = Math.max(a.priority || 0, a.panic_priority || 0, a.bull_priority || 0);
-                            const maxB = Math.max(b.priority || 0, b.panic_priority || 0, b.bull_priority || 0);
-                            return maxB - maxA;
-                          })}
-                          margin={{ left: 100, right: 40, top: 20, bottom: 20 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                          <XAxis type="number" hide />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            width={120} 
-                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} 
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <RechartsTooltip 
-                            cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                const data = payload[0].payload;
-                                const isDual = data.panic_priority !== undefined;
-                                return (
-                                  <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-3xl backdrop-blur-xl">
-                                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-3 border-b border-white/10 pb-2">{data.name}</p>
-                                    <div className="flex flex-col gap-2">
-                                      {isDual ? (
-                                        <>
-                                          <div className="flex justify-between gap-8 items-center">
-                                            <span className="text-[10px] text-rose-400 font-bold uppercase">Panic Weight</span>
-                                            <span className="text-xs font-mono text-white">{data.panic_priority.toFixed(3)}</span>
-                                          </div>
-                                          <div className="flex justify-between gap-8 items-center">
-                                            <span className="text-[10px] text-emerald-400 font-bold uppercase">Bull Weight</span>
-                                            <span className="text-xs font-mono text-white">{data.bull_priority.toFixed(3)}</span>
-                                          </div>
-                                        </>
-                                      ) : (
-                                        <div className="flex justify-between gap-8 items-center">
-                                          <span className="text-[10px] text-accent font-bold uppercase">Sensitivity</span>
-                                          <span className="text-xs font-mono text-white">{data.priority.toFixed(3)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Legend verticalAlign="top" height={36}/>
-                          {inspectionStrategy.indicators[0]?.panic_priority !== undefined ? (
-                            <>
-                              <Bar dataKey="panic_priority" name="Panic DNA" fill="rgba(239, 68, 68, 0.6)" radius={[0, 4, 4, 0]} barSize={12} />
-                              <Bar dataKey="bull_priority" name="Bull DNA" fill="rgba(16, 185, 129, 0.6)" radius={[0, 4, 4, 0]} barSize={12} />
-                            </>
-                          ) : (
-                            <Bar 
-                              dataKey="priority" 
-                              name="Indicator Sensitivity"
-                              radius={[0, 4, 4, 0]}
-                              fill="rgba(99, 102, 241, 0.8)"
-                              barSize={20}
-                            >
-                              {inspectionStrategy.indicators?.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} />
-                              ))}
-                            </Bar>
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-48 flex items-center justify-center border-2 border-dashed border-white/5 rounded-2xl">
-                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Logic transparency not available for this strategy</p>
-                    </div>
-                  )}
+                  <div className="mt-8">
+                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Neural Score Logic (Indicator Weights)</h4>
+                    <IndicatorSensitivityTable indicators={inspectionStrategy.indicators} />
+                  </div>
                 </section>
 
                 {/* Only show Regime Mix for strategies without high-fidelity signal traces */}
@@ -875,64 +1001,14 @@ export default function App() {
                   </section>
                 )}
 
+                {/* Volatility Regime Matrix (V1/V2 Legacy) */}
+                {inspectionStrategy.telemetry?.regime_matrix && (
+                  <RegimeMatrix matrix={inspectionStrategy.telemetry.regime_matrix} />
+                )}
+
+                {/* Neural Decision Matrix */}
                 {inspectionStrategy.telemetry?.signal_trace && (
-                  <section className="glass rounded-3xl p-8">
-                    <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
-                      <span>Strategic Brain Signals (Raw Diagnostics)</span>
-                      <span className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Conviction Threshold Audit</span>
-                    </h3>
-                    <div className="h-[600px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={inspectionStrategy.telemetry.signal_trace} margin={{ left: 20, right: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                          <XAxis dataKey="date" hide />
-                          <YAxis 
-                            tick={{ fill: '#64748b', fontSize: 10 }} 
-                            domain={['dataMin - 2', 'dataMax + 2']} 
-                            tickCount={5}
-                            tickFormatter={(v) => v.toFixed(1)}
-                          />
-                          <RechartsTooltip 
-                            content={({ active, payload, label }) => {
-                              if (active && payload && payload.length) {
-                                return (
-                                  <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-3xl backdrop-blur-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">{label}</p>
-                                    <div className="space-y-2">
-                                      <div className="flex justify-between gap-8 items-center">
-                                        <span className="text-[10px] text-rose-400 font-bold uppercase">Panic Score</span>
-                                        <span className="text-xs font-mono text-white">{payload[0].value.toFixed(3)}</span>
-                                      </div>
-                                      <div className="flex justify-between gap-8 items-center">
-                                        <span className="text-[10px] text-emerald-400 font-bold uppercase">Bull Score</span>
-                                        <span className="text-xs font-mono text-white">{payload[2].value.toFixed(3)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Legend verticalAlign="top" height={36} iconType="plainline" />
-                          <Line type="monotone" dataKey="p_score" name="Panic Score" stroke="#ef4444" strokeWidth={2} dot={false} />
-                          <Line type="monotone" dataKey="p_thresh" name="Panic Threshold" stroke="#ef4444" strokeWidth={1} strokeDasharray="5 5" dot={false} />
-                          <Line type="monotone" dataKey="b_score" name="Bull Score" stroke="#10b981" strokeWidth={2} dot={false} />
-                          <Line type="monotone" dataKey="b_thresh" name="Bull Threshold" stroke="#10b981" strokeWidth={1} strokeDasharray="5 5" dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="mt-4 flex gap-4 justify-center">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-0.5 bg-rose-500"></div>
-                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Above Dashed Red = CASH</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-0.5 bg-emerald-500"></div>
-                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Above Dashed Green = 3x SPY</span>
-                      </div>
-                    </div>
-                  </section>
+                  <NeuralDecisionMatrix strategy={inspectionStrategy} />
                 )}
 
                 <section className="glass rounded-3xl p-8">
