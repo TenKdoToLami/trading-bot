@@ -131,7 +131,15 @@ class GenomeV7DeepFluid(BaseStrategy):
         total = sum(target_holdings.values())
         target_holdings = {k: v/total for k, v in target_holdings.items()}
 
-        # 5. Friction Protection: Rebalance Threshold
+        # 5. Telemetry
+        telemetry = {
+            "conf_cash": float(probs[0]),
+            "conf_1x": float(probs[1]),
+            "conf_2x": float(probs[2]),
+            "conf_3x": float(probs[3])
+        }
+
+        # 6. Friction Protection: Rebalance Threshold
         # Calculate total difference (L1 norm) between current and target
         diff = 0
         all_keys = set(target_holdings.keys()) | set(self.current_holdings.keys())
@@ -142,6 +150,6 @@ class GenomeV7DeepFluid(BaseStrategy):
         if diff >= threshold and self.lock_counter == 0:
             self.current_holdings = target_holdings
             self.lock_counter = max(0, int(round(self.genome.get('lock_days', 2.0))))
-            return target_holdings
+            return target_holdings, telemetry
             
-        return None
+        return self.current_holdings, telemetry

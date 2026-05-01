@@ -59,6 +59,10 @@ class GenomeV7Deep(BaseStrategy):
     def _relu(self, x):
         return np.maximum(0, x)
 
+    def _softmax(self, x):
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
+
     def on_data(self, date, price_data, prev_data):
         spy_price = price_data['close']
         self.prices.append(spy_price)
@@ -115,20 +119,30 @@ class GenomeV7Deep(BaseStrategy):
         # Layer 2: Hidden -> Output (Raw Scores)
         scores = np.dot(h1, self.w2) + self.b2
         
-        # 4. Decision (Highest Score Wins)
+        # 4. Neural Confidence (Softmax)
+        probs = self._softmax(scores)
+        
+        telemetry = {
+            "conf_cash": float(probs[0]),
+            "conf_1x": float(probs[1]),
+            "conf_2x": float(probs[2]),
+            "conf_3x": float(probs[3])
+        }
+
+        # 5. Decision (Highest Score Wins)
         # Order: 0=CASH, 1=1x, 2=2x, 3=3x
-        winner_idx = np.argmax(scores)
+        winner_idx = np.argmax(probs)
         
         if winner_idx == 0: new_holdings = {"CASH": 1.0}
         elif winner_idx == 1: new_holdings = {"SPY": 1.0}
         elif winner_idx == 2: new_holdings = {"2xSPY": 1.0}
         else: new_holdings = {"3xSPY": 1.0}
 
-        # 5. Lockout logic
+        # 6. Lockout logic
         if new_holdings != self.last_holdings:
             if self.lock_counter == 0:
                 self.last_holdings = new_holdings
                 self.lock_counter = max(0, int(round(self.genome.get('lock_days', 3.0))))
-                return new_holdings
+                return new_holdings, telemetry
             
-        return None
+        return self.last_holdings, telemetry
