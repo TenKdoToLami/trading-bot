@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, Shield, Zap, BarChart3, Activity, Globe, Check, ChevronLeft,
-  Plus, Bolt, LineChart as LucideLineChart, Gem, Scale, ExternalLink, Info
+  Plus, Bolt, LineChart as LucideLineChart, Gem, Scale, ExternalLink, Info,
+  ArrowLeft, ArrowRight
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -395,6 +396,57 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('performance');
   const [scaleMode, setScaleMode] = useState('log');
 
+  const sortedData = useMemo(() => [...data].sort((a,b) => b.metrics.cagr - a.metrics.cagr), [data]);
+  const currentIndex = inspectionStrategy ? sortedData.findIndex(s => s.name === inspectionStrategy.name) : -1;
+
+  const handleInspect = (strat) => {
+    setInspectionStrategy(strat);
+    if (strat) {
+      window.location.hash = `/${encodeURIComponent(strat.name)}`;
+    } else {
+      window.location.hash = '';
+    }
+  };
+
+  const navigateAudit = (direction) => {
+    const nextIndex = currentIndex + direction;
+    if (nextIndex >= 0 && nextIndex < sortedData.length) {
+      handleInspect(sortedData[nextIndex]);
+    }
+  };
+
+  // Hash Routing & Browser History
+  useEffect(() => {
+    const syncWithHash = () => {
+      if (loading || data.length === 0) return;
+      const hash = window.location.hash.replace('#/', '');
+      if (hash) {
+        const decoded = decodeURIComponent(hash);
+        const strat = data.find(s => s.name === decoded);
+        if (strat) setInspectionStrategy(strat);
+      } else {
+        setInspectionStrategy(null);
+      }
+    };
+
+    window.addEventListener('hashchange', syncWithHash);
+    syncWithHash(); // Initial sync
+
+    return () => window.removeEventListener('hashchange', syncWithHash);
+  }, [loading, data]);
+
+  // Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!inspectionStrategy) return;
+      if (e.key === 'ArrowLeft') navigateAudit(-1);
+      if (e.key === 'ArrowRight') navigateAudit(1);
+      if (e.key === 'Escape') handleInspect(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inspectionStrategy, currentIndex]);
+
   useEffect(() => {
     fetch('/trading-bot/data.json')
       .then(res => res.json())
@@ -459,18 +511,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-slate-200 flex font-sans selection:bg-accent/30">
       <aside className="w-80 border-r border-border p-6 flex flex-col gap-8 glass shrink-0 sticky top-0 h-screen">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+        <div 
+          className="flex items-center gap-3 cursor-pointer group" 
+          onClick={() => handleInspect(null)}
+        >
+          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)] group-hover:scale-110 transition-transform">
             <TrendingUp className="text-white w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-outfit font-bold text-xl tracking-tight text-white">Tactical Forge</h1>
+            <h1 className="font-outfit font-bold text-xl tracking-tight text-white group-hover:text-accent transition-colors">Tactical Forge</h1>
             <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Command Center</p>
           </div>
         </div>
         <nav className="flex flex-col gap-2">
           <button
-            onClick={() => { setActiveTab('performance'); setInspectionStrategy(null); }}
+            onClick={() => { setActiveTab('performance'); handleInspect(null); }}
             className={cn(
               "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
               activeTab === 'performance' && !inspectionStrategy ? "bg-accent/10 text-accent border border-accent/20" : "hover:bg-white/5 text-slate-400"
@@ -515,7 +570,7 @@ export default function App() {
             >
               <header className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setInspectionStrategy(null)} className="p-2 rounded-xl bg-white/5 border border-border hover:bg-white/10 transition-all text-white">
+                  <button onClick={() => handleInspect(null)} className="p-2 rounded-xl bg-white/5 border border-border hover:bg-white/10 transition-all text-white">
                     <ChevronLeft className="w-6 h-6" />
                   </button>
                   <div>
@@ -524,6 +579,28 @@ export default function App() {
                       <span className="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded-full border border-accent/20 font-bold uppercase tracking-widest">Inspection Active</span>
                     </h2>
                     <p className="text-slate-500 text-sm">Institutional Quantitative Behavioral Analysis</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex bg-white/5 p-1 rounded-xl border border-border">
+                    <button 
+                      onClick={() => navigateAudit(-1)} 
+                      disabled={currentIndex <= 0}
+                      className={cn("p-2 rounded-lg transition-all", currentIndex <= 0 ? "opacity-20 cursor-not-allowed" : "hover:bg-white/10 text-white")}
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="px-4 flex items-center border-x border-white/5">
+                      <span className="text-[10px] font-mono font-bold text-slate-500">{currentIndex + 1} / {data.length}</span>
+                    </div>
+                    <button 
+                      onClick={() => navigateAudit(1)} 
+                      disabled={currentIndex >= data.length - 1}
+                      className={cn("p-2 rounded-lg transition-all", currentIndex >= data.length - 1 ? "opacity-20 cursor-not-allowed" : "hover:bg-white/10 text-white")}
+                    >
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               </header>
@@ -1130,7 +1207,7 @@ export default function App() {
                             <LeverageBar allocation={strat.metrics.allocation_pct} />
                           </td>
                           <td className="px-6 py-6 text-right pr-10">
-                            <button onClick={() => setInspectionStrategy(strat)} className="px-6 py-2 rounded-xl bg-white/5 border border-border text-xs font-bold hover:bg-accent hover:border-accent hover:text-white transition-all shadow-sm">Inspect Audit</button>
+                            <button onClick={() => handleInspect(strat)} className="px-6 py-2 rounded-xl bg-white/5 border border-border text-xs font-bold hover:bg-accent hover:border-accent hover:text-white transition-all shadow-sm">Inspect Audit</button>
                           </td>
                         </tr>
                       ))}
