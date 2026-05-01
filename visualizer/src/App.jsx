@@ -261,58 +261,203 @@ const RegimeMatrix = ({ matrix }) => {
   );
 };
 
-const IndicatorSensitivityTable = ({ indicators }) => {
+const INDICATOR_METADATA = {
+  'SMA': { 
+    desc: 'Trend Proxy', 
+    logic: '(Price - SMA) / SMA', 
+    behavior: 'Positive values suggest bullish trend support.',
+    standard: '±2% to ±10% from mean',
+    calc: 'Calculates the percentage distance of current price from its Simple Moving Average.'
+  },
+  'EMA': { 
+    desc: 'Trend Response', 
+    logic: 'Price relative to EMA', 
+    behavior: 'Used for fast-reacting momentum confirmation.',
+    standard: '±1% to ±5%',
+    calc: 'Exponential Moving Average giving more weight to recent price action.'
+  },
+  'RSI': { 
+    desc: 'Momentum Oscillator', 
+    logic: 'Avg Gain / Avg Loss', 
+    behavior: 'Detects overbought/oversold conditions.',
+    standard: '30 (Oversold) / 70 (Overbought)',
+    calc: '100 - [100 / (1 + RS)], where RS is the ratio of smoothed up-days to down-days.'
+  },
+  'MACD': { 
+    desc: 'Trend Acceleration', 
+    logic: 'Fast EMA - Slow EMA', 
+    behavior: 'Measures momentum shift velocity.',
+    standard: '±0.5 to ±2.0',
+    calc: 'The difference between short-term (fast) and long-term (slow) exponential averages.'
+  },
+  'ADX': { 
+    desc: 'Trend Strength', 
+    logic: 'Directional Movement Index', 
+    behavior: 'Identifies if the market is trending or ranging.',
+    standard: '>25 (Trending) / <20 (Ranging)',
+    calc: 'Average of Directional Movement Index values, smoothed over the lookback period.'
+  },
+  'TRIX': { 
+    desc: 'Triple Smoothed Momentum', 
+    logic: 'EMA of EMA of EMA', 
+    behavior: 'Filters noise to find structural momentum.',
+    standard: '±0.1 to ±1.0',
+    calc: 'The 1-day rate of change of a triple-exponentially smoothed moving average.'
+  },
+  'SLOPE': { 
+    desc: 'Price Velocity', 
+    logic: 'Linear Regression Slope', 
+    behavior: 'Quantifies the angle of price ascent/descent.',
+    standard: '±0.1 to ±0.5',
+    calc: 'Calculates the slope of the best-fit line through the price history window.'
+  },
+  'VOL': { 
+    desc: 'Realized Volatility', 
+    logic: 'Std Dev of Log Returns', 
+    behavior: 'High vol triggers defensive positioning.',
+    standard: '10% (Low) to 30%+ (Extreme)',
+    calc: 'Annualized standard deviation of daily logarithmic price returns.'
+  },
+  'ATR': { 
+    desc: 'True Range', 
+    logic: 'High/Low/Close Range', 
+    behavior: 'Used to scale thresholds relative to market noise.',
+    standard: '0.5% to 2.5% of price',
+    calc: 'Maximum of (H-L), (H-Cp), or (L-Cp), averaged over the N-day window.'
+  },
+  'VIX': { 
+    desc: 'Market Fear', 
+    logic: 'S&P 500 Option Vol', 
+    behavior: 'Primary driver for Panic State activation.',
+    standard: '15 (Stable) to 35+ (Crisis)',
+    calc: 'Real-time market expectation of 30-day volatility derived from SPX options.'
+  },
+  'YC': { 
+    desc: 'Yield Curve', 
+    logic: '10Y - 3M Spread', 
+    behavior: 'Macro-economic risk and recession proxy.',
+    standard: '>0 (Expansion) / <0 (Inversion)',
+    calc: 'The spread between long-term (10-year) and short-term (3-month) Treasury yields.'
+  },
+  'MFI': { 
+    desc: 'Volume Flow', 
+    logic: 'Money Flow Index', 
+    behavior: 'Tracks capital inflow/outflow conviction.',
+    standard: '20 (Accumulation) / 80 (Distribution)',
+    calc: 'Volume-weighted RSI using Typical Price [(H+L+C)/3].'
+  },
+  'BBW': { 
+    desc: 'Bollinger Width', 
+    logic: '(Upper - Lower) / Mid', 
+    behavior: 'Identifies volatility squeezes and expansions.',
+    standard: '0.05 (Squeeze) to 0.25 (Expansion)',
+    calc: 'The distance between Bollinger Bands normalized by the middle band value.'
+  }
+};
+
+const IndicatorGlossary = ({ indicators }) => {
   if (!indicators || indicators.length === 0) return null;
-
-  // Sort by priority (max of bull or panic)
-  const sorted = [...indicators].sort((a, b) => {
-    const maxA = a.priority || 0;
-    const maxB = b.priority || 0;
-    return maxB - maxA;
-  });
-
-  const maxWeight = Math.max(...sorted.map(i => i.priority), 0.001);
-
   return (
-    <div className="space-y-4">
-      {sorted.map((ind, idx) => {
-        const isDual = ind.panic_priority !== undefined;
-        const pct = (ind.priority / maxWeight) * 100;
+    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 mb-10">
+      {indicators.map((ind, idx) => {
+        const parts = ind.name.match(/^([A-Z]+)\s+(DIST\s+)?\((\d+[dw])\)$/i) || [null, ind.name, '', 'N/A'];
+        const shortcut = parts[1];
+        const period = parts[3];
+        const baseName = shortcut.toUpperCase();
+        const meta = INDICATOR_METADATA[baseName] || { desc: 'Neural Vector', logic: 'Linear Input', behavior: 'Calculated tactical input.' };
         
         return (
-          <div key={idx} className="group flex items-center gap-6">
-            {/* Label & Meta */}
-            <div className="w-48 shrink-0">
-              <div className="flex flex-col">
-                <span className="text-xs font-black text-white group-hover:text-accent transition-colors truncate">
-                  {ind.name}
-                </span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">
-                  {isDual ? "Multi-Brain Driver" : "Neural Vector"}
-                </span>
-              </div>
-            </div>
+          <div key={idx} className="relative group aspect-square">
+             <div className="h-full p-3 rounded-xl bg-white/5 border border-white/5 hover:border-accent/40 transition-all cursor-help flex flex-col items-center justify-center text-center">
+                <div className="flex flex-col items-center leading-tight">
+                   <span className="text-base font-black text-accent uppercase mb-0.5">{shortcut}</span>
+                   <span className="text-xs font-mono text-accent/80 font-bold mb-1.5">{period}</span>
+                   <p className="text-[10px] text-accent/60 font-bold uppercase tracking-tighter leading-none">{meta.desc}</p>
+                </div>
+             </div>
 
-            {/* Bar Track */}
-            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 relative group-hover:border-white/10 transition-all">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 1, delay: idx * 0.05, ease: "circOut" }}
-                className={cn(
-                  "h-full relative",
-                  isDual ? "bg-gradient-to-r from-amber-500/40 to-amber-500" : "bg-gradient-to-r from-accent/40 to-accent"
-                )}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-              </motion.div>
-            </div>
+             {/* Deep Dive Tooltip */}
+             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-72 opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50">
+                <div className="p-5 rounded-2xl bg-slate-900 border border-accent/40 shadow-2xl backdrop-blur-2xl text-left">
+                   <div className="flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-6 bg-accent rounded-full" />
+                      <h5 className="text-xs font-black text-white uppercase tracking-widest">{ind.name} Blueprint</h5>
+                   </div>
+                   
+                   <div className="space-y-4">
+                      <div>
+                         <p className="text-[10px] text-accent font-bold uppercase mb-1">Calculations</p>
+                         <p className="text-[11px] text-slate-300 leading-relaxed">{meta.calc}</p>
+                         <p className="text-[9px] text-slate-500 font-mono mt-1 bg-white/5 p-1.5 rounded">{meta.logic}</p>
+                      </div>
 
-            {/* Value */}
-            <div className="w-16 text-right">
-              <span className="text-[10px] font-mono font-black text-slate-400 group-hover:text-white transition-colors">
-                {ind.priority.toFixed(3)}
-              </span>
+                      <div>
+                         <p className="text-[10px] text-accent font-bold uppercase mb-1">Strategic Explanation</p>
+                         <p className="text-[11px] text-slate-300 leading-relaxed">{meta.behavior}</p>
+                      </div>
+
+                      <div className="pt-3 border-t border-white/5">
+                         <p className="text-[9px] text-slate-500 font-bold uppercase">Standard Range</p>
+                         <p className="text-[10px] text-white font-mono">{meta.standard || "N/A"}</p>
+                      </div>
+                   </div>
+                </div>
+                <div className="w-3 h-3 bg-slate-900 border-r border-b border-accent/40 rotate-45 mx-auto -mt-1.5" />
+             </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const IndicatorWeightProfile = ({ indicators }) => {
+  if (!indicators || indicators.length === 0) return null;
+
+  const sorted = [...indicators].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  const maxWeight = Math.max(...sorted.map(i => i.priority), 0.001);
+  const count = sorted.length;
+  const topCut = Math.ceil(count * 0.2);
+  const bottomCut = Math.floor(count * 0.8);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Neural Weighting Profile</h4>
+        <div className="flex gap-4">
+           <span className="flex items-center gap-1.5 text-[8px] font-bold text-emerald-500 uppercase"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Top 20% Drivers</span>
+           <span className="flex items-center gap-1.5 text-[8px] font-bold text-indigo-500 uppercase"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"/> Tactical Set</span>
+           <span className="flex items-center gap-1.5 text-[8px] font-bold text-rose-500 uppercase"><div className="w-1.5 h-1.5 rounded-full bg-rose-500"/> Worst 20%</span>
+        </div>
+      </div>
+      {sorted.map((ind, idx) => {
+        const pct = (ind.priority / maxWeight) * 100;
+        
+        let barColor = "bg-indigo-500/30";
+        let glowColor = "shadow-[0_0_10px_rgba(99,102,241,0.2)]";
+        if (idx < topCut) {
+          barColor = "bg-emerald-500/40";
+          glowColor = "shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+        } else if (idx >= bottomCut) {
+          barColor = "bg-rose-500/30";
+          glowColor = "shadow-[0_0_10px_rgba(244,63,94,0.2)]";
+        }
+
+        return (
+          <div key={idx} className="group flex items-center gap-4">
+            <div className="w-24 shrink-0">
+               <span className="text-[9px] font-black text-slate-400 group-hover:text-white transition-colors">{ind.name}</span>
+            </div>
+            <div className="flex-1 h-6 bg-white/5 rounded border border-white/5 relative overflow-hidden group-hover:border-white/10 transition-all">
+               <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 1, delay: idx * 0.02 }}
+                  className={cn("h-full relative transition-colors", barColor, glowColor)}
+               />
+               <div className="absolute right-3 inset-y-0 flex items-center">
+                  <span className="text-[9px] font-mono font-black text-slate-500 group-hover:text-white">{ind.priority.toFixed(3)}</span>
+               </div>
             </div>
           </div>
         );
@@ -1020,27 +1165,40 @@ export default function App() {
                     <span className="text-[10px] text-accent font-bold uppercase tracking-widest opacity-60">Logic & Feature DNA</span>
                   </h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
-                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Lock Days</div>
-                      <div className="text-2xl font-mono font-black text-white group-hover:text-accent transition-colors">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Lock Days</div>
+                      <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
                         {(inspectionStrategy.genome?.lock_days || 0).toFixed(1)}
                       </div>
                     </div>
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
-                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Genome Version</div>
-                      <div className="text-2xl font-mono font-black text-white group-hover:text-accent transition-colors">
-                        {inspectionStrategy.genome?.version || "1.0"}
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Genome Version</div>
+                      <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
+                        {inspectionStrategy.genome?.version || "2.0"}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Architecture</div>
+                      <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors truncate">
+                        {getInspectionVersion(inspectionStrategy)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Features</div>
+                      <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
+                        {inspectionStrategy.indicators?.length || 0}
                       </div>
                     </div>
                   </div>
 
-                  {/* Regime Presence Table */}
-                  <RegimeDistributionTable allocation={inspectionStrategy.metrics?.allocation_pct} />
+                  <div className="mb-8">
+                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Indicator Behavioral Glossary</h4>
+                    <IndicatorGlossary indicators={inspectionStrategy.indicators} spyData={spyData} />
+                  </div>
 
-                  <div className="mt-8">
-                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Neural Score Logic (Indicator Weights)</h4>
-                    <IndicatorSensitivityTable indicators={inspectionStrategy.indicators} />
+                  <div className="mt-10 pt-8 border-t border-white/5">
+                    <IndicatorWeightProfile indicators={inspectionStrategy.indicators} />
                   </div>
                 </section>
 
