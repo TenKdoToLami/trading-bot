@@ -3,9 +3,13 @@
 ## 🧠 Strategy Logic
 V3 is a highly optimized **Binary State Machine**. It is the first version to use Genetic evolution for both indicator weights and thresholds.
 
-### ⚙️ Decision Engine
-- **Bull vs Panic**: Compares two brain scores to decide between maximum exposure or safety.
-- **Time Lock**: Uses a `lock_days` parameter to prevent high-frequency flipping (whipsaw).
+### 🔬 Decision Engine Anatomy
+1.  **Dual-Brain Scoring**: Simultaneously calculates a **Panic Score** (Defensive) and a **Bull Score** (Offensive) using 9 weighted indicators.
+2.  **Threshold Comparison**:
+    *   If **Panic Score > Threshold**: Trigger immediate exit to **CASH**.
+    *   If **Bull Score > Threshold**: Trigger allocation to **3x SPY**.
+3.  **Hysteresis Locking**: Once a switch occurs, the `lock_days` parameter enforces a mandatory holding period to prevent "flip-flopping" on noise.
+4.  **Priority Gating**: The Panic Brain always has priority over the Bull Brain—if a circuit breaker is triggered, the offensive signals are ignored.
 
 ### 📈 Leverage States
 - **CASH**: Total defense.

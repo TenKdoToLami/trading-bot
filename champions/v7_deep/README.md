@@ -3,11 +3,12 @@
 ## 🧠 Strategy Logic
 V7 Deep uses a **Multi-Layer Perceptron (MLP)** neural network evolved via Gaussian Neuroevolution. Unlike traditional weighted-brain strategies, V7 evolves high-dimensional non-linear relationships between 11 market signals to determine the optimal leverage state.
 
-### ⚙️ Decision Engine
-- **Non-Linear Inference**: Captures complex market regimes that simple weighted sums might miss.
-- **Genetic Topology**: Eevolves the weights and biases of the hidden layers.
-- **Indicator Ablation**: Supports evolutionary pruning of input signals directly from the neural network's input vector.
-- **Institutional Guardrails**: Includes evolved "Decision Thresholds" to control the activation sensitivity of the network.
+### 🔬 Decision Engine Anatomy
+1.  **Direct Feature Injection**: Consumes 13 raw technical indicators (SMA/EMA, RSI, MACD, etc.) + Macro context (VIX, Yield Curve).
+2.  **Neural MLP Architecture**: Uses a single-hidden-layer Multilayer Perceptron (MLP) with **ReLU activation** to model non-linear market relationships.
+3.  **Conviction Normalization**: Converts the hidden layer output into 4 absolute confidence values using a **Softmax** layer for **CASH, 1x, 2x, and 3x**.
+4.  **Argmax Selection**: The allocation with the highest daily probability is selected for execution.
+5.  **Indicator Ablation**: During evolution, the network can "turn off" specific indicator weights, allowing it to ignore market noise and focus only on high-alpha signals.
 
 ### 📈 Leverage States
 - **CASH / 1x / 2x / 3x** (Neural-scaled allocation)

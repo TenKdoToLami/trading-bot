@@ -3,11 +3,12 @@
 ## 🧠 Strategy Logic
 V6 Balancer is a **Dynamic Asset Allocation** engine. Unlike the SPY-focused logic of previous versions, the Balancer manages a diversified portfolio (e.g., SPY, QQQ, TLT) and dynamically rebalances between them based on volatility-weighted risk parity and momentum signals.
 
-### ⚙️ Decision Engine
-- **Volatility Weighting**: Automatically scales asset weights based on their relative risk contribution.
-- **Momentum Overlay**: Enhances risk parity with trend-following filters to avoid "catching falling knives."
-- **Genetic Rebalancing**: Evolved lookback periods for calculating volatility and momentum.
-- **Institutional Guardrails**: Includes evolved friction modeling to optimize rebalancing frequency.
+### 🔬 Decision Engine Anatomy
+1.  **Portfolio Ingestion**: Monitors price and volatility data across multiple asset classes (Equity, Bonds, Cash).
+2.  **Volatility Weighting**: Calculates the relative risk contribution of each asset using evolved lookback periods.
+3.  **Softmax Allocation**: Applies a **Softmax normalization** across raw scores to determine the target capital distribution.
+4.  **Momentum Filter**: Overlays a trend-following logic that can prune or down-weight assets exhibiting negative macro-momentum.
+5.  **Rebalance Optimization**: Only executes a trade if the suggested weight change exceeds the evolved efficiency threshold, minimizing transaction costs.
 
 ### 📈 Leverage States
 - **Multi-Asset Allocation** (Dynamic weights across the portfolio)

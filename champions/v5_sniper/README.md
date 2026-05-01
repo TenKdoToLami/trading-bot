@@ -3,11 +3,13 @@
 ## 🧠 Strategy Logic
 V5 Sniper is a **Precision Mean-Reversion** engine. Unlike the trend-following logic of V1-V3, the Sniper focuses on identifying overextended market conditions using RSI, ADX, and Realized Volatility to "Snipe" entries and exits with high accuracy.
 
-### ⚙️ Decision Engine
-- **RSI Snapback**: Evolved thresholds for deep-value entry during bull regimes.
-- **Vol-Adaptive Exit**: Dynamically tightens exit criteria as realized volatility spikes.
-- **Genetic Lookbacks**: All indicator lookbacks are evolved to match the specific "Sniper" frequency.
-- **Ablation Mode**: Supports evolutionary pruning of weak signals for better generalization.
+### 🔬 Decision Engine Anatomy
+1.  **Overextension Ingestion**: Specifically monitors RSI, ADX, and Realized Volatility to detect "stretched" price action.
+2.  **Regime Detection**: Evaluates the broad market trend to determine if a "Mean Reversion" setup is valid or if it's a "Falling Knife" situation.
+3.  **Conviction Thresholds**:
+    *   **RSI Snapback**: If RSI crosses its evolved deep-value threshold, triggers a tiered entry.
+    *   **Vol-Scaling**: Dynamically adjusts position sizing (1x to 3x) based on the current volatility-to-return ratio.
+4.  **Adaptive Exits**: As volatility spikes, the strategy automatically tightens its profit-taking and stop-loss boundaries to protect alpha.
 
 ### 📈 Leverage States
 - **CASH / 1x / 2x / 3x** (Precision-scaled exposure)

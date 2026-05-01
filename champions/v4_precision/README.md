@@ -3,11 +3,14 @@
 ## 🧠 Strategy Logic
 V4 Precision is the most advanced "Weighted Brain" engine in the fleet. It uses a **Dual-Brain Architecture** (Panic vs Bull) to determine transitions between CASH, SPY (Neutral), and 3xSPY (Bullish). 
 
-### ⚙️ Decision Engine
-- **Genetic Lookbacks**: Unlike V1-V2, every indicator lookback (SMA, RSI, MACD, etc.) is evolved as a distinct gene.
-- **Dynamic Weighting**: Scores indicators across 11 market signals to build a high-fidelity "Confidence Score".
-- **Indicator Ablation**: Supports evolutionary pruning of weak indicators to prevent overfitting.
-- **Institutional Guardrails**: Includes evolved "Lockout" periods to prevent over-trading.
+### 🔬 Decision Engine Anatomy
+1.  **Genetic Feature Lookbacks**: Unlike V1-V2, every indicator lookback (SMA, RSI, MACD, etc.) is an evolved gene, allowing the AI to "tune" its temporal resolution for each signal.
+2.  **Dual-Brain Scoring**: Calculates a **Panic Score** and a **Bull Score** using a high-dimensional weight matrix.
+3.  **Conviction Gating**:
+    *   **Panic State**: Triggered if Panic Score > Threshold. Force-exits to **CASH**.
+    *   **Bull State**: Triggered if Bull Score > Threshold. Scales to **3x SPY**.
+    *   **Neutral State**: Default behavior. Holds **1x SPY** (unleveraged index).
+4.  **Temporal Lockout**: Implements an evolved `lock_days` parameter to stabilize the regime and prevent high-frequency rebalancing costs.
 
 ### 📈 Leverage States
 - **CASH / 1x / 3x** (Regime-based switching)

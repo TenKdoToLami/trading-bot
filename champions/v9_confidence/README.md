@@ -3,16 +3,18 @@
 ## 🧠 Strategy Logic
 V9 Confidence Spread is the **Stability-First** evolution of the V7 neural engine. It solves the "trade slippage" problem by implementing a discrete confidence-based decision engine with built-in hysteresis and signal smoothing.
 
-### ⚙️ Decision Engine
-- **Confidence Scores**: The neural network outputs 4 discrete scores mapping to **CASH, 1x, 2x, and 3x**.
-- **Signal Smoothing**: Applies a low-pass filter (Exponential Moving Average) to the confidence scores before a decision is made. This filters out daily market noise.
-- **Hysteresis (Stickiness)**: To switch from state A to state B, the confidence in B must exceed the confidence in A by a set `hysteresis` margin (e.g., 0.15).
-- **Minimum Hold**: Enforces a minimum holding period after every switch to prevent high-frequency rebalancing.
+### 🔬 Decision Engine Anatomy
+1.  **Feature Ingestion**: Ingests 13 normalized technical indicators (SMA/EMA Distances, RSI, MACD, ADX, TRIX, Slope, Volatility, ATR) + Macro context (VIX, Yield Curve).
+2.  **Neural Inference**: A Multilayer Perceptron (MLP) performs a weighted forward pass to calculate "conviction energy" for 4 discrete regimes.
+3.  **Softmax Normalization**: Raw neural outputs are converted into probabilities (0.0 to 1.0) that sum to unity.
+4.  **Temporal Smoothing**: Probabilities are processed through an Exponential Moving Average (EMA) window to filter high-frequency market noise.
+5.  **Hysteresis Gating**: To prevent "flip-flopping," a transition to a new regime only occurs if its smoothed probability exceeds the current regime by the `hysteresis` threshold (e.g., +0.15).
+6.  **Allocation Selection**: The regime with the highest gated probability (Argmax) is selected for the next trading day.
 
 ### 📈 Leverage States
-- **CASH (0x)**: Defensive posture.
+- **CASH (0x)**: Defensive posture / Panic mitigation.
 - **SPY (1x)**: Standard market exposure.
-- **2xSPY**: Bullish momentum.
+- **2xSPY**: Bullish momentum / Trend following.
 - **3xSPY**: High-conviction aggressive scaling.
 
 ---

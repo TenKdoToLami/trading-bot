@@ -3,10 +3,14 @@
 ## 🧠 Strategy Logic
 V7 Deep Binary is the **Defensive MLP** engine. It uses a Multi-Layer Perceptron to make a binary decision between **3x Leverage** and **CASH**. By stripping away the intermediate states, it focuses entirely on high-conviction regime switches.
 
-### ⚙️ Decision Engine
-- **Binary Softmax**: The neural network's final layer is mapped to a binary decision vector (Aggressive vs. Defensive).
-- **Regime Filtering**: Specialized for identifying macro-economic "Breaking Points" using the same 13-signal input vector as V7 Standard.
-- **Genetic Topology**: Evolves the weights and biases specifically for binary classification of market trends.
+### 🔬 Decision Engine Anatomy
+1.  **Binary Input Vector**: Consumes 13 normalized technical indicators + Macro VIX/Yield Curve.
+2.  **Neural MLP Architecture**: Uses a single-hidden-layer MLP with ReLU activation, specifically evolved for **Binary Classification**.
+3.  **Binary Softmax Mapping**: The output layer generates two probabilities:
+    *   **Node 0**: Probability of Defensive Regime (**CASH**).
+    *   **Node 1**: Probability of Aggressive Regime (**3x SPY**).
+4.  **Argmax Selection**: The highest-probability state is selected daily, creating a "Switch" behavior with no intermediate 1x/2x states.
+5.  **Ablation Pruning**: The model can genetically disable weak signals to maintain a sparse, robust logic tree.
 
 ### 📈 Leverage States
 - **CASH / 3xSPY** (Binary regime switching)
