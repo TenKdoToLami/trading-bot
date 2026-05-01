@@ -47,10 +47,11 @@ def _evaluate_genome_worker(genome):
     return fitness, genome, metrics
 
 class EvolutionEngineV9Confidence:
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.2, seed_vault=None, min_cagr=20.0):
+    def __init__(self, population_size=50, generations=20, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=20.0):
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
+        self.use_ablation = use_ablation
         self.min_cagr = min_cagr
         self.lb_bounds = {
             'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30),
@@ -127,6 +128,13 @@ class EvolutionEngineV9Confidence:
             if random.random() < self.mutation_rate:
                 w += np.random.normal(0, 0.05, w.shape)
                 b += np.random.normal(0, 0.02, b.shape)
+            
+            # Ablation Logic: Structural Sparsity Pressure
+            if self.use_ablation and random.random() < 0.1:
+                # Randomly zero out one entire input feature connection set (Ablation)
+                input_idx = random.randint(0, w.shape[0] - 1)
+                w[input_idx, :] = 0.0
+                
             layer['w'] = w.tolist()
             layer['b'] = b.tolist()
 
@@ -147,7 +155,7 @@ class EvolutionEngineV9Confidence:
 
     def run(self):
         max_workers = max(1, os.cpu_count() - 2)
-        print(f"Starting Evolution V9 Confidence: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}")
+        print(f"Starting Evolution V9 Confidence: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, ablation {'ON' if self.use_ablation else 'OFF'}")
         
         vault_dir = "champions/v9_confidence/vault"
         os.makedirs(vault_dir, exist_ok=True)

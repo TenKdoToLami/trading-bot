@@ -26,10 +26,10 @@ python tests/vault_sweep.py --vault champions/v9_confidence/vault --promote --to
 ### 🧬 Evolution
 ```bash
 # Standard Evolution (Optimized for Hysteresis)
-python tests/run_evolution_v9_confidence.py --pop 100 --gen 50 --min-cagr 30.0
+python tests/run_evolution_v9_confidence.py --pop 100 --gen 50 --min-cagr 30.0 --ablation
 
 # Seeded Evolution (Refine from V7 or existing V9 vault)
-python tests/run_evolution_v9_confidence.py --pop 200 --gen 30 --seed champions/v9_confidence/vault
+python tests/run_evolution_v9_confidence.py --pop 200 --gen 30 --seed champions/v9_confidence/vault --ablation
 ```
 
 ### 📊 Audit & Behavioral Analysis
@@ -47,4 +47,5 @@ python tests/performance_audit.py champions/v9_confidence/genome.json
 | `--gen` | 50 | Number of generations. |
 | `--mut` | 0.20 | Mutation rate. |
 | `--seed`| `None` | Path to seed vault for transfer learning. |
+| `--ablation` | `Off` | Enable **Neural Ablation** (Network learns to ignore weak inputs). |
 | `--min-cagr` | `25.0` | Minimum CAGR threshold for saving to vault. |
