@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
-  Legend, AreaChart, Area, BarChart, Bar, Cell, ReferenceArea
+  Legend, AreaChart, Area, BarChart, Bar, Cell, ReferenceArea, ComposedChart
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -125,6 +125,9 @@ const CustomChartTooltip = ({ active, payload, label }) => {
     const formatValue = (v) => {
       if (isLeverage) return `${v.toFixed(1)}x`;
       if (isPercentage) return `${v.toFixed(1)}%`;
+      if (payload.some(p => p.name.toLowerCase().includes('score') || p.name.toLowerCase().includes('thresh'))) {
+         return v.toFixed(3);
+      }
       if (payload.some(p => p.name.includes('Bullish') || p.name.includes('Panic') || p.name.includes('Neutral'))) {
          return `${(v * 100).toFixed(1)}%`;
       }
@@ -463,6 +466,77 @@ const IndicatorWeightProfile = ({ indicators }) => {
         );
       })}
     </div>
+  );
+};
+
+const NeuralIntelligenceChart = ({ telemetry }) => {
+  if (!telemetry?.signal_trace) return null;
+  
+  return (
+    <section className="glass rounded-3xl p-8 mb-8 border border-white/5">
+      <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+        <div className="flex items-center gap-3">
+          <Activity className="text-accent w-5 h-5" />
+          <span>Neural Intelligence Blueprint</span>
+        </div>
+        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Real-Time Decision Logic Audit</span>
+      </h3>
+      <div className="h-[500px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={telemetry.signal_trace} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+             <defs>
+               <linearGradient id="bullGrad" x1="0" y1="0" x2="0" y2="1">
+                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+               </linearGradient>
+               <linearGradient id="panicGrad" x1="0" y1="0" x2="0" y2="1">
+                 <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
+                 <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+               </linearGradient>
+               <linearGradient id="neutralGrad" x1="0" y1="0" x2="0" y2="1">
+                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                 <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+               </linearGradient>
+             </defs>
+             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+             <XAxis dataKey="date" hide padding={{ left: 0, right: 0 }} />
+             <YAxis 
+                tick={{ fill: '#475569', fontSize: 10 }} 
+                axisLine={false} 
+                tickLine={false} 
+                domain={[dataMin => dataMin * 0.9, dataMax => dataMax * 1.1]} 
+                tickFormatter={v => Math.round(v)}
+             />
+             <RechartsTooltip content={<CustomChartTooltip />} />
+             <Legend verticalAlign="top" height={40} iconType="circle" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '1px' }} />
+             
+             {/* Bull Brain */}
+             {telemetry.signal_trace[0]?.b_score !== undefined && (
+               <>
+                 <Area type="monotone" name="Bull Score" dataKey="b_score" stroke="#10b981" strokeWidth={2} fill="url(#bullGrad)" isAnimationActive={false} />
+                 <Line type="step" name="Bull Thresh" dataKey="b_thresh" stroke="#10b981" dot={false} strokeWidth={1} strokeDasharray="4 4" opacity={0.6} isAnimationActive={false} />
+               </>
+             )}
+             
+             {/* Panic Brain */}
+             {telemetry.signal_trace[0]?.p_score !== undefined && (
+               <>
+                 <Area type="monotone" name="Panic Score" dataKey="p_score" stroke="#ef4444" strokeWidth={2} fill="url(#panicGrad)" isAnimationActive={false} />
+                 <Line type="step" name="Panic Thresh" dataKey="p_thresh" stroke="#ef4444" dot={false} strokeWidth={1} strokeDasharray="4 4" opacity={0.6} isAnimationActive={false} />
+               </>
+             )}
+
+             {/* Neutral Brain */}
+             {telemetry.signal_trace[0]?.s1_score !== undefined && (
+               <>
+                 <Area type="monotone" name="Neutral Score" dataKey="s1_score" stroke="#3b82f6" strokeWidth={2} fill="url(#neutralGrad)" isAnimationActive={false} />
+                 <Line type="step" name="Neutral Thresh" dataKey="s1_thresh" stroke="#3b82f6" dot={false} strokeWidth={1} strokeDasharray="4 4" opacity={0.6} isAnimationActive={false} />
+               </>
+             )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
   );
 };
 
@@ -1239,6 +1313,11 @@ export default function App() {
                 {/* Volatility Regime Matrix (V1/V2 Legacy) */}
                 {inspectionStrategy.telemetry?.regime_matrix && (
                   <RegimeMatrix matrix={inspectionStrategy.telemetry.regime_matrix} />
+                )}
+
+                {/* Neural Intelligence Chart */}
+                {inspectionStrategy.telemetry?.signal_trace && (
+                  <NeuralIntelligenceChart telemetry={inspectionStrategy.telemetry} />
                 )}
 
                 {/* Neural Decision Matrix */}
