@@ -152,7 +152,9 @@ class GenomeV3Strategy(BaseStrategy):
             "conf_2x": 0.0,
             "conf_3x": float(e_b / denom),
             "score_panic": float(score_panic),
-            "score_bull": float(score_bull)
+            "score_bull": float(score_bull),
+            "threshold_panic": float(self.genome['panic']['t']),
+            "threshold_bull": float(self.genome['bull']['t'])
         }
 
         # Calculate Feature Importance for "Decision Engine Anatomy"
@@ -173,7 +175,8 @@ class GenomeV3Strategy(BaseStrategy):
                 lookback = self.genome['bull']['lookbacks'].get(lb_key, 0)
             
             importance[ind] = {
-                "weight": (w_p + w_b) / 2.0,
+                "panic": float(w_p),
+                "bull": float(w_b),
                 "period": int(round(lookback)) if isinstance(lookback, (int, float)) else 0
             }
         telemetry["importance"] = importance

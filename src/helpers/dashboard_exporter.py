@@ -86,12 +86,26 @@ def export_to_dashboard(report_data, output_path="visualizer/public/data.json"):
                 strategy['telemetry']['monthly_avg'] = [
                     {
                         "month": k,
-                        "conf_3x": float(np.mean(v["3x"])),
-                        "conf_2x": float(np.mean(v["2x"])),
-                        "conf_1x": float(np.mean(v["1x"])),
-                        "conf_cash": float(np.mean(v["Cash"]))
+                        "conf_3x": float(np.nan_to_num(np.mean(v["3x"]))) if v["3x"] else 0.0,
+                        "conf_2x": float(np.nan_to_num(np.mean(v["2x"]))) if v["2x"] else 0.0,
+                        "conf_1x": float(np.nan_to_num(np.mean(v["1x"]))) if v["1x"] else 0.0,
+                        "conf_cash": float(np.nan_to_num(np.mean(v["Cash"]))) if v["Cash"] else 0.0
                     } for k, v in sorted(conf_monthly.items())
                 ]
+
+                # Signal Trace for Precision strategies (subsampled 5-day)
+                if 'score_panic' in tel:
+                    trace = []
+                    step = 5
+                    for i in range(0, len(dates), step):
+                        trace.append({
+                            "date": dates[i],
+                            "p_score": float(tel['score_panic'][i]),
+                            "p_thresh": float(tel.get('threshold_panic', [0]*len(dates))[i]),
+                            "b_score": float(tel['score_bull'][i]),
+                            "b_thresh": float(tel.get('threshold_bull', [0]*len(dates))[i])
+                        })
+                    strategy['telemetry']['signal_trace'] = trace
 
             # Calculate rolling 1yr volatility (252 days)
             daily_rets = np.diff(equities) / equities[:-1]

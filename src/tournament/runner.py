@@ -486,6 +486,13 @@ class TournamentRunner:
                 if 'lock_days' in genome: report_params["Lock Days"] = f"{genome['lock_days']:.1f}"
                 report_params["Genome Version"] = genome.get('version', 'N/A')
                 
+                # Intelligent lookback extraction (Root -> Bull Brain -> Panic Brain)
+                lb = genome.get('lookbacks', {})
+                if not lb and 'bull' in genome: lb = genome['bull'].get('lookbacks', {})
+                if not lb and 'panic' in genome: lb = genome['panic'].get('lookbacks', {})
+                if not lb and 'brains' in genome: # V6 Support
+                    lb = genome['brains'].get('3x', {}).get('lookbacks', {})
+                
                 lb_map = {
                     "sma": "Simple Moving Average", "ema": "Exponential Moving Average",
                     "rsi": "Relative Strength Index", "macd_f": "MACD Fast Period",
@@ -508,15 +515,22 @@ class TournamentRunner:
                         for k, v in tel_imp.items():
                             if isinstance(v, dict):
                                 weight = v.get('weight', 0)
+                                panic_w = v.get('panic')
+                                bull_w = v.get('bull')
                                 period = v.get('period', 0)
                             else:
                                 weight = v
+                                panic_w = None
+                                bull_w = None
                                 # Try to find period in genome lookbacks
                                 lb_key = 'macd_f' if k.lower() == 'macd' else k.lower()
                                 period = lb.get(lb_key, 0)
                             
                             label = f"{k.upper()} ({int(round(period))}d)" if period else k.upper()
-                            indicators.append({"name": label, "priority": float(weight)})
+                            ind_obj = {"name": label, "priority": float(weight)}
+                            if panic_w is not None: ind_obj["panic_priority"] = float(panic_w)
+                            if bull_w is not None: ind_obj["bull_priority"] = float(bull_w)
+                            indicators.append(ind_obj)
                 
                 # Fallback for older Neural versions (V7/V9) without importance in telemetry
                 elif 'layers' in genome:

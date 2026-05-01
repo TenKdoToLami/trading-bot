@@ -104,8 +104,8 @@ const getRegimeColor = (name) => {
   const upper = name.toUpperCase();
   if (upper.includes('3X')) return REGIME_COLORS['3x'];
   if (upper.includes('2X')) return REGIME_COLORS['2x'];
-  if (upper.includes('SPY')) return REGIME_COLORS['1x'];
-  if (upper.includes('CASH')) return REGIME_COLORS.CASH;
+  if (upper.includes('1X') || upper.includes('NEUTRAL') || upper.includes('SPY')) return REGIME_COLORS['1x'];
+  if (upper.includes('CASH') || upper.includes('PANIC')) return REGIME_COLORS.CASH;
   return REGIME_COLORS.DEFAULT;
 };
 
@@ -728,7 +728,12 @@ export default function App() {
                           "Average True Range": { what: "True Volatility Range", for: "Setting stop-losses or vol-adjusted leverage.", how: "Average of (High-Low) including price gaps.", common: "14 days" },
                           "Money Flow Index": { what: "Volume-Weighted RSI", for: "Confirming trends using actual dollar-flow.", how: "RSI logic applied to Typical Price * Volume.", common: "14 days" },
                           "Bollinger Bands Period": { what: "Statistical Channel Window", for: "Identifying extreme price extensions/reversals.", how: "Standard deviation bands around a SMA.", common: "20 days" }
-                        }[key] || { what: "Strategy Parameter", for: "Custom structural logic", how: "Genome-defined logic", common: "N/A" };
+                        }[key] || { 
+                          what: "Tactical Parameter", 
+                          for: "Specific strategy decision logic.", 
+                          how: "Genome-defined hyperparameter.", 
+                          common: "Varies by strategy version" 
+                        };
 
                         return (
                           <div 
@@ -752,20 +757,24 @@ export default function App() {
                   )}
 
                   {inspectionStrategy.indicators && inspectionStrategy.indicators.length > 0 ? (
-                    <div className="h-96">
+                    <div className="h-[500px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
                           layout="vertical" 
-                          data={[...inspectionStrategy.indicators].sort((a,b) => b.priority - a.priority)}
-                          margin={{ left: 40, right: 40 }}
+                          data={[...inspectionStrategy.indicators].sort((a,b) => {
+                            const maxA = Math.max(a.priority || 0, a.panic_priority || 0, a.bull_priority || 0);
+                            const maxB = Math.max(b.priority || 0, b.panic_priority || 0, b.bull_priority || 0);
+                            return maxB - maxA;
+                          })}
+                          margin={{ left: 100, right: 40, top: 20, bottom: 20 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
                           <XAxis type="number" hide />
                           <YAxis 
                             dataKey="name" 
                             type="category" 
-                            width={100} 
-                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} 
+                            width={120} 
+                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} 
                             axisLine={false}
                             tickLine={false}
                           />
@@ -773,25 +782,55 @@ export default function App() {
                             cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                             content={({ active, payload }) => {
                               if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                const isDual = data.panic_priority !== undefined;
                                 return (
-                                  <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-1">{payload[0].payload.name}</p>
-                                    <p className="text-xs font-mono text-white">Sensitivity: <span className="text-emerald-400">{payload[0].value.toFixed(3)}</span></p>
+                                  <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-3xl backdrop-blur-xl">
+                                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-3 border-b border-white/10 pb-2">{data.name}</p>
+                                    <div className="flex flex-col gap-2">
+                                      {isDual ? (
+                                        <>
+                                          <div className="flex justify-between gap-8 items-center">
+                                            <span className="text-[10px] text-rose-400 font-bold uppercase">Panic Weight</span>
+                                            <span className="text-xs font-mono text-white">{data.panic_priority.toFixed(3)}</span>
+                                          </div>
+                                          <div className="flex justify-between gap-8 items-center">
+                                            <span className="text-[10px] text-emerald-400 font-bold uppercase">Bull Weight</span>
+                                            <span className="text-xs font-mono text-white">{data.bull_priority.toFixed(3)}</span>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="flex justify-between gap-8 items-center">
+                                          <span className="text-[10px] text-accent font-bold uppercase">Sensitivity</span>
+                                          <span className="text-xs font-mono text-white">{data.priority.toFixed(3)}</span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               }
                               return null;
                             }}
                           />
-                          <Bar 
-                            dataKey="priority" 
-                            radius={[0, 4, 4, 0]}
-                            fill="rgba(99, 102, 241, 0.8)"
-                          >
-                            {inspectionStrategy.indicators?.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} />
-                            ))}
-                          </Bar>
+                          <Legend verticalAlign="top" height={36}/>
+                          {inspectionStrategy.indicators[0]?.panic_priority !== undefined ? (
+                            <>
+                              <Bar dataKey="panic_priority" name="Panic DNA" fill="rgba(239, 68, 68, 0.6)" radius={[0, 4, 4, 0]} barSize={12} />
+                              <Bar dataKey="bull_priority" name="Bull DNA" fill="rgba(16, 185, 129, 0.6)" radius={[0, 4, 4, 0]} barSize={12} />
+                            </>
+                          ) : (
+                            <Bar 
+                              dataKey="priority" 
+                              name="Indicator Sensitivity"
+                              radius={[0, 4, 4, 0]}
+                              fill="rgba(99, 102, 241, 0.8)"
+                              barSize={20}
+                            >
+                              {inspectionStrategy.indicators?.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} />
+                              ))}
+                            </Bar>
+                          )}
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -802,12 +841,13 @@ export default function App() {
                   )}
                 </section>
 
-                <section className="glass rounded-3xl p-8">
-                  <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
-                    <span>Neural Regime Mix (Monthly Aggregated)</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Smoothed Decision Environment</span>
-                  </h3>
-                  {inspectionStrategy.telemetry && inspectionStrategy.telemetry.monthly_avg ? (
+                {/* Only show Regime Mix for strategies without high-fidelity signal traces */}
+                {inspectionStrategy.telemetry && inspectionStrategy.telemetry.monthly_avg && !inspectionStrategy.telemetry.signal_trace && (
+                  <section className="glass rounded-3xl p-8">
+                    <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                      <span>Neural Regime Mix (Monthly Aggregated)</span>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Smoothed Decision Environment</span>
+                    </h3>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
@@ -832,12 +872,68 @@ export default function App() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  ) : (
-                    <div className="h-48 flex items-center justify-center border-2 border-dashed border-white/5 rounded-2xl">
-                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Confidence telemetry only available for neural strategies</p>
+                  </section>
+                )}
+
+                {inspectionStrategy.telemetry?.signal_trace && (
+                  <section className="glass rounded-3xl p-8">
+                    <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
+                      <span>Strategic Brain Signals (Raw Diagnostics)</span>
+                      <span className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Conviction Threshold Audit</span>
+                    </h3>
+                    <div className="h-[600px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={inspectionStrategy.telemetry.signal_trace} margin={{ left: 20, right: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="date" hide />
+                          <YAxis 
+                            tick={{ fill: '#64748b', fontSize: 10 }} 
+                            domain={['dataMin - 2', 'dataMax + 2']} 
+                            tickCount={5}
+                            tickFormatter={(v) => v.toFixed(1)}
+                          />
+                          <RechartsTooltip 
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-3xl backdrop-blur-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">{label}</p>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between gap-8 items-center">
+                                        <span className="text-[10px] text-rose-400 font-bold uppercase">Panic Score</span>
+                                        <span className="text-xs font-mono text-white">{payload[0].value.toFixed(3)}</span>
+                                      </div>
+                                      <div className="flex justify-between gap-8 items-center">
+                                        <span className="text-[10px] text-emerald-400 font-bold uppercase">Bull Score</span>
+                                        <span className="text-xs font-mono text-white">{payload[2].value.toFixed(3)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Legend verticalAlign="top" height={36} iconType="plainline" />
+                          <Line type="monotone" dataKey="p_score" name="Panic Score" stroke="#ef4444" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="p_thresh" name="Panic Threshold" stroke="#ef4444" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                          <Line type="monotone" dataKey="b_score" name="Bull Score" stroke="#10b981" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="b_thresh" name="Bull Threshold" stroke="#10b981" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
-                  )}
-                </section>
+                    <div className="mt-4 flex gap-4 justify-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-0.5 bg-rose-500"></div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Above Dashed Red = CASH</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-0.5 bg-emerald-500"></div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Above Dashed Green = 3x SPY</span>
+                      </div>
+                    </div>
+                  </section>
+                )}
 
                 <section className="glass rounded-3xl p-8">
                   <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
