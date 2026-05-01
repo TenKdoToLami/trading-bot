@@ -24,6 +24,20 @@ def _init_worker(cache_file, min_cagr):
     print(f"  [Worker {os.getpid()}] V4-Precision Ready. Min CAGR: {min_cagr:.1f}%")
 
 def _evaluate_genome_worker(genome):
+    # ── STAGE 1: LITE SCREENING (Last ~4 years) ──
+    lite_window = 1000
+    lite_res = _execute_simulation(
+        strategy_type=GenomeV4Precision,
+        price_data_list=_worker_price_data[-lite_window:],
+        dates=_worker_dates[-lite_window:],
+        strategy_kwargs={'genome': genome}
+    )
+    
+    # Kill genomes that fail in the recent regime
+    if lite_res['metrics']['cagr'] <= 0:
+        return -500.0, genome, lite_res['metrics']
+
+    # ── STAGE 2: FULL AUDIT (30+ years) ──
     res = _execute_simulation(
         strategy_type=GenomeV4Precision,
         price_data_list=_worker_price_data,
@@ -54,9 +68,9 @@ class EvolutionEngineV4Precision:
         self.brains = ['panic', 'bull']
         
         self.lb_bounds = {
-            'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30),
-            'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50),
-            'vol': (5, 60), 'atr': (5, 50)
+            'sma': (10, 500), 'ema': (10, 300), 'rsi': (5, 100), 'macd_f': (5, 50),
+            'macd_s': (15, 120), 'adx': (5, 100), 'trix': (5, 100), 'slope': (5, 200),
+            'vol': (5, 252), 'atr': (5, 100)
         }
 
         print("Loading master data for Evolution V4 Precision...")
@@ -88,12 +102,12 @@ class EvolutionEngineV4Precision:
         genome = {}
         for b in self.brains:
             genome[b] = {
-                'w': {k: random.uniform(-4, 4) for k in self.indicators},
+                'w': {k: random.uniform(-10, 10) for k in self.indicators},
                 'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators},
-                't': random.uniform(-0.5, 2.0),
+                't': random.uniform(-50, 50),
                 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}
             }
-        genome['lock_days'] = random.uniform(0, 10)
+        genome['lock_days'] = random.uniform(0, 20)
         genome['version'] = 4.0
         return genome
 
@@ -114,16 +128,16 @@ class EvolutionEngineV4Precision:
         mutated = {}
         for b in self.brains:
             mutated[b] = {
-                'w': {k: (v + random.gauss(0, 0.8) if random.random() < self.mutation_rate else v) for k, v in genome[b]['w'].items()},
+                'w': {k: (v + random.gauss(0, 1.2) if random.random() < self.mutation_rate else v) for k, v in genome[b]['w'].items()},
                 'a': {k: (not v if random.random() < 0.05 else v) for k, v in genome[b]['a'].items()},
-                't': genome[b]['t'] + random.gauss(0, 0.8) if random.random() < self.mutation_rate else genome[b]['t'],
+                't': genome[b]['t'] + random.gauss(0, 1.2) if random.random() < self.mutation_rate else genome[b]['t'],
                 'lookbacks': {}
             }
             for k, v in genome[b]['lookbacks'].items():
                 mn, mx = self.lb_bounds[k]
                 new_v = v + int(random.gauss(0, (mx-mn)*0.15)) if random.random() < self.mutation_rate else v
                 mutated[b]['lookbacks'][k] = max(mn, min(mx, new_v))
-        mutated['lock_days'] = max(0, min(20, genome['lock_days'] + random.gauss(0, 2))) if random.random() < self.mutation_rate else genome['lock_days']
+        mutated['lock_days'] = max(0, min(40, genome['lock_days'] + random.gauss(0, 4))) if random.random() < self.mutation_rate else genome['lock_days']
         # Enforce MACD order
         for b in self.brains:
             if mutated[b]['lookbacks']['macd_s'] <= mutated[b]['lookbacks']['macd_f']:

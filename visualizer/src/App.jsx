@@ -1160,47 +1160,34 @@ export default function App() {
                   </h3>
                   <div className="h-96">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
-                        date: d,
-                        equity: inspectionStrategy.curve.equities[i],
-                        spy_equity: spyData?.curve.equities[i]
-                      }))}>
+                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => {
+                        const tel = inspectionStrategy.telemetry;
+                        const hist = inspectionStrategy.history;
+                        return {
+                          date: d,
+                          equity: inspectionStrategy.curve.equities[i],
+                          spy_equity: spyData?.curve.equities[i],
+                          // Probabilistic or Discrete Allocations
+                          alloc_3x:   tel?.conf_3x?.[i]   ?? (hist?.regime[i] === '3xSPY' ? 1 : 0),
+                          alloc_2x:   tel?.conf_2x?.[i]   ?? (hist?.regime[i] === '2xSPY' ? 1 : 0),
+                          alloc_1x:   tel?.conf_1x?.[i]   ?? (hist?.regime[i] === 'SPY'   ? 1 : 0),
+                          alloc_cash: tel?.conf_cash?.[i] ?? (hist?.regime[i] === 'CASH'  ? 1 : 0)
+                        };
+                      })}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
                         <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${((v - 1) * 100).toLocaleString()}%`} />
+                        <YAxis yAxisId="alloc" domain={[0, 1]} hide />
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         
-                        {/* Regime Highlights */}
-                        {(() => {
-                          const dates = inspectionStrategy.curve.dates;
-                          const regimes = inspectionStrategy.history?.regime;
-                          if (!dates || !regimes) return null;
-                          const spans = [];
-                          let currentStart = dates[0];
-                          let currentRegime = regimes[0];
-                          for (let i = 1; i < dates.length; i++) {
-                            if (regimes[i] !== currentRegime) {
-                              spans.push({ x1: currentStart, x2: dates[i], regime: currentRegime });
-                              currentStart = dates[i];
-                              currentRegime = regimes[i];
-                            }
-                          }
-                          spans.push({ x1: currentStart, x2: dates[dates.length - 1], regime: currentRegime });
-                          
-                          const colors = {
-                            '3xSPY': 'rgba(239, 68, 68, 0.35)',
-                            '2xSPY': 'rgba(16, 185, 129, 0.35)',
-                            'SPY': 'rgba(59, 130, 246, 0.35)',
-                            'CASH': 'rgba(71, 85, 105, 0.45)'
-                          };
-                          
-                          return spans.map((s, idx) => (
-                            <ReferenceArea key={idx} x1={s.x1} x2={s.x2} fill={colors[s.regime] || 'transparent'} stroke="none" />
-                          ));
-                        })()}
+                        {/* Stacked Regime Background (Stepped for Bar look) */}
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: CASH" dataKey="alloc_cash" stroke="none" fill="rgba(71, 85, 105, 0.35)" isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 1x"   dataKey="alloc_1x"   stroke="none" fill="rgba(59, 130, 246, 0.3)"  isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 2x"   dataKey="alloc_2x"   stroke="none" fill="rgba(16, 185, 129, 0.3)"  isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 3x"   dataKey="alloc_3x"   stroke="none" fill="rgba(239, 68, 68, 0.3)"  isAnimationActive={false} />
                         
-                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(inspectionStrategy.name)} fill={`${getRegimeColor(inspectionStrategy.name)}1A`} strokeWidth={3} />
-                        <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" />
+                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(inspectionStrategy.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
+                        <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
