@@ -19,8 +19,8 @@ V9 Confidence Spread is the **Stability-First** evolution of the V7 neural engin
 
 ## 🚀 Execution Commands
 ```bash
-```
 python tests/vault_sweep.py --vault champions/v9_confidence/vault --promote --top 20
+```
 
 
 ### 🧬 Evolution

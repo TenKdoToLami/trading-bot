@@ -74,12 +74,29 @@ const COLORS = [
 ];
 
 const REGIME_COLORS = {
-  '3x': '#ef4444', // Red
-  '2x': '#10b981', // Green
-  '1x': '#3b82f6', // Blue
-  'SPY': '#3b82f6', // Default SPY is 1x
-  'CASH': '#475569', // Grey
-  'DEFAULT': '#6366f1' // Indigo Accent
+  '3x': '#00e676', // Emerald Green
+  '2x': '#ffcc00', // Gold/Amber
+  '1x': '#3b82f6', // Bright Blue
+  'SPY': '#3b82f6',
+  'CASH': '#ff4d4d', // Rose Red
+  'DEFAULT': '#6366f1'
+};
+
+const ArchitectureBanner = ({ version }) => {
+  const meta = {
+    '9': { name: 'Deep Hysteresis', color: '#8884d8', desc: 'Neural Confidence with Decision Buffering' },
+    '7': { name: 'Deep MLP', color: '#82ca9d', desc: 'Multilayer Perceptron Neural Engine' },
+    '6': { name: 'Balancer', color: '#ffc658', desc: 'Multi-Brain Portfolio Optimization' },
+    '4': { name: 'AI Precision', color: '#ff8042', desc: 'Dual-Brain Conviction Logic (3-State)' },
+    '3': { name: 'Precision Binary', color: '#0088fe', desc: 'Dual-Brain Binary Decision Engine' }
+  };
+  const m = meta[Math.floor(parseFloat(version))?.toString()] || { name: 'Standard Strategy', color: '#ccc', desc: 'Rule-based or Hybrid Logic' };
+  return (
+    <div style={{ padding: '8px 16px', borderRadius: '8px', borderLeft: `4px solid ${m.color}`, background: 'rgba(255,255,255,0.03)', marginBottom: '20px' }}>
+      <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Architecture: {m.name}</div>
+      <div style={{ fontSize: '0.7rem', opacity: 0.4 }}>{m.desc} (v{version})</div>
+    </div>
+  );
 };
 
 const getRegimeColor = (name) => {
@@ -90,6 +107,10 @@ const getRegimeColor = (name) => {
   if (upper.includes('SPY')) return REGIME_COLORS['1x'];
   if (upper.includes('CASH')) return REGIME_COLORS.CASH;
   return REGIME_COLORS.DEFAULT;
+};
+
+const getInspectionVersion = (strat) => {
+  return parseFloat(strat?.parameters?.["Genome Version"] || strat?.parameters?.["version"] || 0);
 };
 
 const CustomChartTooltip = ({ active, payload, label }) => {
@@ -103,7 +124,10 @@ const CustomChartTooltip = ({ active, payload, label }) => {
     const formatValue = (v) => {
       if (isLeverage) return `${v.toFixed(1)}x`;
       if (isPercentage) return `${v.toFixed(1)}%`;
-      return `${((v - 1) * 100).toLocaleString()}%`; // Default to Log/Growth %
+      if (payload.some(p => p.name.includes('Bullish') || p.name.includes('Panic') || p.name.includes('Neutral'))) {
+         return `${(v * 100).toFixed(1)}%`;
+      }
+      return `${((v - 1) * 100).toLocaleString()}%`; // Growth Curve logic
     };
 
     return (
@@ -268,6 +292,37 @@ export default function App() {
                   </div>
                 </div>
               </header>
+
+              <ArchitectureBanner version={getInspectionVersion(inspectionStrategy)} />
+
+              {/* Version-Specific Conviction Fight (V3/V4) */}
+              {getInspectionVersion(inspectionStrategy) >= 3 && getInspectionVersion(inspectionStrategy) < 5 && inspectionStrategy.telemetry?.monthly_avg && (
+                <div className="card mb-6 bg-slate-900/50 border-accent/20">
+                  <div className="flex items-center justify-between p-4 border-b border-white/5">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400"> Conviction Fight: Panic vs Bull</h3>
+                  </div>
+                  <div className="p-6 grid grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                       <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                          <span>Panic Brain Conviction</span>
+                          <span className="text-red-400">{(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100).toFixed(1)}%</span>
+                       </div>
+                       <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100)}%` }}></div>
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                          <span>Bull Brain Conviction</span>
+                          <span className="text-emerald-400">{(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100).toFixed(1)}%</span>
+                       </div>
+                       <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100)}%` }}></div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-4">
                  <RiskGaugeCard 
@@ -658,96 +713,21 @@ export default function App() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                       {Object.entries(inspectionStrategy.parameters).map(([key, val]) => {
                         const info = {
-                          "Hysteresis": {
-                            what: "Decision Buffer",
-                            for: "Prevents 'flip-flopping' on noisy signals.",
-                            how: "Diff required between state probabilities.",
-                            common: "0.10 - 0.25"
-                          },
-                          "Smoothing": {
-                            what: "Confidence Filter",
-                            for: "Smoothing high-frequency neural jitters.",
-                            how: "Exp. Moving Average of Softmax outputs.",
-                            common: "0.15 - 0.40"
-                          },
-                          "Lock Days": {
-                            what: "Minimum Holding Period",
-                            for: "Enforcing patience and reducing friction.",
-                            how: "Integer counter blocking state changes.",
-                            common: "1 - 5 days"
-                          },
-                          "Simple Moving Average": {
-                            what: "Arithmetic Price Average",
-                            for: "Identifying primary long-term trend direction.",
-                            how: "Sum of prices over N days divided by N.",
-                            common: "50, 100, 200 days"
-                          },
-                          "Exponential Moving Average": {
-                            what: "Weight-Decaying Average",
-                            for: "Capturing trend changes faster than a standard SMA.",
-                            how: "N-day decay giving more weight to recent price.",
-                            common: "10, 20, 50 days"
-                          },
-                          "Relative Strength Index": {
-                            what: "Momentum Oscillator",
-                            for: "Spotting over-extended 'Panic' or 'Euphoia' states.",
-                            how: "Ratio of average gains to average losses.",
-                            common: "14 (Standard), 30+ (Macro)"
-                          },
-                          "MACD Fast Period": {
-                            what: "Momentum Velocity",
-                            for: "Detecting changes in trend strength and direction.",
-                            how: "Short-window EMA for the MACD line calculation.",
-                            common: "12 days (Standard)"
-                          },
-                          "MACD Slow Period": {
-                            what: "Trend Baseline",
-                            for: "Providing a baseline for the momentum signal.",
-                            how: "Long-window EMA used in the MACD difference.",
-                            common: "26 days (Standard)"
-                          },
-                          "Average Directional Index": {
-                            what: "Trend Intensity Metric",
-                            for: "Determining if market is trending or sideways.",
-                            how: "Derived from expansion of price range over period.",
-                            common: "14 - 25 days"
-                          },
-                          "Triple Exponential Average": {
-                            what: "Triple-Smoothed Momentum",
-                            for: "Detecting trend changes while ignoring market noise.",
-                            how: "Triple EMA of the logarithmic price.",
-                            common: "15 - 30 days"
-                          },
-                          "LR Slope Period": {
-                            what: "Trend Velocity Measure",
-                            for: "Quantifying how fast the price is moving.",
-                            how: "Slope of the best-fit linear regression line.",
-                            common: "10 - 30 days"
-                          },
-                          "Realized Volatility": {
-                            what: "Historical Risk Measure",
-                            for: "Scaling position size or switching to safety.",
-                            how: "Standard deviation of log-returns over window.",
-                            common: "20, 60, 252 days"
-                          },
-                          "Average True Range": {
-                            what: "True Volatility Range",
-                            for: "Setting stop-losses or vol-adjusted leverage.",
-                            how: "Average of (High-Low) including price gaps.",
-                            common: "14 days"
-                          },
-                          "Money Flow Index": {
-                            what: "Volume-Weighted RSI",
-                            for: "Confirming trends using actual dollar-flow.",
-                            how: "RSI logic applied to Typical Price * Volume.",
-                            common: "14 days"
-                          },
-                          "Bollinger Bands Period": {
-                            what: "Statistical Channel Window",
-                            for: "Identifying extreme price extensions/reversals.",
-                            how: "Standard deviation bands around a SMA.",
-                            common: "20 days"
-                          }
+                          "Hysteresis": { what: "Decision Buffer", for: "Prevents 'flip-flopping' on noisy signals.", how: "Diff required between state probabilities.", common: "0.10 - 0.25" },
+                          "Smoothing": { what: "Confidence Filter", for: "Smoothing high-frequency neural jitters.", how: "Exp. Moving Average of Softmax outputs.", common: "0.15 - 0.40" },
+                          "Lock Days": { what: "Minimum Holding Period", for: "Enforcing patience and reducing friction.", how: "Integer counter blocking state changes.", common: "1 - 5 days" },
+                          "Simple Moving Average": { what: "Arithmetic Price Average", for: "Identifying primary long-term trend direction.", how: "Sum of prices over N days divided by N.", common: "50, 100, 200 days" },
+                          "Exponential Moving Average": { what: "Weight-Decaying Average", for: "Capturing trend changes faster than a standard SMA.", how: "N-day decay giving more weight to recent price.", common: "10, 20, 50 days" },
+                          "Relative Strength Index": { what: "Momentum Oscillator", for: "Spotting over-extended 'Panic' or 'Euphoia' states.", how: "Ratio of average gains to average losses.", common: "14 (Standard), 30+ (Macro)" },
+                          "MACD Fast Period": { what: "Momentum Velocity", for: "Detecting changes in trend strength and direction.", how: "Short-window EMA for the MACD line calculation.", common: "12 days (Standard)" },
+                          "MACD Slow Period": { what: "Trend Baseline", for: "Providing a baseline for the momentum signal.", how: "Long-window EMA used in the MACD difference.", common: "26 days (Standard)" },
+                          "Average Directional Index": { what: "Trend Intensity Metric", for: "Determining if market is trending or sideways.", how: "Derived from expansion of price range over period.", common: "14 - 25 days" },
+                          "Triple Exponential Average": { what: "Triple-Smoothed Momentum", for: "Detecting trend changes while ignoring market noise.", how: "Triple EMA of the logarithmic price.", common: "15 - 30 days" },
+                          "LR Slope Period": { what: "Trend Velocity Measure", for: "Quantifying how fast the price is moving.", how: "Slope of the best-fit linear regression line.", common: "10 - 30 days" },
+                          "Realized Volatility": { what: "Historical Risk Measure", for: "Scaling position size or switching to safety.", how: "Standard deviation of log-returns over window.", common: "20, 60, 252 days" },
+                          "Average True Range": { what: "True Volatility Range", for: "Setting stop-losses or vol-adjusted leverage.", how: "Average of (High-Low) including price gaps.", common: "14 days" },
+                          "Money Flow Index": { what: "Volume-Weighted RSI", for: "Confirming trends using actual dollar-flow.", how: "RSI logic applied to Typical Price * Volume.", common: "14 days" },
+                          "Bollinger Bands Period": { what: "Statistical Channel Window", for: "Identifying extreme price extensions/reversals.", how: "Standard deviation bands around a SMA.", common: "20 days" }
                         }[key] || { what: "Strategy Parameter", for: "Custom structural logic", how: "Genome-defined logic", common: "N/A" };
 
                         return (
@@ -757,25 +737,12 @@ export default function App() {
                           >
                             <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1">{key}</p>
                             <p className="text-sm font-mono font-bold text-accent">{val}</p>
-                            
-                            {/* Detailed Multi-Field Tooltip */}
                             <div className="absolute bottom-full left-0 mb-3 w-64 p-4 bg-slate-950 border border-slate-700 rounded-2xl shadow-3xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-300 z-50 scale-95 group-hover:scale-100">
                               <div className="flex flex-col gap-3">
-                                <div>
-                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">What is it</p>
-                                  <p className="text-[11px] text-emerald-400 font-bold">{info.what}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Tactical Purpose</p>
-                                  <p className="text-[10px] text-slate-300 leading-tight">{info.for}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Calculation</p>
-                                  <p className="text-[10px] text-slate-400 italic font-mono">{info.how}</p>
-                                </div>
-                                <div className="pt-2 border-t border-white/5">
-                                  <p className="text-[9px] text-accent/80 font-bold">Common Range: {info.common}</p>
-                                </div>
+                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">What is it</p><p className="text-[11px] text-emerald-400 font-bold">{info.what}</p></div>
+                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Tactical Purpose</p><p className="text-[10px] text-slate-300 leading-tight">{info.for}</p></div>
+                                <div><p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Calculation</p><p className="text-[10px] text-slate-400 italic font-mono">{info.how}</p></div>
+                                <div className="pt-2 border-t border-white/5"><p className="text-[9px] text-accent/80 font-bold">Common Range: {info.common}</p></div>
                               </div>
                             </div>
                           </div>
@@ -807,9 +774,9 @@ export default function App() {
                             content={({ active, payload }) => {
                               if (active && payload && payload.length) {
                                 return (
-                                  <div className="bg-slate-900 border border-slate-700 p-2 rounded-lg shadow-xl">
-                                    <p className="text-[10px] font-bold text-accent uppercase">{payload[0].payload.name}</p>
-                                    <p className="text-xs font-mono text-white">Sensitivity: {payload[0].value.toFixed(2)}</p>
+                                  <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+                                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-1">{payload[0].payload.name}</p>
+                                    <p className="text-xs font-mono text-white">Sensitivity: <span className="text-emerald-400">{payload[0].value.toFixed(3)}</span></p>
                                   </div>
                                 );
                               }
@@ -819,14 +786,10 @@ export default function App() {
                           <Bar 
                             dataKey="priority" 
                             radius={[0, 4, 4, 0]}
-                            fill="url(#barGradient)"
+                            fill="rgba(99, 102, 241, 0.8)"
                           >
-                            <Cell fill="rgba(99, 102, 241, 0.8)" />
-                            {inspectionStrategy.indicators.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
-                                fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} 
-                              />
+                            {inspectionStrategy.indicators?.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={index < 3 ? "rgba(16, 185, 129, 0.6)" : "rgba(99, 102, 241, 0.4)"} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -847,15 +810,25 @@ export default function App() {
                   {inspectionStrategy.telemetry && inspectionStrategy.telemetry.monthly_avg ? (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={inspectionStrategy.telemetry.monthly_avg}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <BarChart 
+                          data={
+                            Array.isArray(inspectionStrategy.telemetry.monthly_avg) 
+                              ? inspectionStrategy.telemetry.monthly_avg 
+                              : Object.entries(inspectionStrategy.telemetry.monthly_avg).map(([month, val]) => ({ month, ...val }))
+                          }
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                           <XAxis dataKey="month" hide />
-                          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} unit="%" />
+                          <YAxis 
+                            tick={{ fill: '#64748b', fontSize: 10 }} 
+                            domain={[0, 1]} 
+                            tickFormatter={v => `${(v * 100).toFixed(0)}%`} 
+                          />
                           <RechartsTooltip content={<CustomChartTooltip />} />
-                          <Bar dataKey="3x" stackId="1" fill="#ef4444" fillOpacity={0.6} />
-                          <Bar dataKey="2x" stackId="1" fill="#10b981" fillOpacity={0.6} />
-                          <Bar dataKey="1x" stackId="1" fill="#3b82f6" fillOpacity={0.6} />
-                          <Bar dataKey="Cash" stackId="1" fill="#64748b" fillOpacity={0.6} />
+                          <Bar dataKey="conf_3x" name="Bullish 3x" stackId="1" fill={REGIME_COLORS['3x']} fillOpacity={0.8} />
+                          <Bar dataKey="conf_2x" name="Aggressive 2x" stackId="1" fill={REGIME_COLORS['2x']} fillOpacity={0.8} />
+                          <Bar dataKey="conf_1x" name="Neutral 1x" stackId="1" fill={REGIME_COLORS['1x']} fillOpacity={0.8} />
+                          <Bar dataKey="conf_cash" name="Panic/Cash" stackId="1" fill={REGIME_COLORS['CASH']} fillOpacity={0.8} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

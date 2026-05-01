@@ -32,6 +32,7 @@ class BaseStrategy(ABC):
         pass
 
 class _IndicatorExitStrategy(BaseStrategy):
+    version = 1
     """Base for binary 3x/CASH strategies."""
     def __init__(self):
         self.reset()

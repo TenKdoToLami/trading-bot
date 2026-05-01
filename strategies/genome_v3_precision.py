@@ -4,6 +4,7 @@ Focuses entirely on 3x vs Cash.
 Evolves both the indicator weights AND the indicator lookback periods.
 """
 
+import numpy as np
 from strategies.base import BaseStrategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
@@ -11,6 +12,7 @@ from src.helpers.indicators import (
 
 class GenomeV3Strategy(BaseStrategy):
     NAME = "Genome V3 (Precision Binary)"
+    version = 3
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
@@ -135,12 +137,53 @@ class GenomeV3Strategy(BaseStrategy):
         else:
             new_holdings = {"CASH": 1.0}
 
+        # Calculate Conviction "Fight" (Softmax between brain leads)
+        margin_panic = score_panic - self.genome['panic']['t']
+        margin_bull = score_bull - self.genome['bull']['t']
+        
+        e_p = np.exp(margin_panic)
+        e_b = np.exp(margin_bull)
+        e_n = np.exp(0)
+        denom = e_p + e_b + e_n
+        
+        telemetry = {
+            "conf_cash": float(e_p / denom),
+            "conf_1x": float(e_n / denom),
+            "conf_2x": 0.0,
+            "conf_3x": float(e_b / denom),
+            "score_panic": float(score_panic),
+            "score_bull": float(score_bull)
+        }
+
+        # Calculate Feature Importance for "Decision Engine Anatomy"
+        importance = {}
+        indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
+        for ind in indicators:
+            active = self.genome['panic']['a'].get(ind, True) or self.genome['bull']['a'].get(ind, True)
+            if not active: continue
+
+            w_p = abs(self.genome['panic']['w'].get(ind, 0))
+            w_b = abs(self.genome['bull']['w'].get(ind, 0))
+            
+            # Pick lookback from the brain with the higher weight for this feature
+            lb_key = 'macd_f' if ind == 'macd' else ind
+            if w_p > w_b:
+                lookback = self.genome['panic']['lookbacks'].get(lb_key, 0)
+            else:
+                lookback = self.genome['bull']['lookbacks'].get(lb_key, 0)
+            
+            importance[ind] = {
+                "weight": (w_p + w_b) / 2.0,
+                "period": int(round(lookback)) if isinstance(lookback, (int, float)) else 0
+            }
+        telemetry["importance"] = importance
+
         # Apply lockout
         if new_holdings != self.last_holdings:
             is_panic = (new_holdings.get("CASH") == 1.0 and score_panic > self.genome['panic']['t'])
             if self.lock_counter == 0 or is_panic:
                 self.last_holdings = new_holdings
                 self.lock_counter = max(0, int(round(self.genome.get('lock_days', 0))))
-                return new_holdings
+                return new_holdings, telemetry
             
-        return None
+        return self.last_holdings, telemetry

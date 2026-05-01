@@ -525,20 +525,20 @@
         }
     ],
     "lookbacks": {
-        "sma": 36,
-        "ema": 141,
-        "rsi": 35,
-        "macd_f": 22,
-        "macd_s": 49,
-        "adx": 44,
-        "trix": 38,
+        "sma": 20,
+        "ema": 151,
+        "rsi": 39,
+        "macd_f": 23,
+        "macd_s": 47,
+        "adx": 48,
+        "trix": 35,
         "slope": 17,
-        "vol": 59,
-        "atr": 38,
-        "mfi": 33,
+        "vol": 60,
+        "atr": 49,
+        "mfi": 34,
         "bb": 44
     },
-    "hysteresis": 0.06816414369673603,
+    "hysteresis": 0.005,
     "lock_days": 1,
-    "smoothing": 0.2374312134674473
+    "smoothing": 0.2081960709868476
 }

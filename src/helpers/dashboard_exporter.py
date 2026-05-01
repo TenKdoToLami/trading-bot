@@ -86,10 +86,10 @@ def export_to_dashboard(report_data, output_path="visualizer/public/data.json"):
                 strategy['telemetry']['monthly_avg'] = [
                     {
                         "month": k,
-                        "3x": float(np.mean(v["3x"])) * 100,
-                        "2x": float(np.mean(v["2x"])) * 100,
-                        "1x": float(np.mean(v["1x"])) * 100,
-                        "Cash": float(np.mean(v["Cash"])) * 100
+                        "conf_3x": float(np.mean(v["3x"])),
+                        "conf_2x": float(np.mean(v["2x"])),
+                        "conf_1x": float(np.mean(v["1x"])),
+                        "conf_cash": float(np.mean(v["Cash"]))
                     } for k, v in sorted(conf_monthly.items())
                 ]
 

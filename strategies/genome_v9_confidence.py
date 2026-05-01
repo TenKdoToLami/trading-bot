@@ -12,6 +12,7 @@ from src.helpers.indicators import (
 
 class GenomeV9Confidence(BaseStrategy):
     NAME = "Genome V9 (Confidence Spread)"
+    version = 9
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
@@ -142,13 +143,24 @@ class GenomeV9Confidence(BaseStrategy):
         hysteresis = self.genome.get('hysteresis', 0.15)
         
         # 6. Prepare Telemetry
+        features = [
+            ('SMA Dist', 'sma'), ('EMA Dist', 'ema'), ('RSI', 'rsi'), ('MACD', 'macd_f'),
+            ('ADX', 'adx'), ('TRIX', 'trix'), ('Slope', 'slope'), ('Vol', 'vol'),
+            ('ATR', 'atr'), ('VIX', None), ('Yield Curve', None), ('MFI', 'mfi'), ('BBW', 'bb')
+        ]
+        
+        importance = {}
+        for i, (feat_name, lb_key) in enumerate(features):
+            w_imp = float(np.mean(np.abs(self.w1[i, :])))
+            period = int(round(lb.get(lb_key, 0))) if lb_key else 0
+            importance[feat_name] = {"weight": w_imp, "period": period}
+
         telemetry = {
             "conf_cash": float(self.smoothed_scores[0]),
             "conf_1x": float(self.smoothed_scores[1]),
             "conf_2x": float(self.smoothed_scores[2]),
             "conf_3x": float(self.smoothed_scores[3]),
-            "best_conf": float(best_conf),
-            "current_conf": float(current_conf)
+            "importance": importance
         }
 
         # Only switch if the best state is significantly better than current state

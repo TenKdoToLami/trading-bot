@@ -276,22 +276,14 @@ class TournamentRunner:
                                 from strategies.genome_v5_sniper import GenomeV5Sniper
                                 strat_cls = GenomeV5Sniper
                             elif version == 4.0:
-                                folder_name = os.path.basename(root).lower()
-                                if "chameleon" in folder_name:
-                                    from strategies.genome_v4_chameleon import ChameleonV4
-                                    strat_cls = ChameleonV4
-                                else:
-                                    from strategies.genome_v4_precision import GenomeV4Precision
-                                    strat_cls = GenomeV4Precision
+                                from strategies.genome_v4_precision import GenomeV4Precision
+                                strat_cls = GenomeV4Precision
                             elif version == 3.0:
                                 from strategies.genome_v3_precision import GenomeV3Strategy
                                 strat_cls = GenomeV3Strategy
                             elif version == 2.0:
                                 from strategies.genome_v2_multi import GenomeV2Strategy
                                 strat_cls = GenomeV2Strategy
-                            elif version == 1.1:
-                                from strategies._genome_strategy import GenomeStrategy
-                                strat_cls = GenomeStrategy
                             elif version == 1.0:
                                 from strategies.genome_v1_manual import ManualV1
                                 strat_cls = ManualV1
@@ -484,67 +476,77 @@ class TournamentRunner:
             genome = getattr(strat_obj, 'genome', None)
             indicators = []
             report_params = {}
+            if genome:
+                lb = genome.get('lookbacks', {})
+                # 1. Structural Parameters Grid
+                report_params = {}
+                if hasattr(strat_obj, 'version'): report_params["Version"] = strat_obj.version
+                if 'hysteresis' in genome: report_params["Hysteresis"] = f"{genome['hysteresis']:.3f}"
+                if 'smoothing' in genome: report_params["Smoothing"] = f"{genome['smoothing']:.3f}"
+                if 'lock_days' in genome: report_params["Lock Days"] = f"{genome['lock_days']:.1f}"
+                report_params["Genome Version"] = genome.get('version', 'N/A')
+                
+                lb_map = {
+                    "sma": "Simple Moving Average", "ema": "Exponential Moving Average",
+                    "rsi": "Relative Strength Index", "macd_f": "MACD Fast Period",
+                    "macd_s": "MACD Slow Period", "adx": "Average Directional Index",
+                    "trix": "Triple Exponential Average", "slope": "LR Slope Period",
+                    "vol": "Realized Volatility", "atr": "Average True Range",
+                    "mfi": "Money Flow Index", "bb": "Bollinger Bands Period", "bbw": "Bollinger Width Period"
+                }
+                for key, full_name in lb_map.items():
+                    if key in lb: report_params[full_name] = lb[key]
 
-            if genome and 'layers' in genome:
-                try:
-                    # Neural Sensitivity (V9, V8, etc) - calculate absolute importance from layer 1
-                    w1 = np.array(genome['layers'][0]['w'])
-                    importance = np.sum(np.abs(w1), axis=1)
-                    
-                    lb = genome.get('lookbacks', {})
-                    # Dynamic naming with lookback values
-                    names = [
-                        f"SMA ({lb.get('sma', '?')})",
-                        f"EMA ({lb.get('ema', '?')})",
-                        f"RSI ({lb.get('rsi', '?')})",
-                        f"MACD ({lb.get('macd_f', '?')}/{lb.get('macd_s', '?')})",
-                        f"ADX ({lb.get('adx', '?')})",
-                        f"TRIX ({lb.get('trix', '?')})",
-                        f"LR Slope ({lb.get('slope', '?')})",
-                        f"Volatility ({lb.get('vol', '?')})",
-                        f"ATR ({lb.get('atr', '?')})",
-                        f"MFI ({lb.get('mfi', '?')})",
-                        f"BB Band ({lb.get('bb', '?')})",
-                        "Volume Z",
-                        "Macro Trend"
-                    ]
-                    indicators = [{"name": names[i], "priority": float(importance[i])} for i in range(min(len(names), len(importance)))]
-                    
-                    # Store raw lookbacks for display
-                    report_params = {
-                        "Hysteresis": f"{genome.get('hysteresis', 0):.3f}",
-                        "Smoothing": f"{genome.get('smoothing', 0):.3f}",
-                        "Lock Days": genome.get('lock_days', 0),
-                        "Genome Version": genome.get('version', 9.0)
-                    }
-                    
-                    # Map shortcuts to full descriptive names
-                    lb_map = {
-                        "sma": "Simple Moving Average",
-                        "ema": "Exponential Moving Average",
-                        "rsi": "Relative Strength Index",
-                        "macd_f": "MACD Fast Period",
-                        "macd_s": "MACD Slow Period",
-                        "adx": "Average Directional Index",
-                        "trix": "Triple Exponential Average",
-                        "slope": "LR Slope Period",
-                        "vol": "Realized Volatility",
-                        "atr": "Average True Range",
-                        "mfi": "Money Flow Index",
-                        "bb": "Bollinger Bands Period"
-                    }
-                    
-                    # Add lookbacks to parameters grid
-                    for key, full_name in lb_map.items():
-                        if key in lb:
-                            report_params[full_name] = lb[key]
+                # 2. Indicator Anatomy (Importance Chart)
+                # First check telemetry (most accurate)
+                if res.get('telemetry') and 'importance' in res['telemetry']:
+                    # Use the last recorded importance from telemetry
+                    tel_imp_list = res['telemetry']['importance']
+                    if tel_imp_list:
+                        tel_imp = tel_imp_list[-1]
+                        # Some versions return Dict[str, float], others Dict[str, Dict[str, float]]
+                        for k, v in tel_imp.items():
+                            if isinstance(v, dict):
+                                weight = v.get('weight', 0)
+                                period = v.get('period', 0)
+                            else:
+                                weight = v
+                                # Try to find period in genome lookbacks
+                                lb_key = 'macd_f' if k.lower() == 'macd' else k.lower()
+                                period = lb.get(lb_key, 0)
                             
-                except:
-                    report_params = {}
-            elif genome and 'weights' in genome:
-                # Fallback for V7: list active weights as indicators
-                indicators = [{"name": k, "priority": abs(v)} for k, v in genome['weights'].items()]
-                report_params = {"Threshold": genome.get('threshold', 0)}
+                            label = f"{k.upper()} ({int(round(period))}d)" if period else k.upper()
+                            indicators.append({"name": label, "priority": float(weight)})
+                
+                # Fallback for older Neural versions (V7/V9) without importance in telemetry
+                elif 'layers' in genome:
+                    try:
+                        w1 = np.array(genome['layers'][0]['w'])
+                        weights = np.mean(np.abs(w1), axis=1)
+                        # V7/V9 standard feature order
+                        feat_keys = [
+                            ('SMA', 'sma'), ('EMA', 'ema'), ('RSI', 'rsi'), ('MACD', 'macd_f'),
+                            ('ADX', 'adx'), ('TRIX', 'trix'), ('Slope', 'slope'), ('Vol', 'vol'),
+                            ('ATR', 'atr'), ('VIX', None), ('YC', None), ('MFI', 'mfi'), ('BBW', 'bb')
+                        ]
+                        for i, (f_name, lb_k) in enumerate(feat_keys):
+                            if i < len(weights):
+                                period = lb.get(lb_k, 0) if lb_k else 0
+                                label = f"{f_name} ({int(round(period))}d)" if period else f_name
+                                indicators.append({"name": label, "priority": float(weights[i])})
+                    except: pass
+                
+                # Fallback for V6 (Multi-Brain) if telemetry was missing
+                elif 'brains' in genome:
+                    for ind in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc', 'mfi', 'bbw']:
+                        imp = 0
+                        for b in ['cash', '1x', '2x', '3x']:
+                            imp += abs(genome['brains'][b]['w'].get(ind, 0))
+                        
+                        lb_k = 'macd_f' if ind == 'macd' else ind
+                        period = lb.get(lb_k, 0)
+                        label = f"{ind.upper()} ({int(round(period))}d)" if period else ind.upper()
+                        indicators.append({"name": label, "priority": float(imp / 4.0)})
             else:
                 report_params = {}
 

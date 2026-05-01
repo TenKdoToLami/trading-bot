@@ -12,6 +12,7 @@ from src.helpers.indicators import (
 
 class GenomeV7Deep(BaseStrategy):
     NAME = "Genome V7 (Deep Brain)"
+    version = 7
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
@@ -122,11 +123,25 @@ class GenomeV7Deep(BaseStrategy):
         # 4. Neural Confidence (Softmax)
         probs = self._softmax(scores)
         
+        # Feature Importance Mapping
+        features = [
+            ('SMA Dist', 'sma'), ('EMA Dist', 'ema'), ('RSI', 'rsi'), ('MACD', 'macd_f'),
+            ('ADX', 'adx'), ('TRIX', 'trix'), ('Slope', 'slope'), ('Vol', 'vol'),
+            ('ATR', 'atr'), ('VIX', None), ('Yield Curve', None), ('MFI', 'mfi'), ('BBW', 'bb')
+        ]
+        
+        importance = {}
+        for i, (feat_name, lb_key) in enumerate(features):
+            w_imp = float(np.mean(np.abs(self.w1[i, :])))
+            period = int(round(lb.get(lb_key, 0))) if lb_key else 0
+            importance[feat_name] = {"weight": w_imp, "period": period}
+
         telemetry = {
             "conf_cash": float(probs[0]),
             "conf_1x": float(probs[1]),
-            "conf_2x": float(probs[2]),
-            "conf_3x": float(probs[3])
+            "conf_2x": float(probs[2]) if len(probs) > 2 else 0.0,
+            "conf_3x": float(probs[3]) if len(probs) > 3 else 0.0,
+            "importance": importance
         }
 
         # 5. Decision (Highest Score Wins)

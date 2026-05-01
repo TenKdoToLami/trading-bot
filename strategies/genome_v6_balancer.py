@@ -21,6 +21,7 @@ def softmax(x, temp=1.0):
 
 class GenomeV6(BaseStrategy):
     NAME = "[GENE] V6 | (Balancer)"
+    version = 6
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
@@ -136,20 +137,46 @@ class GenomeV6(BaseStrategy):
             "3xSPY": float(probs[3])
         }
 
-        # Threshold to avoid tiny rebalances (slippage protection)
-        # We only rebalance if the largest change in weight is > 5%
+        # 4. Telemetry (Confidence & Importance)
+        telemetry = {
+            "conf_cash": float(probs[0]),
+            "conf_1x": float(probs[1]),
+            "conf_2x": float(probs[2]),
+            "conf_3x": float(probs[3])
+        }
+        
+        # Calculate Feature Importance for "Decision Engine Anatomy"
+        importance = {}
+        indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc', 'mfi', 'bbw']
+        lb = self.genome.get('lookbacks', {})
+        for ind in indicators:
+            imp = 0
+            for b_name in ['cash', '1x', '2x', '3x']:
+                imp += abs(self.genome['brains'][b_name]['w'].get(ind, 0))
+            
+            # Map simple indicator names to lookback keys
+            lb_key = 'macd_f' if ind == 'macd' else ind
+            lookback = lb.get(lb_key, 0)
+            
+            importance[ind] = {
+                "weight": imp / 4.0,
+                "period": int(round(lookback)) if isinstance(lookback, (int, float)) else 0
+            }
+        telemetry["importance"] = importance
+
+        # 5. Threshold to avoid tiny rebalances (slippage protection)
+        max_diff = 0
         if self.last_holdings:
-            max_diff = 0
             for k in new_holdings:
                 diff = abs(new_holdings[k] - self.last_holdings.get(k, 0))
                 if diff > max_diff: max_diff = diff
             
             if max_diff < 0.05 and self.lock_counter > 0:
-                return None
+                return self.last_holdings, telemetry
 
-        if self.lock_counter == 0 or (self.last_holdings and max_diff > 0.15): # Force if big move
+        if self.lock_counter == 0 or max_diff > 0.15: # Force if big move
             self.last_holdings = new_holdings
             self.lock_counter = max(0, int(round(self.genome.get('lock_days', 0))))
-            return new_holdings
+            return new_holdings, telemetry
             
-        return None
+        return self.last_holdings, telemetry
