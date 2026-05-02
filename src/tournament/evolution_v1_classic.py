@@ -5,7 +5,7 @@ import time
 import os
 import numpy as np
 from tqdm import tqdm
-from strategies._genome_strategy import GenomeStrategy
+from strategies.genome_v1_classic import GenomeV1 as GenomeStrategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data, CACHE_FILE
 

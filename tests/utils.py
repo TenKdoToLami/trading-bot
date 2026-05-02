@@ -68,13 +68,17 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             return GenomeV2Strategy(genome=genome)
             
         elif "panic_weights" in genome:
-            from strategies._genome_strategy import GenomeStrategy
-            return GenomeStrategy(genome=genome)
+            from strategies.genome_v1_classic import GenomeV1
+            return GenomeV1(genome=genome)
+            
+        elif "bounds_p" in genome and "weights_p" in genome:
+            from strategies.genome_v1_manual import ManualV1
+            return ManualV1(genome=genome)
             
         else:
             # Final fallback
-            from strategies._genome_strategy import GenomeStrategy
-            return GenomeStrategy(genome=genome)
+            from strategies.genome_v1_classic import GenomeV1
+            return GenomeV1(genome=genome)
 
     # 2. Treat as strategy name
     runner = TournamentRunner()
