@@ -11,7 +11,7 @@ class MostOptimalStrategy(BaseStrategy):
     assets and the expense ratios/cash yields of the underlying assets.
     """
     
-    NAME = "Most Optimal (God Mode)"
+    NAME = "[Cheat] Most Optimal (God Mode)"
 
     def __init__(self):
         self.path = []

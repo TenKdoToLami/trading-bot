@@ -52,6 +52,25 @@ python tests/run_tournament.py --resilience --samples 20
 
 ---
 
+## 🏆 God Mode Variants (Mathematical Limits)
+
+These "God Mode" strategies use lookahead and Dynamic Programming to calculate the mathematically perfect holding sequence. They serve as the **absolute upper bound** of performance under specific constraints.
+
+| Strategy | Constraint | Purpose |
+|----------|------------|---------|
+| `[Cheat] Most Optimal (God Mode)` | None | The theoretical maximum return with daily rebalancing. |
+| `[Cheat] Guided God (Weekly)` | 5 Trading Days | Optimal path if trades are locked for a full week. |
+| `[Cheat] Patient God (Monthly)` | 21 Trading Days | Optimal path if trades are locked for a full month. |
+| `[Cheat] Eternal God (Yearly)` | 252 Trading Days | Optimal path if trades are locked for a full year. |
+
+**Example Usage:**
+```bash
+# Compare the theoretical weekly limit against your AI
+python tests/run_tournament.py --strategy "[Cheat] Guided God (Weekly),Champion V6 (Balancer)"
+```
+
+---
+
 ## 🧬 Evolutionary Strategy Breeding
 The framework includes several Genetic Algorithm (GA) engines to autonomously discover optimal indicator combinations and weights.
 
