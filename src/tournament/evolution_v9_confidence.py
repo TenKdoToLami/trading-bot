@@ -145,7 +145,6 @@ class EvolutionEngineV9Confidence:
                     self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
                     v_path = os.path.join("champions/v9_confidence/vault", f"v9c_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
                     with open(v_path, 'w') as f: json.dump(best_genome, f, indent=4)
-                    with open("champions/v9_confidence/genome.json", 'w') as f: json.dump(best_genome, f, indent=4)
 
                 # Selection
                 elites = [x[2] for x in scored_pop[:max(2, self.pop_size // 5)]]

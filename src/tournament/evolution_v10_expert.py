@@ -50,15 +50,16 @@ def _evaluate_v10_worker(genome):
     
     return fitness, metrics, genome
 
-class EvolutionV10Expert:
-    def __init__(self, data_path, profile_path, population_size=100, generations=50, mutation_rate=0.2):
-        self.data_path = data_path
-        self.profile_path = profile_path
+class EvolutionEngineV10Expert:
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None):
+        self.data_path = "data/history_SPY.csv"
+        self.profile_path = "champions/v10_alpha/indicator_profiles.json"
         self.pop_size = population_size
         self.generations = generations
         self.mut_rate = mutation_rate
+        self.seed_vault = seed_vault
         
-        with open(profile_path, 'r') as f:
+        with open(self.profile_path, 'r') as f:
             self.profile_data = json.load(f)['profiles']
         self.expert_keys = sorted(list(self.profile_data.keys()))
         self.num_experts = len(self.expert_keys)
@@ -95,7 +96,8 @@ class EvolutionV10Expert:
             new_genome['overrides']['bear_veto_threshold'] = max(0.1, min(0.99, new_genome['overrides']['bear_veto_threshold'] + random.gauss(0, 0.05)))
         return new_genome
 
-    def run(self, vault_path):
+    def run(self):
+        vault_path = self.seed_vault or "champions/v10_alpha/vault"
         os.makedirs(vault_path, exist_ok=True)
         from src.helpers.data_provider import CACHE_FILE
         
@@ -129,7 +131,6 @@ class EvolutionV10Expert:
                     self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
                     v_path = os.path.join(vault_path, f"v10_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
                     with open(v_path, 'w') as f: json.dump(best_genome, f, indent=4)
-                    with open(os.path.join(os.path.dirname(vault_path), "genome.json"), 'w') as f: json.dump(best_genome, f, indent=4)
 
                 # Selection
                 elites = [x[2] for x in scored_pop[:max(2, self.pop_size // 5)]]
