@@ -58,7 +58,7 @@ These "God Mode" strategies use lookahead and Dynamic Programming to calculate t
 
 | Strategy | Constraint | Purpose |
 |----------|------------|---------|
-| `[Cheat] Most Optimal (God Mode)` | None | The theoretical maximum return with daily rebalancing. |
+| `Most Optimal (God Mode)` | None | The theoretical maximum return with daily rebalancing. |
 | `[Cheat] Guided God (Weekly)` | 5 Trading Days | Optimal path if trades are locked for a full week. |
 | `[Cheat] Patient God (Monthly)` | 21 Trading Days | Optimal path if trades are locked for a full month. |
 | `[Cheat] Eternal God (Yearly)` | 252 Trading Days | Optimal path if trades are locked for a full year. |
