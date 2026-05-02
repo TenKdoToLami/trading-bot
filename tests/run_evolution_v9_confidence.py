@@ -1,33 +1,33 @@
-import argparse
-import sys
 import os
+import sys
+import argparse
 
-# Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure project root is in path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.tournament.evolution_v9_confidence import EvolutionEngineV9Confidence
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Evolution for V9 Confidence")
-    parser.add_argument("--pop", type=int, default=300, help="Population size")
-    parser.add_argument("--gen", type=int, default=100, help="Number of generations")
+    parser = argparse.ArgumentParser(description="Institutional Evolution: Model V9 Confidence")
+    parser.add_argument("--pop", type=int, default=100, help="Population size")
+    parser.add_argument("--gen", type=int, default=50, help="Number of generations")
     parser.add_argument("--mut", type=float, default=0.2, help="Mutation rate")
-    parser.add_argument("--seed", type=str, default=None, help="Path to seed vault")
-    parser.add_argument("--min-cagr", type=float, default=40.0, help="Minimum CAGR threshold for vault saving")
-    parser.add_argument("--ablation", action="store_true", help="Enable indicator ablation")
-    
+    parser.add_argument("--vault", type=str, default="champions/v9_confidence/vault", help="Path to seed vault")
     args = parser.parse_args()
-    
+
     engine = EvolutionEngineV9Confidence(
         population_size=args.pop,
         generations=args.gen,
         mutation_rate=args.mut,
-        seed_vault=args.seed,
-        use_ablation=args.ablation,
-        min_cagr=args.min_cagr
+        seed_vault=args.vault
     )
     
-    engine.run()
+    try:
+        engine.run()
+    except KeyboardInterrupt:
+        print("\n[INTERRUPTED] Evolution halted by user. Best results saved to vault.")
+    except Exception as e:
+        print(f"\n[CRITICAL ERROR] {e}")
 
 if __name__ == "__main__":
     main()

@@ -4,177 +4,89 @@ import concurrent.futures
 import time
 import os
 import numpy as np
-import pandas as pd
-
+from tqdm import tqdm
 from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
 from src.tournament.runner import _execute_simulation
-from src.helpers.data_provider import load_spy_data
+from src.helpers.data_provider import load_spy_data, CACHE_FILE
 
+# --- GLOBAL WORKER STATE ---
 _worker_price_data = None
 _worker_dates = None
-_worker_min_cagr = 0.0
 
-def _init_worker(cache_file, min_cagr):
-    global _worker_price_data, _worker_dates, _worker_min_cagr
+def _init_worker(cache_file):
+    global _worker_price_data, _worker_dates
     import pandas as pd
-    _worker_min_cagr = min_cagr
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_dates = df.index
-    # Turbo I/O
     _worker_price_data = df.to_dict('records')
-    print(f"  [Worker {os.getpid()}] V7-Fluid Ready. Min CAGR: {min_cagr:.1f}%")
 
-def _evaluate_genome_worker(genome):
-    res = _execute_simulation(
-        strategy_type=GenomeV7DeepFluid,
-        price_data_list=_worker_price_data,
-        dates=_worker_dates,
-        strategy_kwargs={'genome': genome}
-    )
+def _evaluate_v7df_worker(genome):
+    from contextlib import redirect_stdout
+    import os
+    with open(os.devnull, 'w') as fnull:
+        with redirect_stdout(fnull):
+            res = _execute_simulation(
+                strategy_type=GenomeV7DeepFluid,
+                price_data_list=_worker_price_data,
+                dates=_worker_dates,
+                strategy_kwargs={'genome': genome}
+            )
     metrics = res['metrics']
-    cagr = metrics['cagr'] * 100
-    max_dd = abs(metrics['max_dd']) * 100
-    
-    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
-    fitness = cagr - (max_dd * 0.15)
-    
-    if max_dd >= 95.0: 
-        fitness -= 1000
-        
-    return fitness, genome, metrics
+    cagr_pct, dd_pct = metrics['cagr'] * 100, abs(metrics['max_dd']) * 100
+    fitness = cagr_pct - (dd_pct * 0.15)
+    if dd_pct >= 95.0: fitness -= 1000
+    return fitness, metrics, genome
 
 class EvolutionEngineV7DeepFluid:
-    def __init__(self, population_size=50, generations=20, mutation_rate=0.2, seed_vault=None, min_cagr=0.0):
-        self.population_size = population_size
-        self.generations = generations
-        self.mutation_rate = mutation_rate
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, min_cagr=0.0):
+        self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.min_cagr = min_cagr
-        self.lb_bounds = {
-            'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30),
-            'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50),
-            'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)
-        }
-
-        print("Loading master data for Evolution V7 Fluid...")
-        self.data = load_spy_data("1993-01-01")
-        from src.helpers.data_provider import CACHE_FILE
-        self.cache_file = CACHE_FILE
-        
-        self.population = []
-        if seed_vault and os.path.exists(seed_vault):
-            seeds = []
-            vault_files = sorted(os.listdir(seed_vault), reverse=True)
-            for f in vault_files:
-                if f.endswith(".json"):
-                    with open(os.path.join(seed_vault, f), "r") as jf:
-                        try:
-                            g = json.load(jf)
-                            if 'layers' in g:
-                                seeds.append(g)
-                        except: continue
-            
-            num_seeds = min(len(seeds), self.population_size)
-            self.population.extend(seeds[:num_seeds])
-            print(f"  SUCCESS: Injected {num_seeds} V7 Fluid seeds from vault.")
-
-        while len(self.population) < self.population_size:
-            self.population.append(self._random_genome())
+        self.lb_bounds = {'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30), 'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50), 'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)}
+        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
-        return {
-            'version': 7.2,
-            'layers': [
-                {
-                    'w': np.random.uniform(-1, 1, (13, 24)).tolist(),
-                    'b': np.random.uniform(-0.1, 0.1, 24).tolist()
-                },
-                {
-                    'w': np.random.uniform(-1, 1, (24, 4)).tolist(),
-                    'b': np.random.uniform(-0.1, 0.1, 4).tolist()
-                }
-            ],
-            'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()},
-            'lock_days': random.uniform(1, 10),
-            'rebalance_threshold': random.uniform(0.01, 0.10)
-        }
-
-    def _crossover(self, p1, p2):
-        child = {
-            'version': 7.2,
-            'layers': [],
-            'lookbacks': {k: (p1['lookbacks'][k] if random.random() > 0.5 else p2['lookbacks'][k]) for k in self.lb_bounds},
-            'lock_days': p1['lock_days'] if random.random() > 0.5 else p2['lock_days'],
-            'rebalance_threshold': p1['rebalance_threshold'] if random.random() > 0.5 else p2['rebalance_threshold']
-        }
-        for i in range(len(p1['layers'])):
-            if random.random() > 0.5: child['layers'].append(p1['layers'][i])
-            else: child['layers'].append(p2['layers'][i])
-        return child
+        return {'version': 7.2, 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10), 'rebalance_threshold': random.uniform(0.01, 0.10)}
 
     def _mutate(self, genome):
-        mutated = json.loads(json.dumps(genome))
-        for layer in mutated['layers']:
-            w = np.array(layer['w'])
-            b = np.array(layer['b'])
-            if random.random() < self.mutation_rate:
-                w += np.random.normal(0, 0.05, w.shape)
-                b += np.random.normal(0, 0.02, b.shape)
-            if random.random() < 0.1:
-                mask = np.random.random(w.shape) < 0.05
-                w[mask] += np.random.normal(0, 0.5, w[mask].shape)
-            layer['w'] = w.tolist()
-            layer['b'] = b.tolist()
-
-        for k, v in mutated['lookbacks'].items():
-            if random.random() < self.mutation_rate:
-                mn, mx = self.lb_bounds[k]
-                new_v = v + int(random.gauss(0, (mx-mn)*0.1))
-                mutated['lookbacks'][k] = max(mn, min(mx, new_v))
-                
-        if 'macd_f' in mutated['lookbacks'] and 'macd_s' in mutated['lookbacks']:
-            if mutated['lookbacks']['macd_s'] <= mutated['lookbacks']['macd_f']:
-                mutated['lookbacks']['macd_s'] = mutated['lookbacks']['macd_f'] + 1
-                
-        if random.random() < self.mutation_rate:
-            mutated['lock_days'] = max(1, min(14, mutated['lock_days'] + random.gauss(0, 1)))
-        if random.random() < self.mutation_rate:
-            mutated['rebalance_threshold'] = max(0.01, min(0.25, mutated['rebalance_threshold'] + random.gauss(0, 0.02)))
-        return mutated
+        mut = json.loads(json.dumps(genome))
+        for layer in mut['layers']:
+            w, b = np.array(layer['w']), np.array(layer['b'])
+            if random.random() < self.mut_rate: w += np.random.normal(0, 0.05, w.shape); b += np.random.normal(0, 0.02, b.shape)
+            layer['w'], layer['b'] = w.tolist(), b.tolist()
+        for k, v in mut['lookbacks'].items():
+            if random.random() < self.mut_rate: mn, mx = self.lb_bounds[k]; mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn)*0.1))))
+        mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1))) if random.random() < self.mut_rate else mut['lock_days']
+        mut['rebalance_threshold'] = max(0.01, min(0.25, mut['rebalance_threshold'] + random.gauss(0, 0.02))) if random.random() < self.mut_rate else mut['rebalance_threshold']
+        return mut
 
     def run(self):
-        max_workers = max(1, os.cpu_count() - 2)
-        print(f"Starting Evolution V7 Fluid: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, MinCAGR: {self.min_cagr:.1f}%")
-        
         vault_dir = "champions/v7_deep_fluid/vault"
         os.makedirs(vault_dir, exist_ok=True)
-        best_overall_genome = None
+        print(f"Starting V7DF Evolution: {self.generations} gens, pop {self.pop_size}, mut {self.mut_rate:.2f}")
+        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
+        print("-" * 60)
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers, initializer=_init_worker, initargs=(self.cache_file, self.min_cagr)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
-                futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
-                scored = [f.result() for f in concurrent.futures.as_completed(futures)]
+                futures = [executor.submit(_evaluate_v7df_worker, g) for g in self.population]
+                scored = []
+                for f in tqdm(concurrent.futures.as_completed(futures), total=self.pop_size, desc=f"G{gen+1}", leave=False):
+                    try: scored.append(f.result())
+                    except Exception as e: print(f"\nWorker Error: {e}")
+                
                 scored.sort(key=lambda x: x[0], reverse=True)
-                
-                best_fit, best_genome, best_metrics = scored[0]
-                best_overall_genome = best_genome
+                fit, stats, best_g = scored[0]
                 elapsed = time.time() - start_time
+                print(f"{gen+1:02d}  | {fit:7.1f} | {stats['cagr']*100:7.2f}% | {abs(stats['max_dd'])*100:6.1f}% | {stats['num_rebalances']:6.0f} | {elapsed:4.1f}s")
                 
-                print(f"Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:5.2f}% | DD: {best_metrics['max_dd']*100:5.2f}% | Time: {elapsed:.1f}s")
+                cagr, dd = stats['cagr'] * 100, abs(stats['max_dd']) * 100
+                if cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5):
+                    self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
+                    v_path = os.path.join(vault_dir, f"v7df_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
+                    with open(v_path, 'w') as f: json.dump(best_g, f, indent=4)
                 
-                # Save to vault
-                if (best_metrics['cagr'] * 100) >= self.min_cagr:
-                    v_path = os.path.join(vault_dir, f"v7df_cagr_{best_metrics['cagr']*100:.2f}_dd_{best_metrics['max_dd']*100:.2f}.json")
-                    with open(v_path, 'w') as f:
-                        json.dump(best_genome, f, indent=4)
-                
-                # Selection
-                elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]
-                new_pop = list(elites)
-                while len(new_pop) < self.population_size:
-                    p1, p2 = random.choice(elites), random.choice(elites)
-                    child = self._crossover(p1, p2)
-                    new_pop.append(self._mutate(child))
-                
-                self.population = new_pop
-        return best_overall_genome
+                elites = [x[2] for x in scored[:max(2, self.pop_size // 5)]]
+                self.population = elites + [self._mutate(random.choice(elites)) for _ in range(self.pop_size - len(elites))]
+        return scored[0][2]

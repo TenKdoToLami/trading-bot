@@ -3,16 +3,13 @@ import json
 import concurrent.futures
 import time
 import os
-
+import numpy as np
+from tqdm import tqdm
 from strategies.genome_v3_precision import GenomeV3Strategy
 from src.tournament.runner import _execute_simulation
-from src.helpers.data_provider import load_spy_data
+from src.helpers.data_provider import load_spy_data, CACHE_FILE
 
-
-# ──────────────────────────────────────────────────────
-# Worker-Local Data
-# ──────────────────────────────────────────────────────
-
+# --- GLOBAL WORKER STATE ---
 _worker_price_data = None
 _worker_dates = None
 
@@ -23,221 +20,87 @@ def _init_worker(cache_file):
     _worker_price_data = df.to_dict('records')
     _worker_dates = df.index
 
+def _evaluate_v3_worker(genome):
+    from contextlib import redirect_stdout
+    import os
+    with open(os.devnull, 'w') as fnull:
+        with redirect_stdout(fnull):
+            # STAGE 1: LITE SCREENING (Last ~4 years)
+            lite_res = _execute_simulation(
+                strategy_type=GenomeV3Strategy,
+                price_data_list=_worker_price_data[-1000:],
+                dates=_worker_dates[-1000:],
+                strategy_kwargs={'genome': genome}
+            )
+            if lite_res['metrics']['cagr'] <= 0: return -500.0, lite_res['metrics'], genome
 
-def _evaluate_genome_worker(genome):
-    # ── STAGE 1: LITE SCREENING (Last ~4 years) ──
-    lite_window = 1000
-    lite_res = _execute_simulation(
-        strategy_type=GenomeV3Strategy,
-        price_data_list=_worker_price_data[-lite_window:],
-        dates=_worker_dates[-lite_window:],
-        strategy_kwargs={'genome': genome}
-    )
-    
-    # If the genome fails to stay profitable in the recent regime, kill it early
-    if lite_res['metrics']['cagr'] <= 0:
-        return -500.0, genome, lite_res['metrics']
-
-    # ── STAGE 2: FULL AUDIT (30+ years) ──
-    res = _execute_simulation(
-        strategy_type=GenomeV3Strategy,
-        price_data_list=_worker_price_data,
-        dates=_worker_dates,
-        strategy_kwargs={'genome': genome}
-    )
+            # STAGE 2: FULL AUDIT
+            res = _execute_simulation(
+                strategy_type=GenomeV3Strategy,
+                price_data_list=_worker_price_data,
+                dates=_worker_dates,
+                strategy_kwargs={'genome': genome}
+            )
     metrics = res['metrics']
-    cagr = metrics['cagr'] * 100
-    max_dd = abs(metrics['max_dd']) * 100
-    
-    # ── RISK-ADJUSTED FITNESS (Institutional Standard) ──
-    fitness = cagr - (max_dd * 0.15)
-    if max_dd >= 95.0: fitness -= 1000
-    
-    return fitness, genome, metrics
-
+    cagr_pct, dd_pct = metrics['cagr'] * 100, abs(metrics['max_dd']) * 100
+    fitness = cagr_pct - (dd_pct * 0.15)
+    if dd_pct >= 95.0: fitness -= 1000
+    return fitness, metrics, genome
 
 class EvolutionEngineV3:
-    """
-    Genetic Algorithm Engine for Genome V3 (Precision Binary Architecture).
-    """
-    def __init__(self, population_size=40, generations=15, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
-        self.population_size = population_size
-        self.generations = generations
-        self.mutation_rate = mutation_rate
-        self.use_ablation = use_ablation
-        self.min_cagr = min_cagr
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
+        self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
+        self.use_ablation, self.min_cagr = use_ablation, min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', 'bull']
-        
-        # Define bounds for evolving indicator parameters (lookbacks)
-        self.lb_bounds = {
-            'sma': (20, 300),
-            'ema': (10, 200),
-            'rsi': (5, 50),
-            'macd_f': (5, 30),
-            'macd_s': (15, 60),
-            'adx': (5, 50),
-            'trix': (5, 50),
-            'slope': (5, 50),
-            'vol': (5, 60),
-            'atr': (5, 50)
-        }
-
-        print("Loading master data (SPY + Macro) for evolution v3...")
-        self.data = load_spy_data("1993-01-01", force_refresh=False)
-        from src.helpers.data_provider import CACHE_FILE
-        self.cache_file = CACHE_FILE
-        
-        self.population = []
-        
-        # ── Seed Injection ──
-        if seed_vault and os.path.exists(seed_vault):
-            print(f"Injecting seeds from: {seed_vault}...")
-            seeds = []
-            for f in os.listdir(seed_vault):
-                if f.endswith(".json"):
-                    with open(os.path.join(seed_vault, f), "r") as jf:
-                        try:
-                            genome = json.load(jf)
-                            # Minimal V3 structure check (lookbacks are nested in brains)
-                            if 'panic' not in genome or 'bull' not in genome or 'lookbacks' not in genome['panic']:
-                                # Skip non-V3 genomes (V1/V2)
-                                continue
-                            seeds.append(genome)
-                        except: continue
-            
-            self.population.extend(seeds[:self.population_size])
-            print(f"  Successfully injected {len(seeds)} V3 seeds.")
-
-        # Fill the rest with random genomes
-        while len(self.population) < self.population_size:
-            self.population.append(self._random_genome())
+        self.lb_bounds = {'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30), 'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50), 'vol': (5, 60), 'atr': (5, 50)}
+        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
-        genome = {}
-        for b in self.brains:
-            genome[b] = {
-                'w': {k: random.uniform(-4, 4) for k in self.indicators},
-                'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators},
-                't': random.uniform(-1.5, 1.5),
-                'lookbacks': {}
-            }
-            for k, (mn, mx) in self.lb_bounds.items():
-                genome[b]['lookbacks'][k] = random.randint(mn, mx)
-                
+        genome = {b: {'w': {k: random.uniform(-4, 4) for k in self.indicators}, 'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators}, 't': random.uniform(-1.5, 1.5), 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}} for b in self.brains}
         genome['lock_days'] = random.uniform(0, 10)
         return genome
 
-    def _crossover(self, p1, p2):
-        child = {}
-        for b in self.brains:
-            child[b] = {
-                'w': {}, 'a': {}, 't': p1[b]['t'] if random.random() > 0.5 else p2[b]['t'],
-                'lookbacks': {}
-            }
-            # Crossover Lookbacks per brain
-            for k in self.lb_bounds.keys():
-                child[b]['lookbacks'][k] = p1[b]['lookbacks'][k] if random.random() > 0.5 else p2[b]['lookbacks'][k]
-                
-            for k in self.indicators:
-                child[b]['w'][k] = p1[b]['w'][k] if random.random() > 0.5 else p2[b]['w'][k]
-                child[b]['a'][k] = p1[b]['a'][k] if random.random() > 0.5 else p2[b]['a'][k]
-        
-        child['lock_days'] = p1['lock_days'] if random.random() > 0.5 else p2['lock_days']
-        return child
-
     def _mutate(self, genome):
-        mutated = {}
-        
+        mut = json.loads(json.dumps(genome))
         for b in self.brains:
-            mutated[b] = {'w': {}, 'a': {}, 't': genome[b]['t'], 'lookbacks': {}}
-            
-            # Mutate Lookbacks per brain
             for k, (mn, mx) in self.lb_bounds.items():
-                val = genome[b]['lookbacks'][k]
-                if random.random() < self.mutation_rate:
-                    val += int(random.gauss(0, (mx - mn) * 0.1))
-                    val = max(mn, min(mx, val))
-                    if k == 'macd_s' and val <= mutated[b]['lookbacks'].get('macd_f', 0):
-                        val = mutated[b]['lookbacks']['macd_f'] + 1
-                mutated[b]['lookbacks'][k] = val
-                
-            if mutated[b]['lookbacks']['macd_f'] >= mutated[b]['lookbacks']['macd_s']:
-                mutated[b]['lookbacks']['macd_s'] = mutated[b]['lookbacks']['macd_f'] + 1
-
-            if random.random() < self.mutation_rate:
-                mutated[b]['t'] += random.gauss(0, 0.2)
-            
+                if random.random() < self.mut_rate: mut[b]['lookbacks'][k] = max(mn, min(mx, mut[b]['lookbacks'][k] + int(random.gauss(0, (mx-mn)*0.1))))
+            if random.random() < self.mut_rate: mut[b]['t'] += random.gauss(0, 0.2)
             for k in self.indicators:
-                w = genome[b]['w'][k]
-                if random.random() < self.mutation_rate:
-                    mutated[b]['w'][k] = w + random.gauss(0, 0.5)
-                else:
-                    mutated[b]['w'][k] = w
-                
-                a = genome[b]['a'][k]
-                if self.use_ablation and random.random() < 0.05:
-                    mutated[b]['a'][k] = not a
-                else:
-                    mutated[b]['a'][k] = True if not self.use_ablation else a
-                    
-        mutated['lock_days'] = genome['lock_days']
-        if random.random() < self.mutation_rate:
-            mutated['lock_days'] = max(0, min(20, mutated['lock_days'] + random.gauss(0, 2)))
-            
-        return mutated
+                if random.random() < self.mut_rate: mut[b]['w'][k] += random.gauss(0, 0.5)
+                if self.use_ablation and random.random() < 0.05: mut[b]['a'][k] = not mut[b]['a'][k]
+        if random.random() < self.mut_rate: mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2)))
+        return mut
 
     def run(self):
-        best_overall_fitness = -9999
-        best_overall_metrics = None
-        best_overall_genome = None
+        vault_dir = "champions/v3_precision/vault"
+        os.makedirs(vault_dir, exist_ok=True)
+        print(f"Starting V3 Evolution: {self.generations} gens, pop {self.pop_size}, mut {self.mut_rate:.2f}")
+        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
+        print("-" * 60)
 
-        max_workers = max(1, os.cpu_count() - 4)
-        print(f"Starting Evolution V3: {self.generations} generations, pop {self.population_size}, mut {self.mutation_rate:.2f}, ablation {'ON' if self.use_ablation else 'OFF'} (using {max_workers} cores)")
-        
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers,
-            initializer=_init_worker, 
-            initargs=(self.cache_file,)
-        ) as executor:
+        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
+                futures = [executor.submit(_evaluate_v3_worker, g) for g in self.population]
+                scored = []
+                for f in tqdm(concurrent.futures.as_completed(futures), total=self.pop_size, desc=f"G{gen+1}", leave=False):
+                    try: scored.append(f.result())
+                    except Exception as e: print(f"\nWorker Error: {e}")
                 
-                futures = [executor.submit(_evaluate_genome_worker, g) for g in self.population]
-                scored = [f.result() for f in concurrent.futures.as_completed(futures)]
                 scored.sort(key=lambda x: x[0], reverse=True)
-                
-                best_fit, best_genome, best_metrics = scored[0]
-                if best_fit > best_overall_fitness:
-                    best_overall_fitness = best_fit
-                    best_overall_genome = best_genome
-                    best_overall_metrics = best_metrics
-                    
-                    vault_dir = "champions/v3_precision/vault"
-                    if not os.path.exists(vault_dir): os.makedirs(vault_dir)
-                    
-                    # Save to vault (only if above CAGR threshold)
-                    if (best_metrics['cagr'] * 100) >= self.min_cagr:
-                        v_path = os.path.join(vault_dir, f"v3_cagr_{best_metrics['cagr']*100:.2f}_dd_{abs(best_metrics['max_dd']*100):.2f}.json")
-                        with open(v_path, 'w') as f:
-                            json.dump(best_genome, f, indent=4)
-                    else:
-                        print(f"  [SKIPPED] CAGR {best_metrics['cagr']*100:.2f}% < {self.min_cagr}% (Vault not updated)")
-
+                fit, stats, best_g = scored[0]
                 elapsed = time.time() - start_time
-                print(f"V3 Gen {gen+1:02d} | Fit: {best_fit:6.2f} | CAGR: {best_metrics['cagr']*100:6.2f}% | MaxDD: {best_metrics['max_dd']*100:6.2f}% | Time: {elapsed:.1f}s")
+                print(f"{gen+1:02d}  | {fit:7.1f} | {stats['cagr']*100:7.2f}% | {abs(stats['max_dd'])*100:6.1f}% | {stats['num_rebalances']:6.0f} | {elapsed:4.1f}s")
                 
-                # --- PURE GA SELECTION ---
-                elites = [x[1] for x in scored[:max(2, int(self.population_size * 0.2))]]
-                new_pop = list(elites)
+                cagr, dd = stats['cagr'] * 100, abs(stats['max_dd']) * 100
+                if cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5):
+                    self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
+                    v_path = os.path.join(vault_dir, f"v3_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
+                    with open(v_path, 'w') as f: json.dump(best_g, f, indent=4)
                 
-                while len(new_pop) < self.population_size:
-                    p1, p2 = random.choice(elites), random.choice(elites)
-                    child = self._crossover(p1, p2)
-                    new_pop.append(self._mutate(child))
-                
-                self.population = new_pop
-
-        print(f"\nEvolution V3 Complete. Best CAGR: {best_overall_metrics['cagr']*100:.2f}%")
-        print(f"Results stored in vault.")
-        return best_overall_genome
+                elites = [x[2] for x in scored[:max(2, self.pop_size // 5)]]
+                self.population = elites + [self._mutate(random.choice(elites)) for _ in range(self.pop_size - len(elites))]
+        return scored[0][2]
