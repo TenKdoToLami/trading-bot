@@ -21,8 +21,12 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         with open(identifier, "r") as f:
             genome = json.load(f)
             
-        # --- PRIORITY 1: Modern Champions (V9, V7, V6, V5) ---
-        if genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
+        # --- PRIORITY 1: Modern Champions (V10, V9, V7, V6, V5) ---
+        if "brain_a" in genome and "brain_b" in genome:
+            from strategies.genome_v10_expert import GenomeV10Expert
+            return GenomeV10Expert(genome=genome)
+            
+        elif genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
             from strategies.genome_v9_confidence import GenomeV9Confidence
             return GenomeV9Confidence(genome=genome)
             
