@@ -237,91 +237,29 @@ class TournamentRunner:
                         try:
                             with open(json_path, "r") as jf:
                                 genome = json.load(jf)
+                                version = genome.get('version')
+                            from src.tournament.registry import get_strategy_class
+                            strat_cls = get_strategy_class(version, genome=genome)
                             
-                            version = genome.get('version', 0.0)
-                            
-                            # Normalization: Convert string versions to numeric for dispatching
-                            version_map = {
-                                "v1_manual": 1.0, "v1_classic": 1.1, "v2_multi": 2.0, 
-                                "v3_precision": 3.0, "v4_precision": 4.0, "v4_chameleon": 4.1,
-                                "v5_sniper": 5.0, "v6_balancer": 6.0, "v7_deep": 7.0,
-                                "v7_deep_binary": 7.1, "v7_deep_fluid": 7.2, "v9_confidence": 9.0,
-                                "v10_expert": 10.0
-                            }
-                            if isinstance(version, str) and version in version_map:
-                                version = version_map[version]
-
-                            if version == 0.0:
-                                # Detection for legacy V1 structures (no version key)
-                                if "bounds_p" in genome or "weights_p" in genome:
-                                    version = 1.0
-                                elif "panic_weights" in genome:
-                                    version = 1.1 
-                                else:
-                                    folder_name = os.path.basename(root).lower()
-                                    if "v9" in folder_name: version = 9.0
-                                    elif "v6" in folder_name: version = 6.0
-                                    elif "v5" in folder_name: version = 5.0
-                                    elif "v4" in folder_name: version = 4.0
-                                    elif "v3" in folder_name: version = 3.0
-                                    elif "v2" in folder_name: version = 2.0
-                                
-                            strat_cls = None
-                            
-                            if version == 10.0:
-                                from strategies.genome_v10_expert import GenomeV10Expert
-                                strat_cls = GenomeV10Expert
-                            elif version == 9.0:
-                                from strategies.genome_v9_confidence import GenomeV9Confidence
-                                strat_cls = GenomeV9Confidence
-                            elif version == 7.2:
-                                from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
-                                strat_cls = GenomeV7DeepFluid
-                            elif version == 7.1:
-                                from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
-                                strat_cls = GenomeV7DeepBinary
-                            elif version == 7.0:
-                                from strategies.genome_v7_deep import GenomeV7Deep
-                                strat_cls = GenomeV7Deep
-                            elif version == 6.0:
-                                from strategies.genome_v6_balancer import GenomeV6
-                                strat_cls = GenomeV6
-                            elif version == 5.0:
-                                from strategies.genome_v5_sniper import GenomeV5Sniper
-                                strat_cls = GenomeV5Sniper
-                            elif version == 4.1:
-                                from strategies.genome_v4_chameleon import ChameleonV4
-                                strat_cls = ChameleonV4
-                            elif version == 4.0:
-                                from strategies.genome_v4_precision import GenomeV4Precision
-                                strat_cls = GenomeV4Precision
-                            elif version == 3.0:
-                                from strategies.genome_v3_precision import GenomeV3Strategy
-                                strat_cls = GenomeV3Strategy
-                            elif version == 2.0:
-                                from strategies.genome_v2_multi import GenomeV2Strategy
-                                strat_cls = GenomeV2Strategy
-                            elif version == 1.0:
-                                from strategies.genome_v1_manual import ManualV1
-                                strat_cls = ManualV1
-                                
                             if strat_cls:
-                                s = strat_cls(genome=genome)
-                                
-                                # Professional Naming: Champion VX (Name)
-                                folder_name = os.path.basename(root)
-                                if f.lower() == "genome.json":
-                                    # Convert v6_balancer -> Champion V6 (Balancer)
-                                    parts = folder_name.split("_")
-                                    ver = parts[0].upper() # V6
-                                    display_name = " ".join(p.capitalize() for p in parts[1:]) # Balancer
-                                    s.NAME = self._clean_name(f"{ver} ({display_name})", "CHAMP")
-                                else:
-                                    # Fallback for other JSONs
-                                    label = f.replace(".json", "")
-                                    s.NAME = self._clean_name(label, "GENE", genome)
+                                try:
+                                    s = strat_cls(genome=genome)
+                                    folder_name = os.path.basename(root)
                                     
-                                strategies.append(s)
+                                    if f.lower() == "genome.json":
+                                        parts = folder_name.split("_")
+                                        ver = parts[0].upper() # V6
+                                        display_name = " ".join(p.capitalize() for p in parts[1:]) # Balancer
+                                        s.NAME = self._clean_name(f"{ver} ({display_name})", "CHAMP")
+                                    else:
+                                        label = f.replace(".json", "")
+                                        s.NAME = self._clean_name(label, "GENE", genome)
+                                        
+                                    strategies.append(s)
+                                except Exception as e:
+                                    print(f"  Error instantiating {json_path}: {e}")
+                            else:
+                                print(f"  Unknown strategy version for {json_path}: {version}")
                         except Exception as e:
                             print(f"  Error loading genome {f}: {e}")
 

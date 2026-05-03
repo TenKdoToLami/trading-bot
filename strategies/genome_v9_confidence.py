@@ -6,10 +6,12 @@ Uses a stickiness/hysteresis mechanism to maintain positions and reduce slippage
 
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility, mfi, bollinger_bands
 )
 
+@register_strategy(["v9_confidence", 9.0])
 class GenomeV9Confidence(BaseStrategy):
     NAME = "Genome V9 (Confidence Spread)"
     version = 9

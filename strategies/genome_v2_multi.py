@@ -5,20 +5,25 @@ and decision gate, allowing for high-expressive "specialization."
 """
 
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
 )
 
+from src.tournament.market_state import MarketState
+
+@register_strategy(["v2_multi", 2.0])
 class GenomeV2Strategy(BaseStrategy):
     NAME = "Genome V2 (Multi-Brain)"
 
     def __init__(self, genome=None, precalculated_features=None):
         self.genome = genome or self._default_genome()
         self.nitro_features = precalculated_features
+        self.market = MarketState()
         self.reset()
 
     def _default_genome(self):
-        # Every tier gets its own set of weights
+        # ... (keep same)
         def _brain():
             return {
                 'w': {k: 0.0 for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']},
@@ -35,61 +40,44 @@ class GenomeV2Strategy(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        self.prev_ema = None
-        self.prev_atr = None
-        self.indicator_state = {}
+        self.market = MarketState()
         self.last_holdings = None
         self.lock_counter = 0
-        self.prev_macro = {'vix': 15.0, 'yc': 0.0}
 
     def on_data(self, date, price_data, prev_data):
-        spy_price = price_data['close']
+        m = self.market
+        m.update(date, price_data)
         
         if self.lock_counter > 0:
             self.lock_counter -= 1
 
         if self.nitro_features and date in self.nitro_features:
-            # NITRO MODE: Fast lookup
             inputs = self.nitro_features[date]
         else:
-            # LEGACY MODE: Calculate indicators on the fly
-            self.prices.append(spy_price)
-            self.highs.append(price_data['high'])
-            self.lows.append(price_data['low'])
-
-            # 1. Calculate Indicators
-            val_sma = sma(self.prices, 200)
-            val_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
-            self.prev_ema = val_ema
-            val_rsi = rsi(self.prices, 14, state=self.indicator_state)
-            val_macd_tuple = macd(self.prices, 12, 26, state=self.indicator_state)
-            val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
-            val_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
-            val_trix = trix(self.prices, 15, state=self.indicator_state)
-            val_slope = linear_regression_slope(self.prices, 20)
-            val_vol = realized_volatility(self.prices, 20)
-            val_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
-            self.prev_atr = val_atr
-
-            # 2. Normalize
-            macro_vix = float(price_data.get('vix', 15.0))
-            macro_yc = float(price_data.get('yield_curve', 0.0))
+            # Indicator Pipeline via MarketState
+            p = m.last_price
+            v_sma = m.get_indicator('sma', 200)
+            v_ema = m.get_indicator('ema', 50)
+            v_rsi = m.get_indicator('rsi', 14)
+            v_macd = m.get_indicator('macd', 12, slow=26)
+            v_adx = m.get_indicator('adx', 14)
+            v_trix = m.get_indicator('trix', 15)
+            v_slope = m.get_indicator('slope', 20)
+            v_vol = m.get_indicator('vol', 20)
+            v_atr = m.get_indicator('atr', 14)
             
             inputs = {
-                'sma': ((spy_price - val_sma) / val_sma * 5) if val_sma else 0.0,
-                'ema': ((spy_price - val_ema) / val_ema * 10) if val_ema else 0.0,
-                'rsi': ((val_rsi or 50) - 50) / 50.0,
-                'macd': val_macd / spy_price * 100,
-                'adx': ((val_adx or 25) - 25) / 25.0,
-                'trix': val_trix or 0.0,
-                'slope': (val_slope or 0.0) / spy_price * 1000,
-                'vol': (val_vol or 0.15) * 5,
-                'atr': ((val_atr or 0.0) / spy_price) * 50,
-                'vix': (macro_vix - 20) / 10.0,
-                'yc': macro_yc
+                'sma': ((p - v_sma) / v_sma * 5) if v_sma else 0.0,
+                'ema': ((p - v_ema) / v_ema * 10) if v_ema else 0.0,
+                'rsi': ((v_rsi or 50) - 50) / 50.0,
+                'macd': (v_macd / p * 100) if v_macd else 0.0,
+                'adx': ((v_adx or 25) - 25) / 25.0,
+                'trix': v_trix or 0.0,
+                'slope': (v_slope or 0.0) / p * 1000,
+                'vol': (v_vol or 0.15) * 5,
+                'atr': ((v_atr or 0.0) / p) * 50,
+                'vix': (m.get_macro('vix', 15.0) - 20) / 10.0,
+                'yc': m.get_macro('yield_curve', 0.0)
             }
 
         # 3. Decision Pipeline (Each tier has its own weighted score and threshold)

@@ -6,19 +6,25 @@ Evolves both the indicator weights AND the indicator lookback periods for each b
 
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
 )
 
+from src.tournament.market_state import MarketState
+
+@register_strategy(["v4_precision", 4.0])
 class GenomeV4Precision(BaseStrategy):
     NAME = "[GENE] V4 | (AI Precision)"
     version = 4
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
+        self.market = MarketState()
         self.reset()
 
     def _default_genome(self):
+        # ... (keep same)
         def _brain():
             return {
                 'w': {k: 0.0 for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']},
@@ -38,20 +44,61 @@ class GenomeV4Precision(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        
-        # Isolated state per brain
-        self.brain_states = {
-            'panic': {},
-            'bull': {}
-        }
-        
+        self.market = MarketState()
         self.last_holdings = None
         self.lock_counter = 0
 
-    def _get_brain_score(self, brain_key, price_data, shared_cache):
+    def _get_brain_score(self, brain_key, price_data):
+        brain = self.genome[brain_key]
+        lb = brain.get('lookbacks', {})
+        m = self.market
+        
+        if not m.prices: return 0.0
+        
+        total_score = 0.0
+        w, a = brain['w'], brain['a']
+        p = m.last_price
+        
+        if a.get('sma', True):
+            v = m.get_indicator('sma', lb.get('sma', 200))
+            if v: total_score += w['sma'] * ((p - v) / v * 5)
+            
+        if a.get('ema', True):
+            v = m.get_indicator('ema', lb.get('ema', 50))
+            if v: total_score += w['ema'] * ((p - v) / v * 10)
+            
+        if a.get('rsi', True):
+            v = m.get_indicator('rsi', lb.get('rsi', 14))
+            if v: total_score += w['rsi'] * ((v - 50) / 50.0)
+            
+        if a.get('macd', True):
+            v = m.get_indicator('macd', lb.get('macd_f', 12), slow=lb.get('macd_s', 26))
+            if v: total_score += w['macd'] * (v / p * 100)
+            
+        if a.get('adx', True):
+            v = m.get_indicator('adx', lb.get('adx', 14))
+            if v: total_score += w['adx'] * ((v - 25) / 25.0)
+            
+        if a.get('trix', True):
+            v = m.get_indicator('trix', lb.get('trix', 15))
+            if v: total_score += w['trix'] * v
+            
+        if a.get('slope', True):
+            v = m.get_indicator('slope', lb.get('slope', 20))
+            if v: total_score += w['slope'] * (v / p * 1000)
+            
+        if a.get('vol', True):
+            v = m.get_indicator('vol', lb.get('vol', 20))
+            if v: total_score += w['vol'] * (v * 5)
+            
+        if a.get('atr', True):
+            v = m.get_indicator('atr', lb.get('atr', 14))
+            if v: total_score += w['atr'] * ((v / p) * 50)
+            
+        total_score += w['vix'] * ((m.get_macro('vix', 15.0) - 20) / 10.0)
+        total_score += w['yc'] * m.get_macro('yield_curve', 0.0)
+        
+        return total_score
         spy_price = self.prices[-1]
         brain = self.genome[brain_key]
         lb = brain.get('lookbacks', {})
@@ -115,16 +162,12 @@ class GenomeV4Precision(BaseStrategy):
         return total_score
 
     def on_data(self, date, price_data, prev_data):
-        self.prices.append(price_data['close'])
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
+        self.market.update(date, price_data)
 
-        if self.lock_counter > 0:
-            self.lock_counter -= 1
+        if self.lock_counter > 0: self.lock_counter -= 1
 
-        shared_cache = {}
-        score_panic = self._get_brain_score('panic', price_data, shared_cache)
-        score_bull = self._get_brain_score('bull', price_data, shared_cache)
+        score_panic = self._get_brain_score('panic', price_data)
+        score_bull = self._get_brain_score('bull', price_data)
 
         # 3-State Decision Pipeline (Neutral Fallback)
         if score_panic > self.genome['panic']['t']:

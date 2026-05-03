@@ -47,6 +47,9 @@ def _evaluate_v3_worker(genome):
     if dd_pct >= 95.0: fitness -= 1000
     return fitness, metrics, genome
 
+from src.tournament.evolution_registry import register_evolution
+
+@register_evolution("v3_precision")
 class EvolutionEngineV3:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate

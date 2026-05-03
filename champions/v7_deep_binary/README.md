@@ -37,10 +37,10 @@ python tests/vault_sweep.py --vault champions/v7_deep_binary/vault --promote --t
 ### 🧬 Evolution
 ```bash
 # Standard Evolution run
-python tests/run_evolution_v7_deep_binary.py --pop 500 --gen 100 --ablation
+python tests/run_evolution_universal.py --version v7_deep_binary --pop 500 --gen 100 --ablation
 
 # Seeded Evolution (Refine from vault)
-python tests/run_evolution_v7_deep_binary.py --pop 300 --gen 50 --ablation --seed champions/v7_deep_binary/vault
+python tests/run_evolution_universal.py --version v7_deep_binary --pop 300 --gen 50 --ablation --seed champions/v7_deep_binary/vault
 ```
 
 #### ⚙️ Evolution Parameters

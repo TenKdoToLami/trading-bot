@@ -81,6 +81,7 @@ def _evaluate_v1_worker(genome):
     if metrics['num_rebalances'] == 0: fitness -= 2000
     return fitness, metrics, genome
 
+@register_evolution("v1_classic")
 class EvolutionEngineV1Classic:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
         self.pop_size = population_size

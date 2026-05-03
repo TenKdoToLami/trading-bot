@@ -16,8 +16,8 @@ V5 Sniper is a specialized evolution of the Precision series, designed to target
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v5_sniper.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v5_sniper.py --pop 100 --gen 100 --vault champions/v5_sniper/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v5_sniper --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v5_sniper --pop 100 --gen 100 --vault champions/v5_sniper/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

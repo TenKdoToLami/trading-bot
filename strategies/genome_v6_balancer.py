@@ -8,6 +8,7 @@ Shared lookbacks for unified market perception.
 import math
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility,
     mfi, bollinger_width
@@ -19,15 +20,20 @@ def softmax(x, temp=1.0):
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
 
+from src.tournament.market_state import MarketState
+
+@register_strategy(["v6_balancer", 6.0])
 class GenomeV6(BaseStrategy):
     NAME = "[GENE] V6 | (Balancer)"
     version = 6
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
+        self.market = MarketState()
         self.reset()
 
     def _default_genome(self):
+        # ... (keep same)
         indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc', 'mfi', 'bbw']
         return {
             'brains': {
@@ -47,88 +53,59 @@ class GenomeV6(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        self.volumes = []
-        self.brain_state = {}
+        self.market = MarketState()
         self.last_holdings = None
         self.lock_counter = 0
 
-    def _get_brain_scores(self, price_data, shared_cache):
-        spy_price = self.prices[-1]
+    def _get_brain_scores(self, price_data):
         lb = self.genome.get('lookbacks', {})
-        state = self.brain_state
-
-        def _fetch(key, func, *args, **kwargs):
-            lookback = int(round(lb.get(key, 200)))
-            cache_key = (key, lookback)
-            if cache_key in shared_cache: return shared_cache[cache_key]
-            if 'state' in kwargs: res = func(*args, **kwargs)
-            else: res = func(*args, period=lookback)
-            shared_cache[cache_key] = res
-            return res
-
-        # 1. Fetch Shared Indicators
-        val_sma = _fetch('sma', sma, self.prices)
-        val_ema = ema(self.prices, max(2, int(round(lb.get('ema', 50)))), prev_ema=state.get('prev_ema'))
-        state['prev_ema'] = val_ema
-        val_rsi = rsi(self.prices, max(2, int(round(lb.get('rsi', 14)))), state=state)
+        m = self.market
         
-        m_f, m_s = max(2, int(round(lb.get('macd_f', 12)))), max(3, int(round(lb.get('macd_s', 26))))
-        val_macd_tuple = macd(self.prices, m_f, m_s, state=state)
-        val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
-
-        val_adx = adx(self.highs, self.lows, self.prices, max(2, int(round(lb.get('adx', 14)))), state=state)
-        val_trix = trix(self.prices, max(2, int(round(lb.get('trix', 15)))), state=state)
-        val_slope = _fetch('slope', linear_regression_slope, self.prices)
-        val_vol = _fetch('vol', realized_volatility, self.prices)
-        val_atr = atr(self.highs, self.lows, self.prices, max(2, int(round(lb.get('atr', 14)))), prev_atr=state.get('prev_atr'))
-        state['prev_atr'] = val_atr
+        if not m.prices: return [0.0, 0.0, 0.0, 0.0]
         
-        val_mfi = mfi(self.highs, self.lows, self.prices, self.volumes, max(2, int(round(lb.get('mfi', 14)))))
-        val_bbw = bollinger_width(self.prices, max(2, int(round(lb.get('bbw', 20)))))
-
-        macro_vix = float(price_data.get('vix', 15.0))
-        macro_yc = float(price_data.get('yield_curve', 0.0))
+        # Unified Feature Pipeline
+        p = m.last_price
+        v = {}
+        v['sma'] = m.get_indicator('sma', lb.get('sma', 200))
+        v['ema'] = m.get_indicator('ema', lb.get('ema', 50))
+        v['rsi'] = m.get_indicator('rsi', lb.get('rsi', 14))
+        v['macd'] = m.get_indicator('macd', lb.get('macd_f', 12), slow=lb.get('macd_s', 26))
+        v['adx'] = m.get_indicator('adx', lb.get('adx', 14))
+        v['trix'] = m.get_indicator('trix', lb.get('trix', 15))
+        v['slope'] = m.get_indicator('slope', lb.get('slope', 20))
+        v['vol'] = m.get_indicator('vol', lb.get('vol', 20))
+        v['atr'] = m.get_indicator('atr', lb.get('atr', 14))
+        v['mfi'] = m.get_indicator('mfi', lb.get('mfi', 14))
+        v['bbw'] = m.get_indicator('bbw', lb.get('bbw', 20))
         
-        # 2. Calculate scores for each brain
-        scores = {}
-        for b_name, b_data in self.genome['brains'].items():
-            total = 0
-            w, a = b_data['w'], b_data['a']
-            if a.get('sma', True) and val_sma: total += w.get('sma', 0) * ((spy_price - val_sma) / val_sma * 5)
-            if a.get('ema', True) and val_ema: total += w.get('ema', 0) * ((spy_price - val_ema) / val_ema * 10)
-            if a.get('rsi', True) and val_rsi: total += w.get('rsi', 0) * ((val_rsi - 50) / 50.0)
-            if a.get('macd', True): total += w.get('macd', 0) * (val_macd / spy_price * 100)
-            if a.get('adx', True) and val_adx: total += w.get('adx', 0) * ((val_adx - 25) / 25.0)
-            if a.get('trix', True) and val_trix: total += w.get('trix', 0) * val_trix
-            if a.get('slope', True) and val_slope: total += w.get('slope', 0) * (val_slope / spy_price * 1000)
-            if a.get('vol', True) and val_vol: total += w.get('vol', 0) * (val_vol * 5)
-            if a.get('atr', True) and val_atr: total += w.get('atr', 0) * ((val_atr / spy_price) * 50)
-            if a.get('mfi', True) and val_mfi: total += w.get('mfi', 0) * ((val_mfi - 50) / 50.0)
-            if a.get('bbw', True) and val_bbw: total += w.get('bbw', 0) * (val_bbw * 10)
-            if a.get('vix', True): total += w.get('vix', 0) * ((macro_vix - 20) / 10.0)
-            if a.get('yc', True): total += w.get('yc', 0) * macro_yc
-            scores[b_name] = total
-            
+        feat = {
+            'sma': ((p - v['sma']) / v['sma'] * 5) if v['sma'] else 0.0,
+            'ema': ((p - v['ema']) / v['ema'] * 10) if v['ema'] else 0.0,
+            'rsi': ((v['rsi'] or 50) - 50) / 50.0,
+            'macd': (v['macd'] / p * 100) if v['macd'] else 0.0,
+            'adx': ((v['adx'] or 25) - 25) / 25.0,
+            'trix': v['trix'] or 0.0,
+            'slope': (v['slope'] or 0.0) / p * 1000,
+            'vol': (v['vol'] or 0.15) * 5,
+            'atr': ((v['atr'] or 0.0) / p) * 50,
+            'mfi': ((v['mfi'] or 50) - 50) / 50.0,
+            'bbw': (v['bbw'] or 0.05) * 10,
+            'vix': (m.get_macro('vix', 15.0) - 20) / 10.0,
+            'yc': m.get_macro('yield_curve', 0.0)
+        }
+        
+        scores = []
+        for key in ['cash', '1x', '2x', '3x']:
+            brain = self.genome['brains'][key]
+            scores.append(sum(brain['w'][k] * feat[k] for k in brain['w'] if brain['a'].get(k, True)))
         return scores
 
     def on_data(self, date, price_data, prev_data):
-        self.prices.append(price_data['close'])
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
-        self.volumes.append(float(price_data.get('volume', 1000000)))
+        self.market.update(date, price_data)
 
         if self.lock_counter > 0: self.lock_counter -= 1
 
-        shared_cache = {}
-        scores = self._get_brain_scores(price_data, shared_cache)
-        
-        # Softmax to probabilities
-        brain_order = ['cash', '1x', '2x', '3x']
-        raw_vals = [scores[b] for b in brain_order]
-        probs = softmax(raw_vals, temp=self.genome.get('temp', 1.0))
+        probs = softmax(self._get_brain_scores(price_data), temp=self.genome.get('temp', 1.0))
         
         new_holdings = {
             "CASH": float(probs[0]),

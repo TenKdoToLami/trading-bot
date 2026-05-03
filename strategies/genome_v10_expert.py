@@ -12,10 +12,10 @@ import os
 import json
 import numpy as np
 from strategies.base import BaseStrategy
-from src.helpers.indicators import (
-    sma, ema, rsi, macd, adx, atr, realized_volatility, linear_regression_slope, mfi, trix
-)
+from src.tournament.registry import register_strategy
+from src.tournament.market_state import MarketState
 
+@register_strategy(["v10_expert", 10.0])
 class GenomeV10Expert(BaseStrategy):
     NAME = "Genome V10 (Expert Ensemble)"
     version = 10
@@ -67,11 +67,7 @@ class GenomeV10Expert(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        self.volumes = []
-        self.indicator_states = {} # For stateful indicators like EMA/RSI
+        self.market = MarketState()
         self.current_holdings = {"CASH": 1.0}
         
     def _relu(self, x): return np.maximum(0, x)
@@ -84,48 +80,44 @@ class GenomeV10Expert(BaseStrategy):
 
     def _get_indicator_val(self, key, lb):
         """Helper to fetch indicator values matching the Profiler logic."""
+        m = self.market
         lb = int(round(lb))
+        p = m.last_price
+        
         if key == "SMA_DIST":
-            val = sma(self.prices, lb)
-            return (self.prices[-1] - val) / val if val else 0
+            val = m.get_indicator('sma', lb)
+            return (p - val) / val if val else 0
         elif key == "EMA_DIST":
-            state_key = f"ema_{lb}"
-            val = ema(self.prices, lb, prev_ema=self.indicator_states.get(state_key))
-            self.indicator_states[state_key] = val
-            return (self.prices[-1] - val) / val if val else 0
+            val = m.get_indicator('ema', lb)
+            return (p - val) / val if val else 0
         elif key == "RSI":
-            state_key = f"rsi_{lb}"
-            if state_key not in self.indicator_states: self.indicator_states[state_key] = {}
-            val = rsi(self.prices, lb, state=self.indicator_states[state_key])
+            val = m.get_indicator('rsi', lb)
             return val if val is not None else 50
         elif key == "MFI":
-            val = mfi(self.highs, self.lows, self.prices, self.volumes, lb)
+            val = m.get_indicator('mfi', lb)
             return val if val is not None else 50
         elif key == "TRIX":
-            state_key = f"trix_{lb}"
-            if state_key not in self.indicator_states: self.indicator_states[state_key] = {}
-            val = trix(self.prices, lb, state=self.indicator_states[state_key])
+            val = m.get_indicator('trix', lb)
             return val if val is not None else 0
         elif key == "ADX":
-            state_key = f"adx_{lb}"
-            if state_key not in self.indicator_states: self.indicator_states[state_key] = {}
-            val = adx(self.highs, self.lows, self.prices, lb, state=self.indicator_states[state_key])
+            val = m.get_indicator('adx', lb)
             return val if val is not None else 20
         elif key == "SLOPE":
-            val = linear_regression_slope(self.prices, lb)
-            return (val / self.prices[-1] * 1000) if val else 0
+            val = m.get_indicator('slope', lb)
+            return val if val is not None else 0
         elif key == "VOL":
-            val = realized_volatility(self.prices, lb)
+            val = m.get_indicator('vol', lb)
             return val if val is not None else 0.15
+        elif key == "ATR":
+            val = m.get_indicator('atr', lb)
+            return val if val is not None else 1.0
+        elif key == "VIX":
+            return m.get_macro('vix', 20.0)
         return 0
-
     def on_data(self, date, price_data, prev_data):
-        self.prices.append(price_data['close'])
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
-        self.volumes.append(price_data.get('volume', 0))
+        self.market.update(date, price_data)
         
-        if len(self.prices) < 10: return self.current_holdings, {}
+        if len(self.market.prices) < 10: return self.current_holdings, {}
 
         # 1. Expert Layer (Weighted Pre-calculation)
         expert_bull = []

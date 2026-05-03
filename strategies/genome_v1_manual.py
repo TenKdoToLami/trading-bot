@@ -4,16 +4,22 @@ Processes the original manual bounds and weights structure.
 """
 
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import sma
 
+from src.tournament.market_state import MarketState
+
+@register_strategy(["v1_manual", 1.0])
 class ManualV1(BaseStrategy):
     NAME = "Champion V1 (Manual Baseline)"
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
+        self.market = MarketState()
         self.reset()
 
     def _default_genome(self):
+        # ... (keep same)
         return {
             "sma": 200,
             "min_b_days": 5,
@@ -27,17 +33,17 @@ class ManualV1(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
+        self.market = MarketState()
 
     def on_data(self, date, price_data, prev_data):
-        self.prices.append(price_data['close'])
+        self.market.update(date, price_data)
         
         # 1. Trend Filter
-        val_sma = sma(self.prices, self.genome.get('sma', 200))
+        val_sma = self.market.get_indicator('sma', self.genome.get('sma', 200))
         if not val_sma:
             return {"CASH": 1.0}
             
-        is_uptrend = price_data['close'] > val_sma
+        is_uptrend = self.market.last_price > val_sma
         
         # 2. VIX-Based State Selection
         vix = float(price_data.get('vix', 20.0))

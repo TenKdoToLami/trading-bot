@@ -19,8 +19,8 @@ V10 Alpha (Expert) is the ultimate evolution of the tactical bot. It uses a **Hi
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v10_expert.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v10_expert.py --pop 100 --gen 50 --vault champions/v10_alpha/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v10_alpha --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v10_alpha --pop 100 --gen 50 --vault champions/v10_alpha/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

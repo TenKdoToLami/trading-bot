@@ -33,10 +33,10 @@ python tests/vault_sweep.py --vault champions/v7_deep_fluid/vault --promote --to
 ### 🧬 Evolution
 ```bash
 # Standard Evolution run
-python tests/run_evolution_v7_deep_fluid.py --pop 500 --gen 100 --ablation
+python tests/run_evolution_universal.py --version v7_deep_fluid --pop 500 --gen 100 --ablation
 
 # Seeded Evolution (Refine from vault)
-python tests/run_evolution_v7_deep_fluid.py --pop 300 --gen 50 --ablation --seed champions/v7_deep_fluid/vault
+python tests/run_evolution_universal.py --version v7_deep_fluid --pop 300 --gen 50 --ablation --seed champions/v7_deep_fluid/vault
 ```
 
 #### ⚙️ Evolution Parameters

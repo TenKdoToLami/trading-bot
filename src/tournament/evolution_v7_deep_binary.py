@@ -1,3 +1,4 @@
+from src.tournament.evolution_registry import register_evolution
 import random
 import json
 import concurrent.futures
@@ -37,6 +38,7 @@ def _evaluate_v7db_worker(genome):
     if dd_pct >= 95.0: fitness -= 1000
     return fitness, metrics, genome
 
+@register_evolution("v7_deep_binary")
 class EvolutionEngineV7DeepBinary:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate

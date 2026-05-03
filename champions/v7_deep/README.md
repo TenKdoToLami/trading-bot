@@ -16,8 +16,8 @@ V7 Deep is a complete departure from heuristic logic. It uses a **Deep Neural Ne
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v7_deep.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v7_deep.py --pop 100 --gen 100 --vault champions/v7_deep/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v7_deep --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v7_deep --pop 100 --gen 100 --vault champions/v7_deep/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

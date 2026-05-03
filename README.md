@@ -79,17 +79,29 @@ python tests/run_tournament.py --strategy "[Cheat] Guided God (Weekly),Champion 
 ## 🧬 Evolutionary Strategy Breeding
 The framework includes several Genetic Algorithm (GA) engines to autonomously discover optimal indicator combinations and weights.
 
-### Evolution Commands
-| Command | Version | Goal |
-|---------|---------|------|
-| `python tests/run_evolution_v10_expert.py`  | **V10**| Institutional Ensemble (Triple-Brain Consensus) |
-| `python tests/run_evolution_v9_confidence.py`| **V9** | Conviction-Gated Neuro-Ensemble |
-| `python tests/run_evolution_v6_balancer.py` | **V6** | Probabilistic Softmax Allocator (Institutional Grade) |
-| `python tests/run_evolution_v5_sniper.py`   | **V5** | Tiered Entry Hunter (1x -> 2x -> 3x) |
-| `python tests/run_evolution_v4_precision.py`| **V4** | Precision 3-State AI (CASH/1x/3x) |
-| `python tests/run_evolution_v3_precision.py`| **V3** | Binary AI with Genetic Lookback Optimization |
-| `python tests/run_evolution_v2_multi.py`    | **V2** | Multi-Brain Multi-Regime Logic |
-| `python tests/run_evolution_v1_manual.py`  | **V1** | Discrete VIX-Bracketed Switcher (Baseline) |
+### Universal Evolution Engine
+We use a unified runner for all evolution versions.
+```bash
+# General Syntax
+python tests/run_evolution_universal.py --version <VERSION_ID> [OPTIONS]
+
+# Example: Run V6 Balancer Evolution
+python tests/run_evolution_universal.py --version v6_balancer --pop 100 --gen 50
+```
+
+### Supported Versions
+| Version ID | Strategy Type | Goal |
+|------------|---------------|------|
+| `v10_expert` | Institutional Ensemble | Triple-Brain Consensus Logic |
+| `v9_confidence` | Conviction-Gated | Neuro-Ensemble with Hysteresis |
+| `v7_deep` | Fluid Deep Allocation | Dynamic Float Allocation (CASH to 3x) |
+| `v6_balancer` | Probabilistic Balancer | Softmax Allocator (Institutional Grade) |
+| `v5_sniper` | Tiered Entry Hunter | Hunter-style 1x -> 2x -> 3x steps |
+| `v4_precision` | 3-State Precision | Discrete CASH / 1x / 3x Logic |
+| `v3_precision` | Binary AI | High-speed 3x vs CASH with Lookback Optimization |
+| `v2_multi` | Multi-Brain | Cross-Regime Hybrid Logic |
+| `v1_classic` | Weighted Baseline | V1 Classic indicator weights |
+| `v1_manual` | Bracketed Switcher | Manual VIX/SMA bracket logic |
 
 ### Common Parameters
 | Flag | Default | Description |
@@ -147,23 +159,36 @@ python tests/synthetic_audit.py "Champion V6 (Balancer)" --iters 50 --chunk 252
 
 ## 🧩 Writing a New Strategy
 
-Create a new `.py` file in `strategies/` that subclasses `BaseStrategy`:
+Create a new `.py` file in `strategies/` that subclasses `BaseStrategy`. Use the `MarketState` engine for simplified indicators:
 
 ```python
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
+from src.tournament.market_state import MarketState
 
+@register_strategy("my_new_strategy")
 class MyStrategy(BaseStrategy):
     NAME = "My Custom Strategy"
 
-    def __init__(self):
-        self.reset()
+    def __init__(self, genome=None):
+        self.genome = genome
+        self.market = MarketState()
 
     def reset(self):
-        self.prices = []
+        self.market = MarketState()
 
     def on_data(self, date, price_data, prev_data):
-        # price_data contains finalized OHLCV + VIX + Indicators
-        return {"3xSPY": 1.0} # Return holdings dict or None
+        # 1. Update market state
+        self.market.update(date, price_data)
+        
+        # 2. Get indicators easily (auto-cached and stateful)
+        sma_200 = self.market.get_indicator("sma", 200)
+        rsi_14 = self.market.get_indicator("rsi", 14)
+        
+        # 3. Decision Logic
+        if sma_200 and self.market.last_price > sma_200:
+            return {"3xSPY": 1.0}
+        return {"CASH": 1.0}
 ```
 
 ---

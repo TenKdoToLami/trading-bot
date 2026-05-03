@@ -1,5 +1,8 @@
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
+from src.tournament.market_state import MarketState
 
+@register_strategy(["v1_classic", 1.1])
 class GenomeV1(BaseStrategy):
     """
     Weighted Indicator Strategy for V1 Classic.
@@ -10,52 +13,43 @@ class GenomeV1(BaseStrategy):
     def __init__(self, genome=None, precalculated_features=None):
         self.genome = genome
         self.features = precalculated_features or {}
+        self.market = MarketState()
         self.reset()
 
     def reset(self):
         self.last_signal = None
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        self.prev_ema = None
-        self.prev_atr = None
-        self.indicator_state = {}
+        self.market = MarketState()
 
     def on_data(self, date, price_data, prev_data):
+        m = self.market
+        m.update(date, price_data)
+
         # 0. Feature Extraction (Priority: Precalculated -> On-the-fly)
         if date in self.features:
             feat = self.features[date]
         else:
-            # Fallback to manual calculation (required for vault sweep)
-            from src.helpers.indicators import (
-                sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
-            )
-            
-            spy_price = price_data['close']
-            self.prices.append(spy_price)
-            self.highs.append(price_data['high'])
-            self.lows.append(price_data['low'])
-            
-            v_sma = sma(self.prices, 200)
-            self.prev_ema = ema(self.prices, 50, prev_ema=self.prev_ema)
-            v_rsi = rsi(self.prices, 14, state=self.indicator_state)
-            v_macd = macd(self.prices, 12, 26, state=self.indicator_state)[0] or 0.0
-            v_adx = adx(self.highs, self.lows, self.prices, 14, state=self.indicator_state)
-            v_trix = trix(self.prices, 15, state=self.indicator_state)
-            v_slope = linear_regression_slope(self.prices, 20)
-            v_vol = realized_volatility(self.prices, 20)
-            self.prev_atr = atr(self.highs, self.lows, self.prices, 14, prev_atr=self.prev_atr)
+            # Indicator Pipeline via MarketState
+            p = m.last_price
+            v_sma = m.get_indicator('sma', 200)
+            v_ema = m.get_indicator('ema', 50)
+            v_rsi = m.get_indicator('rsi', 14)
+            v_macd = m.get_indicator('macd', 12, slow=26)
+            v_adx = m.get_indicator('adx', 14)
+            v_trix = m.get_indicator('trix', 15)
+            v_slope = m.get_indicator('slope', 20)
+            v_vol = m.get_indicator('vol', 20)
+            v_atr = m.get_indicator('atr', 14)
 
             feat = {
-                'sma': ((spy_price - v_sma) / v_sma * 5) if v_sma else 0.0,
-                'ema': ((spy_price - self.prev_ema) / self.prev_ema * 10) if self.prev_ema else 0.0,
+                'sma': ((p - v_sma) / v_sma * 5) if v_sma else 0.0,
+                'ema': ((p - v_ema) / v_ema * 10) if v_ema else 0.0,
                 'rsi': ((v_rsi or 50) - 50) / 50.0,
-                'macd': v_macd / spy_price * 100,
+                'macd': (v_macd / p * 100) if v_macd else 0.0,
                 'adx': ((v_adx or 25) - 25) / 25.0,
                 'trix': v_trix or 0.0,
-                'slope': (v_slope or 0.0) / spy_price * 1000,
+                'slope': (v_slope or 0.0) / p * 1000,
                 'vol': (v_vol or 0.15) * 5,
-                'atr': ((self.prev_atr or 0.0) / spy_price) * 50
+                'atr': ((v_atr or 0.0) / p) * 50
             }
         
         pw = self.genome['panic_weights']

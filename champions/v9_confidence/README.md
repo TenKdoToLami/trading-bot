@@ -16,8 +16,8 @@ V9 Confidence represents the peak of the V-series neural architectures. It combi
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v9_confidence.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v9_confidence.py --pop 100 --gen 100 --vault champions/v9_confidence/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v9_confidence --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v9_confidence --pop 100 --gen 100 --vault champions/v9_confidence/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

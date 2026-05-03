@@ -16,8 +16,8 @@ V6 Balancer is the first architecture to use a **Softmax Ensemble** approach. In
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v6_balancer.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v6_balancer.py --pop 100 --gen 100 --vault champions/v6_balancer/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v6_balancer --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v6_balancer --pop 100 --gen 100 --vault champions/v6_balancer/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

@@ -1,3 +1,4 @@
+from src.tournament.evolution_registry import register_evolution
 import os
 import json
 import random
@@ -48,6 +49,7 @@ def _evaluate_v9_worker(genome):
     
     return fitness, metrics, genome
 
+@register_evolution("v9_confidence")
 class EvolutionEngineV9Confidence:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=20.0):
         self.pop_size = population_size

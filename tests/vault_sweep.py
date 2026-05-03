@@ -18,119 +18,23 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-# Strategy Imports
-from strategies.genome_v1_manual import ManualV1
-from strategies.genome_v2_multi import GenomeV2Strategy
-from strategies.genome_v3_precision import GenomeV3Strategy
-from strategies.genome_v4_precision import GenomeV4Precision
-from strategies.genome_v5_sniper import GenomeV5Sniper
-from strategies.genome_v6_balancer import GenomeV6
-from strategies.genome_v7_deep import GenomeV7Deep
-from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
-from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
-from strategies.genome_v9_confidence import GenomeV9Confidence
-from strategies.genome_v10_expert import GenomeV10Expert
+from src.tournament.registry import get_strategy_class, discover_all_strategies
+# Load all strategies into registry at startup
+discover_all_strategies()
 
 # ──────────────────────────────────────────────────────
 # Genome Identification
 # ──────────────────────────────────────────────────────
 
-V1_KEYS = {'panic_weights', 'base_weights', 'base_thresholds', 'panic_threshold', 'lock_days'}
-V2_BRAINS = {'panic', '3x', '2x', '1x'}
-V3_BRAINS = {'panic', 'bull'}
-V4_BRAINS = {'panic', 'bull'}
-V5_KEYS = {'sniper'}
-V6_BRAINS = {'cash', '1x', '2x', '3x'}
-
-def get_genome_version(genome: dict):
-    """Detect genome version based on keys or explicit string."""
-    v = genome.get('version')
-    if v is None:
-        if 'hysteresis' in genome: return 9
-        if 'layers' in genome: return 7
-        if V6_BRAINS.issubset(genome.get('brains', {}).keys()): return 6
-        if V5_KEYS.issubset(genome.keys()): return 5
-        if V3_BRAINS.issubset(genome.keys()): return 3
-        if V2_BRAINS.issubset(genome.keys()): return 2
-        if V1_KEYS.issubset(genome.keys()) or 'weights_p' in genome: return 1
-        return 0
-    return v
-
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has a known genome structure."""
-    ver = get_genome_version(genome)
-    if not ver: return False
-    
-    # Structural checks for new string versions
-    if ver == "v10_expert": return "brain_a" in genome
-    if ver == "v9_confidence": return "layers" in genome
-    if ver == "v7_deep": return "layers" in genome
-    if ver == "v7_deep_binary": return "layers" in genome
-    if ver == "v7_deep_fluid": return "layers" in genome
-    if ver == "v6_balancer": return "brains" in genome
-    if ver == "v5_sniper": return "sniper" in genome
-    if ver == "v4_precision": return all(k in genome for k in V4_BRAINS)
-    if ver == "v3_precision": return all(k in genome for k in V3_BRAINS)
-    if ver == "v2_multi": return all(k in genome for k in V2_BRAINS)
-    if ver == "v1_manual": return "bounds_p" in genome
-    if ver == "v1_classic": return "panic_weights" in genome
-    
-    # Handle Numeric Versions for legacy support
-    try:
-        v_num = float(ver)
-        if v_num == 10: return "brain_a" in genome
-        if v_num == 9: return 'layers' in genome
-        if v_num == 7: return 'layers' in genome
-        if v_num == 6: return 'brains' in genome
-        if v_num == 5: return 'sniper' in genome
-        if v_num == 4: return all(k in genome for k in V4_BRAINS)
-        if v_num == 3: return all(k in genome for k in V3_BRAINS)
-        if v_num == 2: return all(k in genome for k in V2_BRAINS)
-        if v_num == 1: return True
-    except:
-        pass
-        
-    return False
+    return get_strategy_class(genome.get('version'), genome=genome) is not None
 
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=200):
     """Run simulation on a slice using the correct strategy class with pre-audit warmup."""
-    ver = genome.get('version', 0)
-    
-    if ver == "v10_expert": strat_type = GenomeV10Expert
-    elif ver == "v9_confidence": strat_type = GenomeV9Confidence
-    elif ver == "v7_deep": strat_type = GenomeV7Deep
-    elif ver == "v7_deep_binary": strat_type = GenomeV7DeepBinary
-    elif ver == "v7_deep_fluid": strat_type = GenomeV7DeepFluid
-    elif ver == "v6_balancer": strat_type = GenomeV6
-    elif ver == "v5_sniper": strat_type = GenomeV5Sniper
-    elif ver == "v4_precision": strat_type = GenomeV4Precision
-    elif ver == "v3_precision": strat_type = GenomeV3Strategy
-    elif ver == "v2_multi": strat_type = GenomeV2Strategy
-    elif ver == "v1_manual": strat_type = ManualV1
-    elif ver == "v1_classic": 
-        from strategies.genome_v1_classic import GenomeV1
-        strat_type = GenomeV1
-    elif ver == 9: strat_type = GenomeV9Confidence
-    elif ver == 7:
-        v = genome.get('version', 7.0)
-        try: v = float(v)
-        except: v = 7.0
-        if v == 7.2: strat_type = GenomeV7DeepFluid
-        elif v == 7.1: strat_type = GenomeV7DeepBinary
-        else: strat_type = GenomeV7Deep
-    elif ver == 6: strat_type = GenomeV6
-    elif ver == 5: strat_type = GenomeV5Sniper
-    elif ver == 4: strat_type = GenomeV4Precision
-    elif ver == 3: strat_type = GenomeV3Strategy
-    elif ver == 2: strat_type = GenomeV2Strategy
-    else:
-        # Structural fallback
-        if "brain_a" in genome: strat_type = GenomeV10Expert
-        elif "panic_weights" in genome:
-            from strategies.genome_v1_classic import GenomeV1
-            strat_type = GenomeV1
-        elif "bounds_p" in genome: strat_type = ManualV1
-        else: strat_type = ManualV1
+    strat_type = get_strategy_class(genome.get('version'), genome=genome)
+    if not strat_type:
+        strat_type = get_strategy_class("v1_classic") # Final fallback
     
     # Run simulation on the full slice (warmup + audit)
     res = _execute_simulation(

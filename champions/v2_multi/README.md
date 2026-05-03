@@ -16,8 +16,8 @@ V2 was the first version to explore **Multi-Asset Leverage**. It uses four disti
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v2_multi.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v2_multi.py --pop 100 --gen 100 --vault champions/v2_multi/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v2_multi --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v2_multi --pop 100 --gen 100 --vault champions/v2_multi/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

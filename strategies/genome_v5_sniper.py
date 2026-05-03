@@ -5,18 +5,24 @@ No CASH state. No Panic brain.
 """
 
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility
 )
 
+from src.tournament.market_state import MarketState
+
+@register_strategy(["v5_sniper", 5.0])
 class GenomeV5Sniper(BaseStrategy):
     NAME = "[GENE] V5 | (Tiered Sniper)"
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
+        self.market = MarketState()
         self.reset()
 
     def _default_genome(self):
+        # ... (keep same)
         return {
             'sniper': {
                 'w': {k: 0.0 for k in ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']},
@@ -33,75 +39,67 @@ class GenomeV5Sniper(BaseStrategy):
         }
 
     def reset(self):
-        self.prices = []
-        self.highs = []
-        self.lows = []
-        self.brain_state = {}
+        self.market = MarketState()
         self.last_holdings = None
         self.lock_counter = 0
 
-    def _get_brain_score(self, price_data, shared_cache):
-        spy_price = self.prices[-1]
+    def _get_brain_score(self, price_data):
         brain = self.genome['sniper']
         lb = brain.get('lookbacks', {})
-        state = self.brain_state
-
-        def _fetch(key, func, *args, **kwargs):
-            lookback = int(round(lb.get(key, 200)))
-            cache_key = (key, lookback)
-            if cache_key in shared_cache: return shared_cache[cache_key]
-            if 'state' in kwargs: res = func(*args, **kwargs)
-            else: res = func(*args, period=lookback)
-            shared_cache[cache_key] = res
-            return res
-
-        # Indicators
-        val_sma = _fetch('sma', sma, self.prices)
-        val_ema = ema(self.prices, max(2, int(round(lb.get('ema', 50)))), prev_ema=state.get('prev_ema'))
-        state['prev_ema'] = val_ema
-        val_rsi = rsi(self.prices, max(2, int(round(lb.get('rsi', 14)))), state=state)
+        m = self.market
         
-        m_f, m_s = max(2, int(round(lb.get('macd_f', 12)))), max(3, int(round(lb.get('macd_s', 26))))
-        val_macd_tuple = macd(self.prices, m_f, m_s, state=state)
-        val_macd = val_macd_tuple[0] if val_macd_tuple[0] is not None else 0.0
-
-        val_adx = adx(self.highs, self.lows, self.prices, max(2, int(round(lb.get('adx', 14)))), state=state)
-        val_trix = trix(self.prices, max(2, int(round(lb.get('trix', 15)))), state=state)
-        val_slope = _fetch('slope', linear_regression_slope, self.prices)
-        val_vol = _fetch('vol', realized_volatility, self.prices)
-        val_atr = atr(self.highs, self.lows, self.prices, max(2, int(round(lb.get('atr', 14)))), prev_atr=state.get('prev_atr'))
-        state['prev_atr'] = val_atr
-
-        # Normalize and Score
-        macro_vix = float(price_data.get('vix', 15.0))
-        macro_yc = float(price_data.get('yield_curve', 0.0))
+        if not m.prices: return 0.0
         
-        total_score = 0
+        total_score = 0.0
         w, a = brain['w'], brain['a']
+        p = m.last_price
         
-        if a.get('sma', True) and val_sma: total_score += w['sma'] * ((spy_price - val_sma) / val_sma * 5)
-        if a.get('ema', True) and val_ema: total_score += w['ema'] * ((spy_price - val_ema) / val_ema * 10)
-        if a.get('rsi', True) and val_rsi: total_score += w['rsi'] * ((val_rsi - 50) / 50.0)
-        if a.get('macd', True): total_score += w['macd'] * (val_macd / spy_price * 100)
-        if a.get('adx', True) and val_adx: total_score += w['adx'] * ((val_adx - 25) / 25.0)
-        if a.get('trix', True) and val_trix: total_score += w['trix'] * val_trix
-        if a.get('slope', True) and val_slope: total_score += w['slope'] * (val_slope / spy_price * 1000)
-        if a.get('vol', True) and val_vol: total_score += w['vol'] * (val_vol * 5)
-        if a.get('atr', True) and val_atr: total_score += w['atr'] * ((val_atr / spy_price) * 50)
-        if a.get('vix', True): total_score += w['vix'] * ((macro_vix - 20) / 10.0)
-        if a.get('yc', True): total_score += w['yc'] * macro_yc
+        if a.get('sma', True):
+            v = m.get_indicator('sma', lb.get('sma', 200))
+            if v: total_score += w['sma'] * ((p - v) / v * 5)
+            
+        if a.get('ema', True):
+            v = m.get_indicator('ema', lb.get('ema', 50))
+            if v: total_score += w['ema'] * ((p - v) / v * 10)
+            
+        if a.get('rsi', True):
+            v = m.get_indicator('rsi', lb.get('rsi', 14))
+            if v: total_score += w['rsi'] * ((v - 50) / 50.0)
+            
+        if a.get('macd', True):
+            v = m.get_indicator('macd', lb.get('macd_f', 12), slow=lb.get('macd_s', 26))
+            if v: total_score += w['macd'] * (v / p * 100)
+            
+        if a.get('adx', True):
+            v = m.get_indicator('adx', lb.get('adx', 14))
+            if v: total_score += w['adx'] * ((v - 25) / 25.0)
+            
+        if a.get('trix', True):
+            v = m.get_indicator('trix', lb.get('trix', 15))
+            if v: total_score += w['trix'] * v
+            
+        if a.get('slope', True):
+            v = m.get_indicator('slope', lb.get('slope', 20))
+            if v: total_score += w['slope'] * (v / p * 1000)
+            
+        if a.get('vol', True):
+            v = m.get_indicator('vol', lb.get('vol', 20))
+            if v: total_score += w['vol'] * (v * 5)
+            
+        if a.get('atr', True):
+            v = m.get_indicator('atr', lb.get('atr', 14))
+            if v: total_score += w['atr'] * ((v / p) * 50)
+            
+        total_score += w['vix'] * ((m.get_macro('vix', 15.0) - 20) / 10.0)
+        total_score += w['yc'] * m.get_macro('yield_curve', 0.0)
         
         return total_score
-
     def on_data(self, date, price_data, prev_data):
-        self.prices.append(price_data['close'])
-        self.highs.append(price_data['high'])
-        self.lows.append(price_data['low'])
+        self.market.update(date, price_data)
 
         if self.lock_counter > 0: self.lock_counter -= 1
 
-        shared_cache = {}
-        score = self._get_brain_score(price_data, shared_cache)
+        score = self._get_brain_score(price_data)
         brain = self.genome['sniper']
 
         # Tiered Sniper Logic

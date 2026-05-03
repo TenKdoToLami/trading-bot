@@ -1,3 +1,4 @@
+from src.tournament.evolution_registry import register_evolution
 import os
 import json
 import random
@@ -50,6 +51,7 @@ def _evaluate_v10_worker(genome):
     
     return fitness, metrics, genome
 
+@register_evolution("v10_expert")
 class EvolutionEngineV10Expert:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, min_cagr=0.0):
         self.data_path = "data/history_SPY.csv"

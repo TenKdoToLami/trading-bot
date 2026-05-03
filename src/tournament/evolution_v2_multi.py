@@ -87,6 +87,9 @@ def _evaluate_v2_worker(genome):
         
     return fitness, metrics, genome
 
+from src.tournament.evolution_registry import register_evolution
+
+@register_evolution("v2_multi")
 class EvolutionEngineV2:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, push_mid_tiers=False, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate

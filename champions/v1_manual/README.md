@@ -16,8 +16,8 @@ The evolved version of the original "Golden Rules." While the structure remains 
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v1_manual.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v1_manual.py --pop 100 --gen 100 --vault champions/v1_manual/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v1_manual --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v1_manual --pop 100 --gen 100 --vault champions/v1_manual/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

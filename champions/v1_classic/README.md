@@ -16,8 +16,8 @@ The original weighted-sum approach. This model calculates a "Base Score" and a "
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_v1_classic.py --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_v1_classic.py --pop 100 --gen 100 --vault champions/v1_classic/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v1_classic --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v1_classic --pop 100 --gen 100 --vault champions/v1_classic/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

@@ -6,10 +6,12 @@ Capable of learning non-linear relationships between market signals.
 
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility, mfi, bollinger_bands
 )
 
+@register_strategy(["v7_deep", 7.0, 7.1, 7.2])
 class GenomeV7Deep(BaseStrategy):
     NAME = "Genome V7 (Deep Brain)"
     version = 7
