@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * 1-5' # Run every weekday at midnight UTC to get fresh data
+    - cron: '0 0 * * 0' # Run every Sunday at midnight UTC to get fresh weekly data
 
 jobs:
   simulate-and-deploy:
@@ -28,7 +28,7 @@ jobs:
       - name: Run Live Tournament Simulation 🚀
         run: |
           export PYTHONPATH=$PYTHONPATH:.
-          python tests/run_tournament.py --no-audit
+          python showcase.py --no-server
 
       - name: Set up Node.js ⬢
         uses: actions/setup-node@v3
