@@ -83,20 +83,38 @@ const REGIME_COLORS = {
   'DEFAULT': '#6366f1'
 };
 
-const ArchitectureBanner = ({ version }) => {
+const ArchitectureBanner = ({ version, name = "" }) => {
   const meta = {
+    '10': { name: 'V10 Alpha Ensemble', color: '#00e676', desc: 'Triple-Brain Neural Ensemble with MixMaster Consensus' },
     '9': { name: 'Deep Hysteresis', color: '#8884d8', desc: 'Neural Confidence with Decision Buffering' },
     '7': { name: 'Deep MLP', color: '#82ca9d', desc: 'Multilayer Perceptron Neural Engine' },
     '6': { name: 'Balancer', color: '#ffc658', desc: 'Multi-Brain Portfolio Optimization' },
     '4': { name: 'AI Precision', color: '#ff8042', desc: 'Dual-Brain Conviction Logic (3-State)' },
     '3': { name: 'Precision Binary', color: '#0088fe', desc: 'Dual-Brain Binary Decision Engine' }
   };
-  const m = meta[Math.floor(parseFloat(version))?.toString()] || { name: 'Standard Strategy', color: '#ccc', desc: 'Rule-based or Hybrid Logic' };
+  
+  const versionKey = name.toLowerCase().includes('v10') ? '10' : Math.floor(parseFloat(version))?.toString();
+  const m = meta[versionKey] || { name: 'Standard Strategy', color: '#ccc', desc: 'Rule-based or Hybrid Logic' };
+  
   return (
-    <div style={{ padding: '8px 16px', borderRadius: '8px', borderLeft: `4px solid ${m.color}`, background: 'rgba(255,255,255,0.03)', marginBottom: '20px' }}>
-      <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Architecture: {m.name}</div>
-      <div style={{ fontSize: '0.7rem', opacity: 0.4 }}>{m.desc} (v{version})</div>
-    </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-4 p-4 rounded-2xl border-l-4 bg-white/[0.03] mb-8" 
+      style={{ borderLeftColor: m.color }}
+    >
+      <div className="p-3 rounded-xl bg-white/5">
+        <Zap className="w-5 h-5" style={{ color: m.color }} />
+      </div>
+      <div>
+        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Architecture Engine</div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-black text-white">{m.name}</span>
+          <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-slate-400">v{version}</span>
+        </div>
+        <div className="text-[10px] text-slate-500 font-medium">{m.desc}</div>
+      </div>
+    </motion.div>
   );
 };
 
@@ -824,7 +842,7 @@ export default function App() {
                 </div>
               </header>
 
-              <ArchitectureBanner version={getInspectionVersion(inspectionStrategy)} />
+              <ArchitectureBanner version={getInspectionVersion(inspectionStrategy)} name={inspectionStrategy.name} />
 
               {/* Version-Specific Conviction Fight (V3/V4) */}
               {getInspectionVersion(inspectionStrategy) >= 3 && getInspectionVersion(inspectionStrategy) < 5 && inspectionStrategy.telemetry?.monthly_avg && (
@@ -1345,25 +1363,85 @@ export default function App() {
             </motion.div>
           ) : (
             <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-10">
-              <header className="flex justify-between items-end">
+              <header className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                  <div className="flex items-center gap-2 text-accent text-sm mb-1 font-bold tracking-widest uppercase">
                     <Globe className="w-4 h-4" />
-                    <span>Live Tournament Universe</span>
+                    <span>Global Tournament Universe</span>
                   </div>
-                  <h2 className="text-4xl font-outfit font-extrabold tracking-tight text-white underline decoration-accent decoration-4 underline-offset-8">Strategy Tournament</h2>
+                  <h2 className="text-5xl font-outfit font-black tracking-tighter text-white mb-2">Tactical Intelligence Forge</h2>
+                  <p className="text-slate-500 max-w-lg leading-relaxed">Aggregated performance audit of all neural engines and tactical strategies in the current tournament population.</p>
                 </div>
-                <div className="flex gap-8">
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Global CAGR Lead</p>
-                    <p className="text-2xl font-outfit font-bold text-success">{bestCagr ? (bestCagr.metrics.cagr * 100).toFixed(1) : '0.0'}%</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Tournament Population</p>
-                    <p className="text-2xl font-outfit font-bold text-white">{data.length}</p>
-                  </div>
+                <div className="flex gap-4">
+                   <div className="p-4 bg-white/5 rounded-3xl border border-white/10 text-center min-w-[140px]">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Top CAGR</div>
+                      <div className="text-2xl font-black text-success">{((bestCagr?.metrics.cagr || 0) * 100).toFixed(1)}%</div>
+                   </div>
+                   <div className="p-4 bg-white/5 rounded-3xl border border-white/10 text-center min-w-[140px]">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Alpha Population</div>
+                      <div className="text-2xl font-black text-white">{data.filter(d => !d.name.includes('[BASE]')).length}</div>
+                   </div>
                 </div>
               </header>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {/* Top Sharpe Champion */}
+                 {(() => {
+                    const topSharpe = [...data].sort((a,b) => b.metrics.sharpe - a.metrics.sharpe)[0];
+                    return (
+                       <div className="p-6 rounded-[32px] bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 relative overflow-hidden group">
+                          <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"/>
+                          <div className="flex items-center gap-3 mb-4">
+                             <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400"><Bolt className="w-5 h-5"/></div>
+                             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Sharpe Leader</span>
+                          </div>
+                          <div className="text-2xl font-black text-white mb-1 truncate">{topSharpe?.name}</div>
+                          <div className="flex items-end gap-2">
+                             <span className="text-3xl font-black text-indigo-400">{topSharpe?.metrics.sharpe.toFixed(2)}</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase mb-2">Sharpe Ratio</span>
+                          </div>
+                       </div>
+                    );
+                 })()}
+
+                 {/* Top Calmar Champion */}
+                 {(() => {
+                    const topCalmar = [...data].filter(d => d.metrics.calmar != null).sort((a,b) => (b.metrics.calmar || 0) - (a.metrics.calmar || 0))[0];
+                    return (
+                       <div className="p-6 rounded-[32px] bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 relative overflow-hidden group">
+                          <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"/>
+                          <div className="flex items-center gap-3 mb-4">
+                             <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400"><Shield className="w-5 h-5"/></div>
+                             <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Resilience Leader</span>
+                          </div>
+                          <div className="text-2xl font-black text-white mb-1 truncate">{topCalmar?.name}</div>
+                          <div className="flex items-end gap-2">
+                             <span className="text-3xl font-black text-emerald-400">{topCalmar?.metrics.calmar?.toFixed(2) || 'N/A'}</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase mb-2">Calmar Ratio</span>
+                          </div>
+                       </div>
+                    );
+                 })()}
+
+                 {/* Top Alpha Champion */}
+                 {(() => {
+                    const topAlpha = [...data].filter(d => d.metrics.alpha != null).sort((a,b) => (b.metrics.alpha || 0) - (a.metrics.alpha || 0))[0];
+                    return (
+                       <div className="p-6 rounded-[32px] bg-gradient-to-br from-accent/10 to-transparent border border-accent/20 relative overflow-hidden group">
+                          <div className="absolute -right-4 -top-4 w-24 h-24 bg-accent/10 rounded-full blur-2xl group-hover:bg-accent/20 transition-all"/>
+                          <div className="flex items-center gap-3 mb-4">
+                             <div className="p-2 rounded-xl bg-accent/20 text-accent"><Gem className="w-5 h-5"/></div>
+                             <span className="text-[10px] font-black text-accent uppercase tracking-widest">Alpha Pure Skill</span>
+                          </div>
+                          <div className="text-2xl font-black text-white mb-1 truncate">{topAlpha?.name}</div>
+                          <div className="flex items-end gap-2">
+                             <span className="text-3xl font-black text-accent">{((topAlpha?.metrics.alpha || 0) * 100).toFixed(1)}%</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase mb-2">Annual Alpha</span>
+                          </div>
+                       </div>
+                    );
+                 })()}
+              </div>
               <section className="glass rounded-[40px] p-10 border-accent/20 shadow-2xl shadow-accent/5">
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-2xl font-outfit font-bold flex items-center gap-3 text-white"><Activity className="text-accent" /> Cumulative Growth Discovery</h3>
