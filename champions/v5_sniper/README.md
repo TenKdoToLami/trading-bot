@@ -1,53 +1,44 @@
-# V5 Sniper — High-Fidelity Mean Reversion
+# V5 Sniper — The Volatility Regime Hunter
 
 ## 🧠 Strategy Logic
-V5 Sniper is a **Precision Mean-Reversion** engine. Unlike the trend-following logic of V1-V3, the Sniper focuses on identifying overextended market conditions using RSI, ADX, and Realized Volatility to "Snipe" entries and exits with high accuracy.
+V5 Sniper is a specialized evolution of the Precision series, designed to target specific **Volatility Thresholds**. It introduces the "Regime Corridor," where the strategy remains aggressive as long as volatility stays within an evolved "sweet spot" and retreats instantly when thresholds are breached.
 
 ### 🔬 Decision Engine Anatomy
-1.  **Overextension Ingestion**: Specifically monitors RSI, ADX, and Realized Volatility to detect "stretched" price action.
-2.  **Regime Detection**: Evaluates the broad market trend to determine if a "Mean Reversion" setup is valid or if it's a "Falling Knife" situation.
-3.  **Conviction Thresholds**:
-    *   **RSI Snapback**: If RSI crosses its evolved deep-value threshold, triggers a tiered entry.
-    *   **Vol-Scaling**: Dynamically adjusts position sizing (1x to 3x) based on the current volatility-to-return ratio.
-4.  **Adaptive Exits**: As volatility spikes, the strategy automatically tightens its profit-taking and stop-loss boundaries to protect alpha.
-
-### 📈 Leverage States
-- **CASH / 1x / 2x / 3x** (Precision-scaled exposure)
+1.  **Regime Corridor**: Evolution identifies two critical VIX thresholds (Low and High) that define the "Sniper Zone."
+2.  **Ablative Indicator Weighting**: Uses 11 weighted indicators with active ablation, allowing the GA to simplify the decision logic for maximum robustness.
+3.  **Adaptive Lookbacks**: Every indicator's lookback period is evolved independently, ensuring the model reacts at the optimal speed for current market cycles.
+4.  **Sticky Rebalancing**: Enforces a mandatory holding period (`lock_days`) to filter out whipsaws and reduce turnover costs.
 
 ---
 
-## 🚀 Execution Commands
+## ⚡ QUICK LAUNCH: V5 Sniper Command Center
 
-### 📊 Audit & Behavioral Analysis
-```bash
-# Institutional Performance Report
-python tests/performance_audit.py champions/v5_sniper/genome.json
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_v5_sniper.py --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_v5_sniper.py --pop 100 --gen 100 --vault champions/v5_sniper/vault --mut 0.4` |
 
-# Behavioral X-Ray (Allocation DNA)
-python tests/genome_xray.py champions/v5_sniper/genome.json
-```
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v5_sniper/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v5_sniper/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v5_sniper/vault --promote --top 20` |
 
-### 🌪️ Stress Testing
-```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v5_sniper/vault --promote --top 20
-```
+---
 
-### 🧬 Evolution
-```bash
-# Standard Evolution run
-python tests/run_evolution_v5_sniper.py --pop 1000 --gen 100 --ablation
-
-# Seeded Evolution (Refine from vault)
-python tests/run_evolution_v5_sniper.py --pop 1000 --gen 100 --ablation --seed champions/v5_sniper/vault
-```
-
-#### ⚙️ Evolution Parameters
+## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 300 | Population size. |
-| `--gen` | 100 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate. Use `0.40` for aggressive exploration. |
-| `--seed`| `None` | Path to vault dir for seed injection. |
-| `--ablation` | `Off` | Enable **Indicator Ablation** (AI prunes its own logic tree). |
-| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate. |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `30.0` | Minimum CAGR threshold for saving results. |
+| `--no-ablation`| `True` | Disable indicator ablation (forces all indicators to stay active). |
+
+---
+
+## 🛡️ Best Used For
+The "Volatility Specialist." V5 Sniper excels in environments where volatility is trending or mean-reverting. It is less about broad market trends and more about identifying specific risk regimes that are safe for 3x leverage.

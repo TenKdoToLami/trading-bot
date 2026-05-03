@@ -23,57 +23,77 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             
         # --- PRIORITY 0: Explicit Version Strings ---
         v_str = str(genome.get('version', ''))
-        if v_str == "v10_expert" or ("brain_a" in genome and "brain_b" in genome):
+        
+        if v_str == "v10_expert":
             from strategies.genome_v10_expert import GenomeV10Expert
             return GenomeV10Expert(genome=genome)
+        elif v_str == "v9_confidence":
+            from strategies.genome_v9_confidence import GenomeV9Confidence
+            return GenomeV9Confidence(genome=genome)
+        elif v_str == "v7_deep":
+            from strategies.genome_v7_deep import GenomeV7Deep
+            return GenomeV7Deep(genome=genome)
+        elif v_str == "v7_deep_binary":
+            from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
+            return GenomeV7DeepBinary(genome=genome)
+        elif v_str == "v7_deep_fluid":
+            from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
+            return GenomeV7DeepFluid(genome=genome)
+        elif v_str == "v6_balancer":
+            from strategies.genome_v6_balancer import GenomeV6
+            return GenomeV6(genome=genome)
+        elif v_str == "v5_sniper":
+            from strategies.genome_v5_sniper import GenomeV5Sniper
+            return GenomeV5Sniper(genome=genome)
+        elif v_str == "v4_precision":
+            from strategies.genome_v4_precision import GenomeV4Precision
+            return GenomeV4Precision(genome=genome)
+        elif v_str == "v3_precision":
+            from strategies.genome_v3_precision import GenomeV3Strategy
+            return GenomeV3Strategy(genome=genome)
+        elif v_str == "v2_multi":
+            from strategies.genome_v2_multi import GenomeV2Strategy
+            return GenomeV2Strategy(genome=genome)
         elif v_str == "v1_manual":
             from strategies.genome_v1_manual import ManualV1
             return ManualV1(genome=genome)
         elif v_str == "v1_classic":
             from strategies.genome_v1_classic import GenomeV1
             return GenomeV1(genome=genome)
-            
-        # --- PRIORITY 1: Modern Champions (V9, V7, V6, V5) ---
-        if genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
+
+        # --- PRIORITY 1: Structural Fallbacks (Legacy/Numeric) ---
+        if v_str == "9.0" or "hysteresis" in genome:
             from strategies.genome_v9_confidence import GenomeV9Confidence
             return GenomeV9Confidence(genome=genome)
             
-        elif "layers" in genome or genome.get('version') in [7.0, 7.1, 7.2]:
+        elif "layers" in genome or v_str in ["7.0", "7.1", "7.2"]:
             from strategies.genome_v7_deep import GenomeV7Deep
             from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
             from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
             
-            v = genome.get('version', 7.0)
-            try: v = float(v)
+            try: v = float(v_str) if v_str else 7.0
             except: v = 7.0
             
             if v == 7.2: return GenomeV7DeepFluid(genome=genome)
             if v == 7.1: return GenomeV7DeepBinary(genome=genome)
             return GenomeV7Deep(genome=genome)
             
-        elif "brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"]) or genome.get('version') == 6.0:
+        elif ("brains" in genome and ("cash" in genome["brains"] or "1x" in genome["brains"])) or v_str == "6.0":
             from strategies.genome_v6_balancer import GenomeV6
             return GenomeV6(genome=genome)
             
-        elif "sniper" in genome or genome.get('version') == 5.0:
+        elif "sniper" in genome or v_str == "5.0":
             from strategies.genome_v5_sniper import GenomeV5Sniper
             return GenomeV5Sniper(genome=genome)
             
-        # --- PRIORITY 2: Elite Versions (V4, V3) ---
-        elif "vix_ema" in genome and "vol_stretch" in genome:
-            from strategies.genome_v4_chameleon import ChameleonV4
-            return ChameleonV4(genome=genome)
-        
         elif "panic" in genome and "bull" in genome:
-            # Distinguish V3 (Binary) from V4 (3-State)
-            if genome.get('version') == 4.0 or "v4_precision" in identifier.lower():
+            if v_str == "4.0" or "v4_precision" in identifier.lower():
                 from strategies.genome_v4_precision import GenomeV4Precision
                 return GenomeV4Precision(genome=genome)
             else:
                 from strategies.genome_v3_precision import GenomeV3Strategy
                 return GenomeV3Strategy(genome=genome)
                 
-        # --- PRIORITY 3: Legacy Versions (V2, V1) ---
         elif "panic" in genome and "3x" in genome:
             from strategies.genome_v2_multi import GenomeV2Strategy
             return GenomeV2Strategy(genome=genome)
@@ -87,7 +107,6 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             return ManualV1(genome=genome)
             
         else:
-            # Final fallback
             from strategies.genome_v1_classic import GenomeV1
             return GenomeV1(genome=genome)
 

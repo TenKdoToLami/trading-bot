@@ -77,7 +77,7 @@ class EvolutionEngineV9Confidence:
                 try:
                     g = json.load(jf)
                     if 'layers' in g:
-                        g['version'] = 9.0
+                        g['version'] = 'v9_confidence'
                         self.population.append(g)
                 except: continue
         print(f"  SUCCESS: Injected {len(self.population)} seeds for V9 evolution.")
@@ -87,7 +87,7 @@ class EvolutionEngineV9Confidence:
         layers.append({'w': (np.random.randn(13, 24) * 0.8).tolist(), 'b': (np.random.randn(24) * 0.2).tolist()})
         layers.append({'w': np.random.uniform(-3, 3, (24, 4)).tolist(), 'b': np.random.uniform(-0.2, 0.2, 4).tolist()})
         return {
-            'version': 9.0, 'layers': layers,
+            'version': 'v9_confidence', 'layers': layers,
             'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()},
             'hysteresis': random.uniform(0.01, 0.6), 'lock_days': random.uniform(1, 20), 'smoothing': random.uniform(0.1, 0.9)
         }

@@ -239,12 +239,23 @@ class TournamentRunner:
                                 genome = json.load(jf)
                             
                             version = genome.get('version', 0.0)
+                            
+                            # Normalization: Convert string versions to numeric for dispatching
+                            version_map = {
+                                "v1_manual": 1.0, "v1_classic": 1.1, "v2_multi": 2.0, 
+                                "v3_precision": 3.0, "v4_precision": 4.0, "v4_chameleon": 4.1,
+                                "v5_sniper": 5.0, "v6_balancer": 6.0, "v7_deep": 7.0,
+                                "v7_deep_binary": 7.1, "v7_deep_fluid": 7.2, "v9_confidence": 9.0,
+                                "v10_expert": 10.0
+                            }
+                            if isinstance(version, str) and version in version_map:
+                                version = version_map[version]
+
                             if version == 0.0:
-                                # Detection for legacy V1 structures
+                                # Detection for legacy V1 structures (no version key)
                                 if "bounds_p" in genome or "weights_p" in genome:
                                     version = 1.0
                                 elif "panic_weights" in genome:
-                                    # V1 Classic (GenomeStrategy)
                                     version = 1.1 
                                 else:
                                     folder_name = os.path.basename(root).lower()
@@ -257,7 +268,10 @@ class TournamentRunner:
                                 
                             strat_cls = None
                             
-                            if version == 9.0:
+                            if version == 10.0:
+                                from strategies.genome_v10_expert import GenomeV10Expert
+                                strat_cls = GenomeV10Expert
+                            elif version == 9.0:
                                 from strategies.genome_v9_confidence import GenomeV9Confidence
                                 strat_cls = GenomeV9Confidence
                             elif version == 7.2:
@@ -275,6 +289,9 @@ class TournamentRunner:
                             elif version == 5.0:
                                 from strategies.genome_v5_sniper import GenomeV5Sniper
                                 strat_cls = GenomeV5Sniper
+                            elif version == 4.1:
+                                from strategies.genome_v4_chameleon import ChameleonV4
+                                strat_cls = ChameleonV4
                             elif version == 4.0:
                                 from strategies.genome_v4_precision import GenomeV4Precision
                                 strat_cls = GenomeV4Precision

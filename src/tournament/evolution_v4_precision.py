@@ -48,15 +48,44 @@ class EvolutionEngineV4Precision:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.use_ablation, self.min_cagr = use_ablation, min_cagr
+        self.seed_vault = seed_vault
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', 'bull']
         self.lb_bounds = {'sma': (10, 500), 'ema': (10, 300), 'rsi': (5, 100), 'macd_f': (5, 50), 'macd_s': (15, 120), 'adx': (5, 100), 'trix': (5, 100), 'slope': (5, 200), 'vol': (5, 252), 'atr': (5, 100)}
-        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        
+        self.population = []
+        if self.seed_vault and os.path.exists(self.seed_vault):
+            main_champ = os.path.join(os.path.dirname(self.seed_vault), "genome.json")
+            if os.path.exists(main_champ):
+                try:
+                    with open(main_champ, "r") as f:
+                        self.population.append(json.load(f))
+                except: pass
+            
+            files = [f for f in os.listdir(self.seed_vault) if f.endswith(".json")]
+            seeds = []
+            for f in files:
+                try:
+                    cagr = float(f.split("cagr_")[1].split("_")[0])
+                    seeds.append((cagr, f))
+                except: seeds.append((0, f))
+            seeds.sort(key=lambda x: x[0], reverse=True)
+            for _, f in seeds:
+                if len(self.population) >= self.pop_size: break
+                try:
+                    with open(os.path.join(self.seed_vault, f), "r") as jf:
+                        self.population.append(json.load(jf))
+                except: pass
+            print(f"  SUCCESS: Injected {len(self.population)} seeds from {self.seed_vault}")
+
+        while len(self.population) < self.pop_size:
+            self.population.append(self._random_genome())
+
         self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
         genome = {b: {'w': {k: random.uniform(-10, 10) for k in self.indicators}, 'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators}, 't': random.uniform(-50, 50), 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}} for b in self.brains}
-        genome['lock_days'], genome['version'] = random.uniform(0, 20), 4.0
+        genome['lock_days'], genome['version'] = random.uniform(0, 20), 'v4_precision'
         return genome
 
     def _mutate(self, genome):

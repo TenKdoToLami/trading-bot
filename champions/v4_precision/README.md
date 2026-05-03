@@ -1,54 +1,44 @@
-# V4 Precision — 3-State AI Architecture
+# V4 Precision — The Adaptive Machine
 
 ## 🧠 Strategy Logic
-V4 Precision is the most advanced "Weighted Brain" engine in the fleet. It uses a **Dual-Brain Architecture** (Panic vs Bull) to determine transitions between CASH, SPY (Neutral), and 3xSPY (Bullish). 
+V4 Precision introduces **Adaptive Lookbacks**, allowing the AI to not only evolve the importance of indicators but also the specific time-windows they monitor. This makes it significantly more resilient to shifting market regimes than previous versions.
 
 ### 🔬 Decision Engine Anatomy
-1.  **Genetic Feature Lookbacks**: Unlike V1-V2, every indicator lookback (SMA, RSI, MACD, etc.) is an evolved gene, allowing the AI to "tune" its temporal resolution for each signal.
-2.  **Dual-Brain Scoring**: Calculates a **Panic Score** and a **Bull Score** using a high-dimensional weight matrix.
-3.  **Conviction Gating**:
-    *   **Panic State**: Triggered if Panic Score > Threshold. Force-exits to **CASH**.
-    *   **Bull State**: Triggered if Bull Score > Threshold. Scales to **3x SPY**.
-    *   **Neutral State**: Default behavior. Holds **1x SPY** (unleveraged index).
-4.  **Temporal Lockout**: Implements an evolved `lock_days` parameter to stabilize the regime and prevent high-frequency rebalancing costs.
-
-### 📈 Leverage States
-- **CASH / 1x / 3x** (Regime-based switching)
+1.  **Dynamic Feature Engineering**: Evolution optimizes 10 distinct indicator lookbacks (SMA, RSI, MACD, etc.) for both Bull and Panic states.
+2.  **Regime-Specific DNA**: Maintains two independent "brains" that process market data through different lenses depending on current volatility.
+3.  **Hysteresis Safety**: Implements a sticky rebalance timer to filter out high-frequency noise and minimize slippage.
+4.  **Ablation Support**: The Genetic Algorithm can dynamically disable indicators that contribute more noise than signal, simplifying the resulting logic.
 
 ---
 
-## 🚀 Execution Commands
+## ⚡ QUICK LAUNCH: V4 Precision Command Center
 
-### 📊 Audit & Behavioral Analysis
-```bash
-# Institutional Performance Report
-python tests/performance_audit.py champions/v4_precision/genome.json
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_v4_precision.py --pop 500 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_v4_precision.py --pop 500 --gen 50 --vault champions/v4_precision/vault --mut 0.4` |
 
-# Behavioral X-Ray (Allocation DNA)
-python tests/genome_xray.py champions/v4_precision/genome.json
-```
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v4_precision/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v4_precision/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v4_precision/vault --promote --top 20` |
 
-### 🌪️ Stress Testing
-```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v4_precision/vault --promote --top 20
-```
+---
 
-### 🧬 Evolution
-```bash
-# Standard Evolution run
-python tests/run_evolution_v4_precision.py --pop 500 --gen 100 --ablation
-
-# Seeded Evolution (Refine from vault)
-python tests/run_evolution_v4_precision.py --pop 500 --gen 100 --ablation --seed champions/v4_precision/vault
-```
-
-#### ⚙️ Evolution Parameters
+## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 300 | Population size. |
-| `--gen` | 100 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate. Use `0.40` for aggressive exploration. |
-| `--seed`| `None` | Path to vault dir for seed injection. |
-| `--ablation` | `Off` | Enable **Indicator Ablation** (AI prunes its own logic tree). |
-| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate. |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `30.0` | Minimum CAGR threshold for saving results. |
+| `--no-ablation`| `True` | Disable indicator ablation (forces all indicators to stay active). |
+
+---
+
+## 🛡️ Best Used For
+The "Professional Standard." V4 Precision is the sweet spot between the simplicity of V1 and the complexity of the neural models. It offers excellent risk-adjusted returns and is highly understandable through X-Ray diagnostics.

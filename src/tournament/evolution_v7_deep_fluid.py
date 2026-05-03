@@ -46,7 +46,7 @@ class EvolutionEngineV7DeepFluid:
         self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
-        return {'version': 7.2, 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10), 'rebalance_threshold': random.uniform(0.01, 0.10)}
+        return {'version': 'v7_deep_fluid', 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10), 'rebalance_threshold': random.uniform(0.01, 0.10)}
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))

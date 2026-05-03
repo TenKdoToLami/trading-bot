@@ -91,14 +91,48 @@ class EvolutionEngineV2:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, push_mid_tiers=False, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.use_ablation, self.push_mid_tiers, self.min_cagr = use_ablation, push_mid_tiers, min_cagr
+        self.seed_vault = seed_vault
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr', 'vix', 'yc']
         self.brains = ['panic', '3x', '2x', '1x']
-        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        
+        self.population = []
+        if self.seed_vault and os.path.exists(self.seed_vault):
+            # 1. Try to load the main champion if it exists in the parent dir
+            main_champ = os.path.join(os.path.dirname(self.seed_vault), "genome.json")
+            if os.path.exists(main_champ):
+                try:
+                    with open(main_champ, "r") as f:
+                        self.population.append(json.load(f))
+                except: pass
+                
+            # 2. Load from vault, sorted by performance
+            files = [f for f in os.listdir(self.seed_vault) if f.endswith(".json")]
+            seeds = []
+            for f in files:
+                try:
+                    # Extract CAGR from filename: v2_cagr_35.1_dd_12.2.json
+                    cagr = float(f.split("cagr_")[1].split("_")[0])
+                    seeds.append((cagr, f))
+                except: seeds.append((0, f))
+            seeds.sort(key=lambda x: x[0], reverse=True)
+            
+            for _, f in seeds:
+                if len(self.population) >= self.pop_size: break
+                try:
+                    with open(os.path.join(self.seed_vault, f), "r") as jf:
+                        self.population.append(json.load(jf))
+                except: pass
+            print(f"  SUCCESS: Injected {len(self.population)} seeds from {self.seed_vault}")
+
+        while len(self.population) < self.pop_size:
+            self.population.append(self._random_genome())
+            
         self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
         genome = {b: {'w': {k: random.uniform(-4, 4) for k in self.indicators}, 'a': {k: (random.random() > 0.4 if self.use_ablation else True) for k in self.indicators}, 't': random.uniform(-1.5, 1.5)} for b in self.brains}
         genome['lock_days'] = random.uniform(0, 10)
+        genome['version'] = 'v2_multi'
         return genome
 
     def _mutate(self, genome):

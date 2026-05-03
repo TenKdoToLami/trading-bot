@@ -1,53 +1,43 @@
-# V9 Confidence Spread — Hysteresis-based Macro Intelligence
+# V9 Confidence — The Institutional Neuro-Ensemble
 
 ## 🧠 Strategy Logic
-V9 Confidence Spread is the **Stability-First** evolution of the V7 neural engine. It solves the "trade slippage" problem by implementing a discrete confidence-based decision engine with built-in hysteresis and signal smoothing.
+V9 Confidence represents the peak of the V-series neural architectures. It combines a **Deep Neural Network** with a **Confidence Thresholding** layer. Instead of simply predicting the best asset, it calculates a conviction score—if the network is "unsure," it automatically defaults to a defensive posture.
 
 ### 🔬 Decision Engine Anatomy
-1.  **Feature Ingestion**: Ingests 13 normalized technical indicators (SMA/EMA Distances, RSI, MACD, ADX, TRIX, Slope, Volatility, ATR) + Macro context (VIX, Yield Curve).
-2.  **Neural Inference**: A Multilayer Perceptron (MLP) performs a weighted forward pass to calculate "conviction energy" for 4 discrete regimes.
-3.  **Softmax Normalization**: Raw neural outputs are converted into probabilities (0.0 to 1.0) that sum to unity.
-4.  **Temporal Smoothing**: Probabilities are processed through an Exponential Moving Average (EMA) window to filter high-frequency market noise.
-5.  **Hysteresis Gating**: To prevent "flip-flopping," a transition to a new regime only occurs if its smoothed probability exceeds the current regime by the `hysteresis` threshold (e.g., +0.15).
-6.  **Allocation Selection**: The regime with the highest gated probability (Argmax) is selected for the next trading day.
-
-### 📈 Leverage States
-- **CASH (0x)**: Defensive posture / Panic mitigation.
-- **SPY (1x)**: Standard market exposure.
-- **2xSPY**: Bullish momentum / Trend following.
-- **3xSPY**: High-conviction aggressive scaling.
+1.  **Confidence-Weighted MLP**: A deep neural network that outputs both a target allocation and a confidence coefficient.
+2.  **Dynamic Hysteresis & Smoothing**: Uses evolved exponential smoothing on signals to filter out high-frequency volatility and "ghost" signals.
+3.  **Conviction Gating**: If the conviction score falls below an evolved threshold, the model downshifts leverage regardless of the raw signal.
+4.  **Multi-Brain Synthesis**: Leverages 13 market features with non-linear cross-correlations, allowing it to "anticipate" regime shifts.
 
 ---
 
-## 🚀 Execution Commands
-```bash
-python tests/vault_sweep.py --vault champions/v9_confidence/vault --promote --top 20
-```
+## ⚡ QUICK LAUNCH: V9 Confidence Command Center
 
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_v9_confidence.py --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_v9_confidence.py --pop 100 --gen 100 --vault champions/v9_confidence/vault --mut 0.4` |
 
-### 🧬 Evolution
-```bash
-# Standard Evolution (Optimized for Hysteresis)
-python tests/run_evolution_v9_confidence.py --pop 100 --gen 50 --min-cagr 30.0 --ablation
-
-# Seeded Evolution (Refine from V7 or existing V9 vault)
-python tests/run_evolution_v9_confidence.py --pop 200 --gen 30 --seed champions/v9_confidence/vault --ablation
-```
-
-### 📊 Audit & Behavioral Analysis
-```bash
-# Institutional Performance Report
-python tests/performance_audit.py champions/v9_confidence/genome.json
-```
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v9_confidence/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v9_confidence/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v9_confidence/vault --promote --top 20` |
 
 ---
 
 ## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 100 | Population size. |
-| `--gen` | 50 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate. |
-| `--seed`| `None` | Path to seed vault for transfer learning. |
-| `--ablation` | `Off` | Enable **Neural Ablation** (Network learns to ignore weak inputs). |
-| `--min-cagr` | `25.0` | Minimum CAGR threshold for saving to vault. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate (DNA change probability). |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `35.0` | Minimum CAGR threshold for saving results. |
+
+---
+
+## 🛡️ Best Used For
+The "Professional Allocator." V9 is designed for large portfolios where drawdown protection and signal conviction are just as important as raw CAGR. It is the most "stable" of the high-performance neural models.

@@ -62,6 +62,7 @@ class EvolutionEngineV4:
     def _random_genome(self):
         genome = {k: random.uniform(mn, mx) if isinstance(mn, float) else random.randint(mn, mx) for k, (mn, mx) in self.bounds.items()}
         genome['a'] = {bit: random.random() > 0.4 for bit in ['vix', 'mom', 'rsi', 'slope']}
+        genome['version'] = 'v4_chameleon'
         return genome
 
     def _mutate(self, genome):

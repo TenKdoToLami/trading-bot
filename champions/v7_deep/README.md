@@ -1,53 +1,43 @@
-# V7 Deep — Neuroevolutionary Logic
+# V7 Deep — The Neural Frontier
 
 ## 🧠 Strategy Logic
-V7 Deep uses a **Multi-Layer Perceptron (MLP)** neural network evolved via Gaussian Neuroevolution. Unlike traditional weighted-brain strategies, V7 evolves high-dimensional non-linear relationships between 11 market signals to determine the optimal leverage state.
+V7 Deep is a complete departure from heuristic logic. It uses a **Deep Neural Network** (MLP) architecture evolved through Genetic Algorithms. Instead of human-defined rules, the network learns complex non-linear relationships between indicators to predict the optimal leverage state.
 
 ### 🔬 Decision Engine Anatomy
-1.  **Direct Feature Injection**: Consumes 13 raw technical indicators (SMA/EMA, RSI, MACD, etc.) + Macro context (VIX, Yield Curve).
-2.  **Neural MLP Architecture**: Uses a single-hidden-layer Multilayer Perceptron (MLP) with **ReLU activation** to model non-linear market relationships.
-3.  **Conviction Normalization**: Converts the hidden layer output into 4 absolute confidence values using a **Softmax** layer for **CASH, 1x, 2x, and 3x**.
-4.  **Argmax Selection**: The allocation with the highest daily probability is selected for execution.
-5.  **Indicator Ablation**: During evolution, the network can "turn off" specific indicator weights, allowing it to ignore market noise and focus only on high-alpha signals.
-
-### 📈 Leverage States
-- **CASH / 1x / 2x / 3x** (Neural-scaled allocation)
+1.  **Neural Architecture**: Features a multi-layer perceptron (MLP) with evolved weights and biases, processing 13 distinct market features.
+2.  **Softmax Output Layer**: The final layer produces a probability distribution across four assets (Cash, 1x, 2x, 3x), resolving into a weighted portfolio allocation.
+3.  **Black-Box Optimization**: Evolution treats the entire network as a genome, optimizing the weights to maximize CAGR while penalizing drawdown through the fitness function.
+4.  **Non-Linear Feature Interaction**: Capable of detecting subtle correlations (e.g., VIX spikes coinciding with specific Yield Curve inversions) that discrete logic would miss.
 
 ---
 
-## 🚀 Execution Commands
+## ⚡ QUICK LAUNCH: V7 Deep Command Center
 
-### 📊 Audit & Behavioral Analysis
-```bash
-# Institutional Performance Report
-python tests/performance_audit.py champions/v7_deep/genome.json
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_v7_deep.py --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_v7_deep.py --pop 100 --gen 100 --vault champions/v7_deep/vault --mut 0.4` |
 
-# Behavioral X-Ray (Allocation DNA)
-python tests/genome_xray.py champions/v7_deep/genome.json
-```
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v7_deep/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v7_deep/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v7_deep/vault --promote --top 20` |
 
-### 🌪️ Stress Testing
-```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v7_deep/vault --promote --top 20
-```
+---
 
-### 🧬 Evolution
-Optimizes neural network weights using **Gaussian Neuroevolution**.
-```bash
-# Standard high-diversity run
-python tests/run_evolution_v7_deep.py --pop 500 --gen 100 --ablation
-
-# Seeded Evolution (Refine using your best neural genomes)
-python tests/run_evolution_v7_deep.py --pop 300 --gen 50 --ablation --seed champions/v7_deep/vault
-```
-
-#### ⚙️ Evolution Parameters
+## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 100 | Population size. Recommend `500+` for MLPs. |
-| `--gen` | 50 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate (Gaussian noise applied to weights). |
-| `--seed`| `None` | Path to vault dir for seed injection. |
-| `--ablation` | `Off` | Enable **Indicator Ablation** (Network learns to ignore weak inputs). |
-| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate (adjusts weight/bias variance). |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `25.0` | Minimum CAGR threshold for saving results. |
+
+---
+
+## 🛡️ Best Used For
+The "Edge Seeker." V7 is for environments where traditional indicators are failing or the market has become highly efficient. Its neural structure allows it to find "pockets" of alpha that are invisible to linear models.

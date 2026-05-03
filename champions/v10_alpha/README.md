@@ -1,44 +1,46 @@
-# Model V10: The Triple-Brain Ensemble (Expert System)
+# V10 Alpha — The Institutional Ensemble
 
-Model V10 represents a paradigm shift from monolithic neural networks to a **Hierarchical Expert Ensemble**. It treats the market as a series of asymmetric "Market Physics" events.
+## 🧠 Strategy Logic
+V10 Alpha (Expert) is the ultimate evolution of the tactical bot. It uses a **Hierarchical Expert Ensemble** architecture. Instead of processing raw indicators, it consumes "Indicator Profiles" (pre-calculated expert signals) and synthesizes them through three independent neural brains (A, B, and C) to reach a final allocation.
 
-### 🧠 The Triple-Brain Architecture
-1.  **Brain A (The Bull Specialist)**: A high-precision neural network trained exclusively on "Perfect Rallies." It is fed with indicators that the Profiler has determined to be most predictive in uptrends.
-2.  **Brain B (The Bear Specialist)**: A specialized "Crash Detector." This brain has **Priority Veto Power**. If its confidence exceeds a specific threshold, it overrides Brain A, forcing the system into CASH regardless of how bullish the other indicators look.
-3.  **Brain C (The MixMaster)**: A final decision layer that ingests the outputs of Brains A & B along with macro volatility (VIX). It calculates the final optimal portfolio mix (0x to 3x leverage).
-
-### 🔬 Phase 1: The Indicator Profiler
-Before the brains are trained, the **V10 Profiler** performs an exhaustive "Sensitivity Analysis" on every technical indicator.
-
-**It answers two critical questions:**
-- **Duration**: At what lookback (e.g., SMA 50 vs SMA 200) does this indicator have the most "Certainty"?
-- **Threshold**: At what specific value (e.g., RSI < 28.5) does the historical Win Rate exceed 75%?
-
-**Usage:**
-```bash
-# Scan data/SPY.csv to find optimal indicator profiles for a 20-day horizon
-python src/tournament/v10_profiler.py --data data/history_SPY.csv --horizon 20 --out champions/v10_alpha/indicator_profiles.json
-```
-
-**Workflow:**
-1.  **Profile**: Run the Profiler to generate `indicator_profiles.json`.
-    ```bash
-    python src/tournament/v10_profiler.py --data data/history_SPY.csv --horizon 20 --out champions/v10_alpha/indicator_profiles.json
-    ```
-2.  **Evolve**: Use the evolution engine to train the three brains.
-    ```bash
-    # Train with a population of 100 for 50 generations
-    python tests/run_evolution_v10_expert.py --pop 100 --gen 50
-    ```
-3.  **Promote**: Identify the best genome in the vault and use it in your live strategy.
+### 🔬 Decision Engine Anatomy
+1.  **Expert Signal Synthesis**: Consumes 20+ specialized "Indicator Profiles" that represent the best-of-breed logic from previous V-series models.
+2.  **Triple-Brain Consensus**:
+    *   **Brain A**: Focuses on long-term structural trends.
+    *   **Brain B**: Analyzes short-term volatility regimes.
+    *   **Brain C**: Synthesizes A & B into a finalized probability distribution.
+3.  **Institutional Bear Veto**: Features a dedicated "Veto" layer that can force a retreat to CASH even if the neural consensus is bullish, based on extreme risk parameters.
+4.  **Version 10 Logic**: The first model to be fully "Strategy-Aware," meaning it understands its own historical behavior and adjusts sensitivity dynamically.
 
 ---
 
-### 🧬 Evolution Parameters
+## ⚡ QUICK LAUNCH: V10 Alpha Command Center
+
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_v10_expert.py --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_v10_expert.py --pop 100 --gen 50 --vault champions/v10_alpha/vault --mut 0.4` |
+
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v10_alpha/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v10_alpha/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v10_alpha/vault --promote --top 20` |
+
+---
+
+## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 50 | Population size. Higher = more diversity. |
-| `--gen` | 20 | Number of generations to train. |
-| `--mut` | 0.2 | Mutation rate (probability of DNA change). |
-| `--vault`| `vault/` | Directory where winning brains are saved. |
-| `--min-cagr`| `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate (adjusts ensemble weighting variance). |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `30.0` | Minimum CAGR threshold for saving results. |
+
+---
+
+## 🛡️ Best Used For
+The "Sovereign Wealth" play. V10 Alpha is designed for maximum resilience across decades of market data. It is the most sophisticated model in the library, offering the best risk-adjusted returns (Sharpe/Sortino) by using an ensemble of experts rather than a single point of failure.

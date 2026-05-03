@@ -34,6 +34,10 @@ python tests/run_tournament.py --refresh
 # Skip interactive report generation
 python tests/run_tournament.py --no-report
 
+# Skip synthetic data audit and robustness tests
+python tests/run_tournament.py --no-audit
+
+
 # Resilience stress test — random periods across duration buckets
 python tests/run_tournament.py --resilience --samples 20
 ```
@@ -78,13 +82,14 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 ### Evolution Commands
 | Command | Version | Goal |
 |---------|---------|------|
+| `python tests/run_evolution_v10_expert.py`  | **V10**| Institutional Ensemble (Triple-Brain Consensus) |
+| `python tests/run_evolution_v9_confidence.py`| **V9** | Conviction-Gated Neuro-Ensemble |
 | `python tests/run_evolution_v6_balancer.py` | **V6** | Probabilistic Softmax Allocator (Institutional Grade) |
 | `python tests/run_evolution_v5_sniper.py`   | **V5** | Tiered Entry Hunter (1x -> 2x -> 3x) |
 | `python tests/run_evolution_v4_precision.py`| **V4** | Precision 3-State AI (CASH/1x/3x) |
-| `python tests/run_evolution_v4_chameleon.py`| **V4** | Adaptive Chameleon (Volatility Regime Selection) |
 | `python tests/run_evolution_v3_precision.py`| **V3** | Binary AI with Genetic Lookback Optimization |
 | `python tests/run_evolution_v2_multi.py`    | **V2** | Multi-Brain Multi-Regime Logic |
-| `python tests/run_evolution_v1_classic.py`  | **V1** | Classic Linear Weight-Sum (Baseline) |
+| `python tests/run_evolution_v1_manual.py`  | **V1** | Discrete VIX-Bracketed Switcher (Baseline) |
 
 ### Common Parameters
 | Flag | Default | Description |
@@ -92,14 +97,14 @@ The framework includes several Genetic Algorithm (GA) engines to autonomously di
 | `--pop` | 30-500 | Population size. Higher = more diversity, slower generations. |
 | `--gen` | 10-200 | Number of generations to evolve. |
 | `--mut` | 0.15 | Mutation rate. Use `0.25 - 0.40` when seeding from a vault. |
-| `--seed`| None | Path to a `vault/` directory to load initial genomes from. |
+| `--vault`| None | Path to a `vault/` directory to load initial genomes from. |
 | `--ablation` | `Off` | Feature Selection: Disables indicators randomly to find the most robust subset. |
-| `--min-cagr`| `0.0` | **Performance Floor**: Ignores any genome with CAGR lower than this (e.g., `0.35` for 35%). |
+| `--min-cagr`| `0.0` | **Performance Floor**: Ignores any genome with CAGR lower than this (e.g., `35.0` for 35%). |
 
 ---
 
 ## 🛠️ Diagnostics & Strategy Audit
-These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect the strategy version (V2–V6).
+These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect the strategy version (V1–V10).
 
 ### 1. Vault Sweep — Cross-Regime Stress Test
 Tests every genome in a vault across rolling windows (5yr to 30yr) to rank them by resilience. 

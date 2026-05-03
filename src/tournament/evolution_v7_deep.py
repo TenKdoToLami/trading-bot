@@ -41,12 +41,41 @@ class EvolutionEngineV7:
     def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.use_ablation, self.min_cagr = use_ablation, min_cagr
+        self.seed_vault = seed_vault
         self.lb_bounds = {'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30), 'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50), 'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)}
-        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        
+        self.population = []
+        if self.seed_vault and os.path.exists(self.seed_vault):
+            main_champ = os.path.join(os.path.dirname(self.seed_vault), "genome.json")
+            if os.path.exists(main_champ):
+                try:
+                    with open(main_champ, "r") as f:
+                        self.population.append(json.load(f))
+                except: pass
+            
+            files = [f for f in os.listdir(self.seed_vault) if f.endswith(".json")]
+            seeds = []
+            for f in files:
+                try:
+                    cagr = float(f.split("cagr_")[1].split("_")[0])
+                    seeds.append((cagr, f))
+                except: seeds.append((0, f))
+            seeds.sort(key=lambda x: x[0], reverse=True)
+            for _, f in seeds:
+                if len(self.population) >= self.pop_size: break
+                try:
+                    with open(os.path.join(self.seed_vault, f), "r") as jf:
+                        self.population.append(json.load(jf))
+                except: pass
+            print(f"  SUCCESS: Injected {len(self.population)} seeds from {self.seed_vault}")
+
+        while len(self.population) < self.pop_size:
+            self.population.append(self._random_genome())
+
         self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
-        return {'version': 7.0, 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10)}
+        return {'version': 'v7_deep', 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10)}
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))

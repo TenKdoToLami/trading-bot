@@ -59,15 +59,26 @@ def get_genome_version(genome: dict):
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has a known genome structure."""
     ver = get_genome_version(genome)
+    if not ver: return False
     
-    # Handle String Versions
+    # Structural checks for new string versions
     if ver == "v10_expert": return "brain_a" in genome
+    if ver == "v9_confidence": return "layers" in genome
+    if ver == "v7_deep": return "layers" in genome
+    if ver == "v7_deep_binary": return "layers" in genome
+    if ver == "v7_deep_fluid": return "layers" in genome
+    if ver == "v6_balancer": return "brains" in genome
+    if ver == "v5_sniper": return "sniper" in genome
+    if ver == "v4_precision": return all(k in genome for k in V4_BRAINS)
+    if ver == "v3_precision": return all(k in genome for k in V3_BRAINS)
+    if ver == "v2_multi": return all(k in genome for k in V2_BRAINS)
     if ver == "v1_manual": return "bounds_p" in genome
     if ver == "v1_classic": return "panic_weights" in genome
     
-    # Handle Numeric Versions
+    # Handle Numeric Versions for legacy support
     try:
         v_num = float(ver)
+        if v_num == 10: return "brain_a" in genome
         if v_num == 9: return 'layers' in genome
         if v_num == 7: return 'layers' in genome
         if v_num == 6: return 'brains' in genome
@@ -86,6 +97,15 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=
     ver = genome.get('version', 0)
     
     if ver == "v10_expert": strat_type = GenomeV10Expert
+    elif ver == "v9_confidence": strat_type = GenomeV9Confidence
+    elif ver == "v7_deep": strat_type = GenomeV7Deep
+    elif ver == "v7_deep_binary": strat_type = GenomeV7DeepBinary
+    elif ver == "v7_deep_fluid": strat_type = GenomeV7DeepFluid
+    elif ver == "v6_balancer": strat_type = GenomeV6
+    elif ver == "v5_sniper": strat_type = GenomeV5Sniper
+    elif ver == "v4_precision": strat_type = GenomeV4Precision
+    elif ver == "v3_precision": strat_type = GenomeV3Strategy
+    elif ver == "v2_multi": strat_type = GenomeV2Strategy
     elif ver == "v1_manual": strat_type = ManualV1
     elif ver == "v1_classic": 
         from strategies.genome_v1_classic import GenomeV1
