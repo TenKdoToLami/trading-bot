@@ -6,10 +6,12 @@ Uses a Multi-Layer Perceptron (MLP) with only TWO output states:
 
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility, mfi, bollinger_bands
 )
 
+@register_strategy("v7_deep_binary")
 class GenomeV7DeepBinary(BaseStrategy):
     NAME = "Genome V7 (Deep Binary)"
 

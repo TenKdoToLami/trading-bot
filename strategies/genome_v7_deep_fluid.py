@@ -6,10 +6,12 @@ capital across all 4 tiers (CASH, 1x, 2x, 3x) simultaneously.
 
 import numpy as np
 from strategies.base import BaseStrategy
+from src.tournament.registry import register_strategy
 from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility, mfi, bollinger_bands
 )
 
+@register_strategy("v7_deep_fluid")
 class GenomeV7DeepFluid(BaseStrategy):
     NAME = "Genome V7 (Deep Fluid)"
 

@@ -3,6 +3,7 @@ Central registry for strategy versions.
 Allows for polymorphic instantiation of strategies based on version identifiers.
 """
 
+import numpy as np
 from typing import Dict, Type, Any
 
 # Dictionary mapping version IDs (strings or floats) to Strategy classes
@@ -31,7 +32,14 @@ def structural_detect(genome: dict) -> Any:
     """
     if "brain_a" in genome: return "v10_alpha"
     if "hysteresis" in genome: return "v9_confidence"
-    if "layers" in genome: return "v7_deep"
+    if "layers" in genome:
+        # Distinguish V7 variants by output layer shape
+        try:
+            out_w = np.array(genome["layers"][-1]["w"])
+            if out_w.shape[1] == 2: return "v7_deep_binary"
+            if out_w.shape[1] == 1: return "v7_deep_fluid"
+        except: pass
+        return "v7_deep"
     if "brains" in genome:
         b = genome["brains"]
         if "cash" in b or "1x" in b: return "v6_balancer"
