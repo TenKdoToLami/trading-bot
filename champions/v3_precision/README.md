@@ -16,8 +16,8 @@ V3 is a highly optimized **Binary State Machine**. It is the first version to us
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_universal.py --version v3_precision --pop 500 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_universal.py --version v3_precision --pop 500 --gen 50 --vault champions/v3_precision/vault --mut 0.4` |
+| **New Run** | `python tests/run_evolution_universal.py --version v3_precision --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v3_precision --pop 100 --gen 50 --vault champions/v3_precision/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |

@@ -41,7 +41,8 @@ from src.tournament.evolution_registry import register_evolution
 
 @register_evolution("v6_balancer")
 class EvolutionEngineV6:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0, workers=None, **kwargs):
+        self.workers = workers or os.cpu_count()
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.use_ablation, self.min_cagr = use_ablation, min_cagr
         self.seed_vault = seed_vault
@@ -103,7 +104,7 @@ class EvolutionEngineV6:
         print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
         print("-" * 60)
 
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_v6b_worker, g) for g in self.population]

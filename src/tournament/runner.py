@@ -146,9 +146,10 @@ def _run_audit_batch(strategy_type, full_records, full_dates, strategy_kwargs, i
     }
 
 class TournamentRunner:
-    def __init__(self, start_date="1993-01-01", end_date=None):
+    def __init__(self, start_date="1993-01-01", end_date=None, workers=None):
         self.start_date = start_date
         self.end_date = end_date
+        self.workers = workers or max(1, os.cpu_count() - 2)
         self.data = None
         self.results = {}
 
@@ -300,7 +301,7 @@ class TournamentRunner:
         dates = self.data.index
 
         results = {}
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers) as executor:
             future_to_name = {
                 executor.submit(_execute_simulation, type(s), price_list, dates, 
                                 {'genome': s.genome} if hasattr(s, 'genome') else {}): s.NAME
@@ -360,7 +361,7 @@ class TournamentRunner:
             audit_dates = self.data.index.tolist()
             
             start_time = time.time()
-            workers = max(1, (os.cpu_count() or 2) // 2)
+            workers = self.workers
             with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
                 future_to_strat = {}
                 for name, res in self.results.items():

@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--vault", type=str, default=None, help="Vault directory for seeding")
     parser.add_argument("--ablation", action="store_true", help="Enable ablation study during evolution")
     parser.add_argument("--cagr", type=float, default=0.0, help="Minimum CAGR filter")
+    parser.add_argument("--workers", type=int, default=max(1, os.cpu_count() - 2), help="Number of worker processes")
     
     args = parser.parse_args()
     
@@ -31,7 +32,7 @@ def main():
         sys.exit(1)
         
     print(f"Starting {args.version} Evolution...")
-    print(f"Settings: pop={args.pop}, gen={args.gen}, mut={args.mut}, vault={args.vault}")
+    print(f"Settings: pop={args.pop}, gen={args.gen}, mut={args.mut}, vault={args.vault}, workers={args.workers}")
     
     # Initialize engine
     # We pass args as a dict to the engine, adapting to its expected signature
@@ -41,7 +42,8 @@ def main():
         mutation_rate=args.mut,
         seed_vault=args.vault,
         use_ablation=args.ablation,
-        min_cagr=args.cagr
+        min_cagr=args.cagr,
+        workers=args.workers
     )
     
     try:

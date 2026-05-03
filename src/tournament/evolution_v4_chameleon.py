@@ -85,7 +85,7 @@ class EvolutionEngineV4:
         print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
         print("-" * 60)
 
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_v4c_worker, g) for g in self.population]

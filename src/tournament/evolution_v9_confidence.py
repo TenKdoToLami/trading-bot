@@ -51,7 +51,8 @@ def _evaluate_v9_worker(genome):
 
 @register_evolution("v9_confidence")
 class EvolutionEngineV9Confidence:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=20.0):
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=20.0, workers=None, **kwargs):
+        self.workers = workers or os.cpu_count()
         self.pop_size = population_size
         self.generations = generations
         self.mut_rate = mutation_rate
@@ -123,7 +124,7 @@ class EvolutionEngineV9Confidence:
         print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Hyst':<5} | {'Time':<5}")
         print("-" * 65)
 
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_v9_worker, g) for g in self.population]

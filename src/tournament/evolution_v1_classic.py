@@ -1,3 +1,4 @@
+from src.tournament.evolution_registry import register_evolution
 import random
 import json
 import concurrent.futures
@@ -83,7 +84,8 @@ def _evaluate_v1_worker(genome):
 
 @register_evolution("v1_classic")
 class EvolutionEngineV1Classic:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0):
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=True, min_cagr=0.0, workers=None, **kwargs):
+        self.workers = workers or os.cpu_count()
         self.pop_size = population_size
         self.generations = generations
         self.mut_rate = mutation_rate
@@ -152,7 +154,7 @@ class EvolutionEngineV1Classic:
         print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
         print("-" * 60)
 
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_v1_worker, g) for g in self.population]

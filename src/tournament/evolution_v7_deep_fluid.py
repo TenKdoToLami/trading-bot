@@ -40,7 +40,9 @@ def _evaluate_v7df_worker(genome):
 
 @register_evolution("v7_deep_fluid")
 class EvolutionEngineV7DeepFluid:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, min_cagr=0.0):
+    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0, workers=None, **kwargs):
+        self.workers = workers or os.cpu_count()
+        self.use_ablation = use_ablation
         self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
         self.min_cagr = min_cagr
         self.lb_bounds = {'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30), 'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50), 'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)}
@@ -69,7 +71,7 @@ class EvolutionEngineV7DeepFluid:
         print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
         print("-" * 60)
 
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
             for gen in range(self.generations):
                 start_time = time.time()
                 futures = [executor.submit(_evaluate_v7df_worker, g) for g in self.population]
