@@ -1,54 +1,43 @@
-# V7 Deep Binary — Neuroevolutionary Risk Control
+# V7 Deep Binary — The Defensive Switch
 
 ## 🧠 Strategy Logic
-V7 Deep Binary is the **Defensive MLP** engine. It uses a Multi-Layer Perceptron to make a binary decision between **3x Leverage** and **CASH**. By stripping away the intermediate states, it focuses entirely on high-conviction regime switches.
+V7 Deep Binary is the **Neuro-Switch** engine. It uses a Multi-Layer Perceptron to make high-conviction decisions between **3x Leverage** and **CASH**. By stripping away intermediate states (1x, 2x), it focuses entirely on identifying major regime shifts with maximum precision.
 
 ### 🔬 Decision Engine Anatomy
-1.  **Binary Input Vector**: Consumes 13 normalized technical indicators + Macro VIX/Yield Curve.
-2.  **Neural MLP Architecture**: Uses a single-hidden-layer MLP with ReLU activation, specifically evolved for **Binary Classification**.
-3.  **Binary Softmax Mapping**: The output layer generates two probabilities:
-    *   **Node 0**: Probability of Defensive Regime (**CASH**).
-    *   **Node 1**: Probability of Aggressive Regime (**3x SPY**).
-4.  **Argmax Selection**: The highest-probability state is selected daily, creating a "Switch" behavior with no intermediate 1x/2x states.
-5.  **Ablation Pruning**: The model can genetically disable weak signals to maintain a sparse, robust logic tree.
-
-### 📈 Leverage States
-- **CASH / 3xSPY** (Binary regime switching)
+1.  **Binary MLP Architecture**: Features a single-hidden-layer neural network specifically evolved for **Binary Classification**.
+2.  **Argmax Softmax Mapping**: The output layer generates probabilities for "Aggressive" vs "Defensive" regimes. The bot selects the dominant state daily.
+3.  **High-Conviction Filtering**: Designed to ignore market "noise" and only rebalance when the neural network detects a fundamental shift in technical indicators.
+4.  **Ablative Pruning**: Supports Indicator Ablation to genetically disable weak features, resulting in a sparse and robust decision tree.
 
 ---
 
-## 🚀 Execution Commands
+## ⚡ QUICK LAUNCH: V7 Binary Command Center
 
-### 📊 Audit & Behavioral Analysis
-```bash
-# Institutional Performance Report
-python tests/performance_audit.py champions/v7_deep_binary/genome.json
+### 🧬 Evolution (Training)
+| Goal | Command |
+| :--- | :--- |
+| **New Run** | `python tests/run_evolution_universal.py --version v7_deep_binary --pop 100 --gen 100` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v7_deep_binary --pop 100 --gen 100 --vault champions/v7_deep_binary/vault --mut 0.4` |
 
-# Behavioral X-Ray (Allocation DNA)
-python tests/genome_xray.py champions/v7_deep_binary/genome.json
-```
+### 🔬 Diagnostics (Audit)
+| Goal | Command |
+| :--- | :--- |
+| **Audit** | `python tests/performance_audit.py champions/v7_deep_binary/genome.json` |
+| **X-Ray** | `python tests/genome_xray.py champions/v7_deep_binary/genome.json` |
+| **Sweep** | `python tests/vault_sweep.py --vault champions/v7_deep_binary/vault --promote --top 20` |
 
-### 🌪️ Stress Testing
-```bash
-# Cross-Regime Sweep (Rolling 5yr Windows)
-python tests/vault_sweep.py --vault champions/v7_deep_binary/vault --promote --top 20
-```
+---
 
-### 🧬 Evolution
-```bash
-# Standard Evolution run
-python tests/run_evolution_universal.py --version v7_deep_binary --pop 500 --gen 100 --ablation
-
-# Seeded Evolution (Refine from vault)
-python tests/run_evolution_universal.py --version v7_deep_binary --pop 300 --gen 50 --ablation --seed champions/v7_deep_binary/vault
-```
-
-#### ⚙️ Evolution Parameters
+## ⚙️ Evolution Parameters
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--pop` | 100 | Population size. Recommend `500+` for Neuroevolution. |
-| `--gen` | 50 | Number of generations. |
-| `--mut` | 0.20 | Mutation rate (Gaussian noise). |
-| `--seed`| `None` | Path to vault dir for seed injection. |
-| `--ablation` | `Off` | Enable **Indicator Ablation**. |
-| `--min-cagr` | `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
+| :--- | :--- | :--- |
+| `--pop` | `100` | Population size. Recommend `500+` for Neuroevolution. |
+| `--gen` | `50` | Number of generations. |
+| `--mut` | `0.20` | Mutation rate (adjusts weight/bias variance). |
+| `--vault` | `None` | Path to load seeds from. |
+| `--min-cagr` | `30.0` | Minimum CAGR threshold for saving results. |
+
+---
+
+## 🛡️ Best Used For
+The "Sentry." V7 Binary is best for aggressive portfolios that want to be "All In" during bull runs and "All Out" during crashes, skipping the volatility and friction of intermediate leverage tiers.
