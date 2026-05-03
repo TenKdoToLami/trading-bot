@@ -97,7 +97,9 @@ class GenomeV6(BaseStrategy):
         scores = []
         for key in ['cash', '1x', '2x', '3x']:
             brain = self.genome['brains'][key]
-            scores.append(sum(brain['w'][k] * feat[k] for k in brain['w'] if brain['a'].get(k, True)))
+            score = sum(brain['w'][k] * feat[k] for k in brain['w'] if brain['a'].get(k, True))
+            score += brain.get('t', 0.0)
+            scores.append(score)
         return scores
 
     def on_data(self, date, price_data, prev_data):
