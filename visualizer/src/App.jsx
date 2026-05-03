@@ -16,6 +16,7 @@ import { twMerge } from 'tailwind-merge';
 import { RiskGaugeCard } from './components/RiskGaugeCard';
 import { AuditCard } from './components/AuditCard';
 import { LeverageBar } from './components/LeverageBar';
+import { calculateCoreMetrics } from './utils/metrics';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -651,6 +652,9 @@ export default function App() {
   const [selectedNames, setSelectedNames] = useState([]);
   const [inspectionStrategy, setInspectionStrategy] = useState(null);
   const [comparisonStrategy, setComparisonStrategy] = useState(null);
+  const [timeframe, setTimeframe] = useState('MAX');
+  const [customRange, setCustomRange] = useState({ start: '', end: '' });
+  const [pendingRange, setPendingRange] = useState({ start: '', end: '' });
   const [activeTab, setActiveTab] = useState('performance');
   const [scaleMode, setScaleMode] = useState('log');
   const [sidebarSearch, setSidebarSearch] = useState('');
@@ -658,12 +662,110 @@ export default function App() {
   const [sortCol, setSortCol] = useState('cagr');
   const [sortDir, setSortDir] = useState('desc');
 
-  const sortedData = useMemo(() => [...data].sort((a,b) => b.metrics.cagr - a.metrics.cagr), [data]);
+  // Slicing Logic for Dynamic Timeframes
+  const sliceStrategy = (strat, tf, customRange = null) => {
+    if (!strat || !strat.curve || !strat.curve.dates) return strat;
+    if (tf === 'MAX' && (!customRange || (!customRange.start && !customRange.end))) return strat;
+    
+    let startIndex = 0;
+    let endIndex = strat.curve.dates.length - 1;
+    
+    if (customRange && (customRange.start || customRange.end)) {
+      const startMs = customRange.start ? new Date(customRange.start).getTime() : 0;
+      const endMs = customRange.end ? new Date(customRange.end).getTime() : Infinity;
+      
+      for (let i = 0; i < strat.curve.dates.length; i++) {
+        const time = new Date(strat.curve.dates[i]).getTime();
+        if (time >= startMs && startIndex === 0) startIndex = i;
+        if (time <= endMs) endIndex = i;
+      }
+    } else {
+      const lastDateStr = strat.curve.dates[strat.curve.dates.length - 1];
+      const lastDate = new Date(lastDateStr);
+      let cutoffYear = lastDate.getFullYear();
+      
+      if (tf === '1Y') cutoffYear -= 1;
+      if (tf === '3Y') cutoffYear -= 3;
+      if (tf === '5Y') cutoffYear -= 5;
+      if (tf === '10Y') cutoffYear -= 10;
+      
+      const cutoffDate = new Date(lastDate);
+      cutoffDate.setFullYear(cutoffYear);
+      const cutoffTime = cutoffDate.getTime();
+      
+      for (let i = strat.curve.dates.length - 1; i >= 0; i--) {
+        if (new Date(strat.curve.dates[i]).getTime() < cutoffTime) {
+          startIndex = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (startIndex >= endIndex || startIndex >= strat.curve.dates.length) return strat; // Invalid range
+    
+    const slicedDates = strat.curve.dates.slice(startIndex, endIndex + 1);
+    const rawEquities = strat.curve.equities.slice(startIndex, endIndex + 1);
+    const baseEq = rawEquities[0];
+    const slicedEquities = rawEquities.map(e => e / baseEq);
+
+    const slicedMetrics = calculateCoreMetrics(slicedEquities, slicedDates);
+    
+    // Slice parallel arrays
+    const slicedRollingVol = strat.metrics.rolling_vol ? strat.metrics.rolling_vol.slice(startIndex, endIndex + 1) : undefined;
+    
+    // Telemetry and history slicing
+    const slicedTelemetry = strat.telemetry ? {} : undefined;
+    if (strat.telemetry) {
+      for (const key in strat.telemetry) {
+        if (Array.isArray(strat.telemetry[key]) && strat.telemetry[key].length >= strat.curve.dates.length) {
+          const offset = strat.telemetry[key].length - strat.curve.dates.length;
+          slicedTelemetry[key] = strat.telemetry[key].slice(startIndex + offset, endIndex + 1 + offset);
+        } else {
+          slicedTelemetry[key] = strat.telemetry[key];
+        }
+      }
+    }
+
+    const slicedHistory = strat.history ? {} : undefined;
+    if (strat.history) {
+      for (const key in strat.history) {
+        if (Array.isArray(strat.history[key]) && strat.history[key].length >= strat.curve.dates.length) {
+          const offset = strat.history[key].length - strat.curve.dates.length;
+          slicedHistory[key] = strat.history[key].slice(startIndex + offset, endIndex + 1 + offset);
+        } else {
+          slicedHistory[key] = strat.history[key];
+        }
+      }
+    }
+    
+    return {
+      ...strat,
+      curve: { dates: slicedDates, equities: slicedEquities },
+      telemetry: slicedTelemetry,
+      history: slicedHistory,
+      metrics: {
+        ...strat.metrics, 
+        ...slicedMetrics,
+        // CalculateCoreMetrics provides freshly calculated drawdowns, yearly_returns, monthly_returns
+        rolling_vol: slicedRollingVol
+      }
+    };
+  };
+
+  const slicedData = useMemo(() => {
+    return data.map(strat => sliceStrategy(strat, timeframe, customRange));
+  }, [data, timeframe, customRange]);
+
+  const sortedData = useMemo(() => [...slicedData].sort((a,b) => b.metrics.cagr - a.metrics.cagr), [slicedData]);
   const currentIndex = inspectionStrategy ? sortedData.findIndex(s => s.name === inspectionStrategy.name) : -1;
+
+  const activeInspection = useMemo(() => inspectionStrategy ? slicedData.find(s => s.name === inspectionStrategy.name) : null, [inspectionStrategy, slicedData]);
+  const activeComparison = useMemo(() => comparisonStrategy ? slicedData.find(s => s.name === comparisonStrategy.name) : null, [comparisonStrategy, slicedData]);
+  const activeSpy = useMemo(() => slicedData.find(s => s.name === '[BASE] B&H SPY'), [slicedData]);
 
   // Filtered view: hides [Cheat] strategies unless toggled on
   const displayData = useMemo(() => {
-    let filtered = showCheats ? data : data.filter(s => !s.name.includes('[Cheat]'));
+    let filtered = showCheats ? slicedData : slicedData.filter(s => !s.name.includes('[Cheat]'));
     const col = sortCol;
     const dir = sortDir === 'desc' ? -1 : 1;
     const getValue = (s) => {
@@ -682,7 +784,7 @@ export default function App() {
       }
     };
     return [...filtered].sort((a, b) => (getValue(b) - getValue(a)) * dir);
-  }, [data, showCheats, sortCol, sortDir]);
+  }, [slicedData, showCheats, sortCol, sortDir]);
 
   const toggleSort = (col) => {
     if (sortCol === col) {
@@ -770,17 +872,17 @@ export default function App() {
   const bestCagr = useMemo(() => realStrategies.length ? [...realStrategies].sort((a, b) => b.metrics.cagr - a.metrics.cagr)[0] : null, [realStrategies]);
 
   const chartData = useMemo(() => {
-    if (!data.length || !selectedNames.length) return [];
-    const baseDates = data[0].curve.dates;
+    if (!slicedData.length || !selectedNames.length) return [];
+    const baseDates = slicedData[0].curve.dates;
     return baseDates.map((date, i) => {
       const point = { date };
       selectedNames.forEach(name => {
-        const strat = data.find(s => s.name === name);
+        const strat = slicedData.find(s => s.name === name);
         if (strat) point[name] = strat.curve.equities[i];
       });
       return point;
     });
-  }, [data, selectedNames]);
+  }, [slicedData, selectedNames]);
 
   const toggleStrategy = (name) => {
     setSelectedNames(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
@@ -880,6 +982,68 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-10 relative">
+        <div className="flex items-center justify-between mb-8 pb-6 border-b border-white/5">
+          <div className="flex items-center gap-6">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-accent" />
+                Global Time Machine
+              </h2>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Slices entire tournament timeline</p>
+            </div>
+            
+            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-border">
+              {['1Y', '3Y', '5Y', '10Y', 'MAX'].map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => {
+                    setTimeframe(tf);
+                    setCustomRange({ start: '', end: '' });
+                    setPendingRange({ start: '', end: '' });
+                  }}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                    timeframe === tf && !customRange.start && !customRange.end 
+                      ? "bg-accent text-white shadow-sm" 
+                      : "text-slate-500 hover:text-slate-300"
+                  )}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-border">
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Custom:</span>
+              <input 
+                type="date" 
+                value={pendingRange.start}
+                onChange={(e) => setPendingRange(p => ({ ...p, start: e.target.value }))}
+                className="bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-accent"
+              />
+              <span className="text-slate-600">-</span>
+              <input 
+                type="date" 
+                value={pendingRange.end}
+                onChange={(e) => setPendingRange(p => ({ ...p, end: e.target.value }))}
+                className="bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-accent"
+              />
+            </div>
+            <button
+              onClick={() => {
+                setCustomRange(pendingRange);
+                setTimeframe('CUSTOM');
+              }}
+              disabled={!pendingRange.start && !pendingRange.end}
+              className="bg-accent hover:bg-accent/80 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+
         <AnimatePresence mode="wait">
           {inspectionStrategy ? (
             <motion.div
@@ -896,7 +1060,7 @@ export default function App() {
                   </button>
                   <div>
                     <h2 className="text-3xl font-outfit font-extrabold tracking-tight flex items-center gap-3 text-white">
-                      {inspectionStrategy.name}
+                      {activeInspection.name}
                       <span className="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded-full border border-accent/20 font-bold uppercase tracking-widest">Inspection Active</span>
                     </h2>
                     <p className="text-slate-500 text-sm">Institutional Quantitative Behavioral Analysis</p>
@@ -915,7 +1079,7 @@ export default function App() {
                       }}
                     >
                       <option value="">None</option>
-                      {data.filter(s => s.name !== inspectionStrategy.name).map(s => (
+                      {data.filter(s => s.name !== activeInspection.name).map(s => (
                         <option key={s.name} value={s.name} className="bg-slate-900">{s.name}</option>
                       ))}
                     </select>
@@ -943,10 +1107,10 @@ export default function App() {
                 </div>
               </header>
 
-              <ArchitectureBanner version={getInspectionVersion(inspectionStrategy)} name={inspectionStrategy.name} />
+              <ArchitectureBanner version={getInspectionVersion(activeInspection)} name={activeInspection.name} />
 
               {/* Version-Specific Conviction Fight (V3/V4) */}
-              {getInspectionVersion(inspectionStrategy) >= 3 && getInspectionVersion(inspectionStrategy) < 5 && inspectionStrategy.telemetry?.monthly_avg && (
+              {getInspectionVersion(activeInspection) >= 3 && getInspectionVersion(activeInspection) < 5 && activeInspection.telemetry?.monthly_avg && (
                 <div className="card mb-6 bg-slate-900/50 border-accent/20">
                   <div className="flex items-center justify-between p-4 border-b border-white/5">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400"> Conviction Fight: Panic vs Bull</h3>
@@ -955,19 +1119,19 @@ export default function App() {
                     <div className="space-y-2">
                        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
                           <span>Panic Brain Conviction</span>
-                          <span className="text-red-400">{(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100).toFixed(1)}%</span>
+                          <span className="text-red-400">{(Object.values(activeInspection.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100).toFixed(1)}%</span>
                        </div>
                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                          <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100)}%` }}></div>
+                          <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(activeInspection.telemetry.monthly_avg).slice(-1)[0]?.conf_cash * 100)}%` }}></div>
                        </div>
                     </div>
                     <div className="space-y-2">
                        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
                           <span>Bull Brain Conviction</span>
-                          <span className="text-emerald-400">{(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100).toFixed(1)}%</span>
+                          <span className="text-emerald-400">{(Object.values(activeInspection.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100).toFixed(1)}%</span>
                        </div>
                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(inspectionStrategy.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100)}%` }}></div>
+                          <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-1000" style={{ width: `${(Object.values(activeInspection.telemetry.monthly_avg).slice(-1)[0]?.conf_3x * 100)}%` }}></div>
                        </div>
                     </div>
                   </div>
@@ -977,63 +1141,63 @@ export default function App() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                  <RiskGaugeCard 
                     title="Total Return" 
-                    value={`${inspectionStrategy.metrics.multiplier?.toFixed(1) || 'N/A'}x`} 
-                    compareValue={comparisonStrategy ? `${comparisonStrategy.metrics.multiplier?.toFixed(1) || 'N/A'}x` : undefined}
+                    value={`${activeInspection.metrics.multiplier?.toFixed(1) || 'N/A'}x`} 
+                    compareValue={activeComparison ? `${activeComparison.metrics.multiplier?.toFixed(1) || 'N/A'}x` : undefined}
                     subValue="Cumulative Multiplier" 
                     colorClass="text-success"
                     tooltipProps={{
                       explanation: "The total multiplier of original capital over the entire period.",
                       goodRange: "> 50x (Strategic Lead)",
-                      spyValue: `${spyData?.metrics.multiplier?.toFixed(1)}x`,
+                      spyValue: `${activeSpy?.metrics.multiplier?.toFixed(1)}x`,
                       formula: "(Ending / Starting Value)"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Annual CAGR" 
-                    value={`${(inspectionStrategy.metrics.cagr * 100).toFixed(1)}%`} 
-                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.cagr * 100).toFixed(1)}%` : undefined}
+                    value={`${(activeInspection.metrics.cagr * 100).toFixed(1)}%`} 
+                    compareValue={activeComparison ? `${(activeComparison.metrics.cagr * 100).toFixed(1)}%` : undefined}
                     subValue="Geometric Mean" 
                     colorClass="text-success"
                     tooltipProps={{
                       explanation: "Compound Annual Growth Rate. The smooth annual rate of return.",
                       goodRange: "> 15% (Institutional)",
-                      spyValue: `${(spyData?.metrics.cagr * 100).toFixed(1)}%`,
+                      spyValue: `${(activeSpy?.metrics.cagr * 100).toFixed(1)}%`,
                       formula: "((End / Start)^(1/Years)) - 1"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Max Drawdown" 
-                    value={`${(inspectionStrategy.metrics.max_dd * 100).toFixed(1)}%`} 
-                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.max_dd * 100).toFixed(1)}%` : undefined}
+                    value={`${(activeInspection.metrics.max_dd * 100).toFixed(1)}%`} 
+                    compareValue={activeComparison ? `${(activeComparison.metrics.max_dd * 100).toFixed(1)}%` : undefined}
                     subValue="Structural Risk" 
-                    colorClass={inspectionStrategy.metrics.max_dd < -0.5 ? "text-danger" : "text-success"}
-                    progress={(1 + inspectionStrategy.metrics.max_dd) * 100}
+                    colorClass={activeInspection.metrics.max_dd < -0.5 ? "text-danger" : "text-success"}
+                    progress={(1 + activeInspection.metrics.max_dd) * 100}
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Largest peak-to-trough decline. Measures maximum pain threshold.",
                       goodRange: "> -30% (High Quality)",
-                      spyValue: `${(spyData?.metrics.max_dd * 100).toFixed(1)}%`,
+                      spyValue: `${(activeSpy?.metrics.max_dd * 100).toFixed(1)}%`,
                       formula: "(Peak - Trough) / Peak"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Ann. Volatility" 
-                    value={`${(inspectionStrategy.metrics.volatility * 100).toFixed(1)}%`} 
-                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.volatility * 100).toFixed(1)}%` : undefined}
+                    value={`${(activeInspection.metrics.volatility * 100).toFixed(1)}%`} 
+                    compareValue={activeComparison ? `${(activeComparison.metrics.volatility * 100).toFixed(1)}%` : undefined}
                     subValue="Price Fluctuations" 
-                    progress={100 - (inspectionStrategy.metrics.volatility * 200)}
+                    progress={100 - (activeInspection.metrics.volatility * 200)}
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Standard deviation of returns. Higher volatility means more aggressive swings.",
                       goodRange: "< 25% (Controlled)",
-                      spyValue: `${(spyData?.metrics.volatility * 100).toFixed(1)}%`,
+                      spyValue: `${(activeSpy?.metrics.volatility * 100).toFixed(1)}%`,
                       formula: "StdDev(Daily) * sqrt(252)"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Annual Pivots" 
-                    value={inspectionStrategy.metrics.trades_per_year.toFixed(1)} 
-                    compareValue={comparisonStrategy ? comparisonStrategy.metrics.trades_per_year.toFixed(1) : undefined}
+                    value={activeInspection.metrics.trades_per_year?.toFixed(1) || 'N/A'} 
+                    compareValue={activeComparison ? activeComparison.metrics.trades_per_year?.toFixed(1) : undefined}
                     subValue="Yearly Rebalances" 
                     tooltipProps={{
                       explanation: "The frequency of strategy rebalancing per year. High pivots increase slippage risk.",
@@ -1044,7 +1208,7 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Trades / Mo" 
-                    value={(inspectionStrategy.metrics.trades_per_year / 12).toFixed(1)} 
+                    value={(activeInspection.metrics.trades_per_year / 12).toFixed(1)} 
                     subValue="Rebalance Freq" 
                     tooltipProps={{
                       explanation: "Average monthly rebalancing frequency.",
@@ -1055,8 +1219,8 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Avg Leverage" 
-                    value={`${inspectionStrategy.metrics.avg_leverage?.toFixed(2)}x`} 
-                    compareValue={comparisonStrategy ? `${comparisonStrategy.metrics.avg_leverage?.toFixed(2)}x` : undefined}
+                    value={`${activeInspection.metrics.avg_leverage?.toFixed(2)}x`} 
+                    compareValue={activeComparison ? `${activeComparison.metrics.avg_leverage?.toFixed(2)}x` : undefined}
                     subValue="Portfolio Heaviness" 
                     colorClass="text-info"
                     tooltipProps={{
@@ -1068,15 +1232,15 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Expectancy" 
-                    value={`${(inspectionStrategy.metrics.expectancy * 100).toFixed(2)}%`} 
-                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.expectancy * 100).toFixed(2)}%` : undefined}
+                    value={`${(activeInspection.metrics.expectancy * 100).toFixed(2)}%`} 
+                    compareValue={activeComparison ? `${(activeComparison.metrics.expectancy * 100).toFixed(2)}%` : undefined}
                     subValue="Edge per Day" 
-                    progress={inspectionStrategy.metrics.expectancy * 500}
+                    progress={activeInspection.metrics.expectancy * 500}
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "The mathematical edge. Average expected profit per day.",
                       goodRange: "> 0.10% (Exceptional)",
-                      spyValue: `${(spyData?.metrics.expectancy * 100).toFixed(2)}%`,
+                      spyValue: `${(activeSpy?.metrics.expectancy * 100).toFixed(2)}%`,
                       formula: "Mean(Daily Returns)"
                     }}
                  />
@@ -1085,24 +1249,24 @@ export default function App() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                  <RiskGaugeCard 
                     title="Sharpe" 
-                    value={inspectionStrategy.metrics.sharpe.toFixed(2)} 
-                    compareValue={comparisonStrategy ? comparisonStrategy.metrics.sharpe.toFixed(2) : undefined}
+                    value={activeInspection.metrics.sharpe.toFixed(2)} 
+                    compareValue={activeComparison ? activeComparison.metrics.sharpe.toFixed(2) : undefined}
                     icon={Bolt}
-                    progress={inspectionStrategy.metrics.sharpe * 33} 
+                    progress={activeInspection.metrics.sharpe * 33} 
                     trackClass="bg-gradient-to-r from-danger via-yellow-500 to-success"
                     tooltipProps={{
                       explanation: "Risk-adjusted return. Measures reward per unit of volatility.",
                       goodRange: "> 1.0 (Professional)",
-                      spyValue: spyData?.metrics.sharpe.toFixed(2),
+                      spyValue: activeSpy?.metrics.sharpe.toFixed(2),
                       formula: "(Mean Ret - RF) / Vol"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Beta" 
-                    value={inspectionStrategy.metrics.beta?.toFixed(2) || 'N/A'} 
-                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.beta?.toFixed(2) || 'N/A') : undefined}
+                    value={activeInspection.metrics.beta?.toFixed(2) || 'N/A'} 
+                    compareValue={activeComparison ? (activeComparison.metrics.beta?.toFixed(2) || 'N/A') : undefined}
                     icon={LucideLineChart}
-                    progress={100 - (Math.abs(inspectionStrategy.metrics.beta - 1) * 50)} 
+                    progress={100 - (Math.abs(activeInspection.metrics.beta - 1) * 50)} 
                     trackClass="bg-gradient-to-r from-danger via-success to-danger"
                     tooltipProps={{
                       explanation: "Sensitivity to market moves. 1.0 means perfectly correlated to SPY.",
@@ -1113,24 +1277,24 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Sortino" 
-                    value={inspectionStrategy.metrics.sortino?.toFixed(2) || 'N/A'} 
-                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.sortino?.toFixed(2) || 'N/A') : undefined}
+                    value={activeInspection.metrics.sortino?.toFixed(2) || 'N/A'} 
+                    compareValue={activeComparison ? (activeComparison.metrics.sortino?.toFixed(2) || 'N/A') : undefined}
                     icon={Shield}
-                    progress={inspectionStrategy.metrics.sortino * 33} 
+                    progress={activeInspection.metrics.sortino * 33} 
                     trackClass="bg-gradient-to-r from-danger via-yellow-500 to-success"
                     tooltipProps={{
                       explanation: "Adjusted return focusing only on 'bad' downside volatility.",
                       goodRange: "> 1.5 (Excellent)",
-                      spyValue: spyData?.metrics.sortino?.toFixed(2),
+                      spyValue: activeSpy?.metrics.sortino?.toFixed(2),
                       formula: "(Mean Ret - RF) / DownsideVol"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Alpha" 
-                    value={`${((inspectionStrategy.metrics.alpha || 0) * 100).toFixed(1)}%`} 
-                    compareValue={comparisonStrategy ? `${((comparisonStrategy.metrics.alpha || 0) * 100).toFixed(1)}%` : undefined}
+                    value={`${((activeInspection.metrics.alpha || 0) * 100).toFixed(1)}%`} 
+                    compareValue={activeComparison ? `${((activeComparison.metrics.alpha || 0) * 100).toFixed(1)}%` : undefined}
                     icon={Gem}
-                    progress={(inspectionStrategy.metrics.alpha + 0.1) * 500} 
+                    progress={(activeInspection.metrics.alpha + 0.1) * 500} 
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "True skill. Performance added beyond market beta exposure.",
@@ -1141,10 +1305,10 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Information" 
-                    value={inspectionStrategy.metrics.information_ratio?.toFixed(2) || 'N/A'} 
-                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.information_ratio?.toFixed(2) || 'N/A') : undefined}
+                    value={activeInspection.metrics.information_ratio?.toFixed(2) || 'N/A'} 
+                    compareValue={activeComparison ? (activeComparison.metrics.information_ratio?.toFixed(2) || 'N/A') : undefined}
                     icon={Info}
-                    progress={inspectionStrategy.metrics.information_ratio * 50} 
+                    progress={activeInspection.metrics.information_ratio * 50} 
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Measures consistency of excess returns relative to SPY.",
@@ -1155,42 +1319,42 @@ export default function App() {
                  />
                  <RiskGaugeCard 
                     title="Calmar" 
-                    value={inspectionStrategy.metrics.calmar?.toFixed(2) || 'N/A'} 
-                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.calmar?.toFixed(2) || 'N/A') : undefined}
+                    value={activeInspection.metrics.calmar?.toFixed(2) || 'N/A'} 
+                    compareValue={activeComparison ? (activeComparison.metrics.calmar?.toFixed(2) || 'N/A') : undefined}
                     icon={TrendingUp}
-                    progress={inspectionStrategy.metrics.calmar * 50} 
+                    progress={activeInspection.metrics.calmar * 50} 
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Return-to-Drawdown ratio. Measures pain-adjusted efficiency.",
                       goodRange: "> 0.8 (Resilient)",
-                      spyValue: spyData?.metrics.calmar?.toFixed(2),
+                      spyValue: activeSpy?.metrics.calmar?.toFixed(2),
                       formula: "Annual CAGR / Max Drawdown"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Treynor Ratio" 
-                    value={`${((inspectionStrategy.metrics.treynor || 0) * 100).toFixed(1)}%`} 
-                    compareValue={comparisonStrategy ? `${((comparisonStrategy.metrics.treynor || 0) * 100).toFixed(1)}%` : undefined}
+                    value={`${((activeInspection.metrics.treynor || 0) * 100).toFixed(1)}%`} 
+                    compareValue={activeComparison ? `${((activeComparison.metrics.treynor || 0) * 100).toFixed(1)}%` : undefined}
                     icon={ExternalLink}
-                    progress={(inspectionStrategy.metrics.treynor || 0) * 500} 
+                    progress={(activeInspection.metrics.treynor || 0) * 500} 
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Risk-adjusted return focusing on systematic (market) risk.",
                       goodRange: "> 10% (Alpha Hunter)",
-                      spyValue: `${((spyData?.metrics.treynor || 0) * 100).toFixed(1)}%`,
+                      spyValue: `${((activeSpy?.metrics.treynor || 0) * 100).toFixed(1)}%`,
                       formula: "(Ret - RF) / Beta"
                     }}
                  />
                  <RiskGaugeCard 
                     title="Omega Ratio" 
-                    value={inspectionStrategy.metrics.omega?.toFixed(2) || 'N/A'} 
+                    value={activeInspection.metrics.omega?.toFixed(2) || 'N/A'} 
                     icon={Scale}
-                    progress={(inspectionStrategy.metrics.omega || 1) * 40} 
+                    progress={(activeInspection.metrics.omega || 1) * 40} 
                     trackClass="bg-gradient-to-r from-danger to-success"
                     tooltipProps={{
                       explanation: "Probability-weighted ratio of gains vs losses. Measures 'good' vs 'bad' outcomes.",
                       goodRange: "> 1.15 (Favorable)",
-                      spyValue: spyData?.metrics.omega?.toFixed(2),
+                      spyValue: activeSpy?.metrics.omega?.toFixed(2),
                       formula: "Sum(Gains) / Sum(|Losses|)"
                     }}
                  />
@@ -1204,17 +1368,17 @@ export default function App() {
                   </h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
+                      <AreaChart data={activeInspection.curve.dates.map((d, i) => ({
                         date: d,
-                        dd: (inspectionStrategy.metrics.drawdowns?.[i] || 0) * 100,
-                        spy_dd: (spyData?.metrics.drawdowns?.[i] || 0) * 100,
-                        comp_dd: comparisonStrategy ? (comparisonStrategy.metrics.drawdowns?.[i] || 0) * 100 : null
+                        dd: (activeInspection.metrics.drawdowns?.[i] || 0) * 100,
+                        spy_dd: (activeSpy?.metrics.drawdowns?.[i] || 0) * 100,
+                        comp_dd: activeComparison ? (activeComparison.metrics.drawdowns?.[i] || 0) * 100 : null
                       }))}>
                         <defs>
                           <linearGradient id="ddGradient" x1="0" y1="0" x2="1" y2="0">
-                            {inspectionStrategy.curve.dates.map((_, i, arr) => {
-                              const dd = (inspectionStrategy.metrics.drawdowns?.[i] || 0);
-                              const spy_dd = (spyData?.metrics.drawdowns?.[i] || 0);
+                            {activeInspection.curve.dates.map((_, i, arr) => {
+                              const dd = (activeInspection.metrics.drawdowns?.[i] || 0);
+                              const spy_dd = (activeSpy?.metrics.drawdowns?.[i] || 0);
                               const color = dd >= spy_dd ? "#10b981" : "#ef4444"; // Green if better (less negative), Red if worse
                               return <stop key={i} offset={`${(i / arr.length) * 100}%`} stopColor={color} />;
                             })}
@@ -1226,8 +1390,8 @@ export default function App() {
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
                         <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke="url(#ddGradient)" fill="rgba(255, 255, 255, 0.05)" strokeWidth={2} />
-                        {comparisonStrategy && (
-                          <Area type="monotone" name={`${comparisonStrategy.name} DD`} dataKey="comp_dd" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" />
+                        {activeComparison && (
+                          <Area type="monotone" name={`${activeComparison.name} DD`} dataKey="comp_dd" stroke={getStrategyColor(activeComparison.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" />
                         )}
                         <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke="#475569" fill="rgba(71, 85, 105, 0.02)" strokeWidth={1} />
                       </AreaChart>
@@ -1238,18 +1402,18 @@ export default function App() {
                   <h3 className="text-xl font-outfit font-bold mb-6 text-white">Rolling 1yr Volatility Profile</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={inspectionStrategy.curve.dates.map((d, i) => ({
+                      <LineChart data={activeInspection.curve.dates.map((d, i) => ({
                         date: d,
-                        vol: inspectionStrategy.metrics.rolling_vol?.[i],
-                        spy_vol: spyData?.metrics.rolling_vol?.[i],
-                        comp_vol: comparisonStrategy ? comparisonStrategy.metrics.rolling_vol?.[i] : null
+                        vol: activeInspection.metrics.rolling_vol?.[i],
+                        spy_vol: activeSpy?.metrics.rolling_vol?.[i],
+                        comp_vol: activeComparison ? activeComparison.metrics.rolling_vol?.[i] : null
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
                         <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
-                        <Line type="monotone" name="Portfolio Vol" dataKey="vol" stroke={getRegimeColor(inspectionStrategy.name)} dot={false} strokeWidth={2} isAnimationActive={false} />
+                        <Line type="monotone" name="Portfolio Vol" dataKey="vol" stroke={getRegimeColor(activeInspection.name)} dot={false} strokeWidth={2} isAnimationActive={false} />
                         {comparisonStrategy && (
                           <Line type="monotone" name={`${comparisonStrategy.name} Vol`} dataKey="comp_vol" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} dot={false} strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
                         )}
@@ -1262,10 +1426,10 @@ export default function App() {
                   <h3 className="text-xl font-outfit font-bold mb-6 text-white">Annual Return vs SPY</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={inspectionStrategy.metrics.yearly_returns.map(yr => ({
+                      <BarChart data={activeInspection.metrics.yearly_returns.map(yr => ({
                         ...yr,
-                        spy_return: spyData?.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0,
-                        comp_return: comparisonStrategy ? (comparisonStrategy.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0) : null
+                        spy_return: activeSpy?.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0,
+                        comp_return: activeComparison ? (activeComparison.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0) : null
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="year" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -1273,8 +1437,8 @@ export default function App() {
                         <RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={customTooltipStyle} itemStyle={{ color: '#fff' }} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
                         <Bar dataKey="return" name="Portfolio %">
-                          {inspectionStrategy.metrics.yearly_returns.map((entry, index) => {
-                            const spyReturn = spyData?.metrics.yearly_returns.find(s => s.year === entry.year)?.return || 0;
+                          {activeInspection.metrics.yearly_returns.map((entry, index) => {
+                            const spyReturn = activeSpy?.metrics.yearly_returns.find(s => s.year === entry.year)?.return || 0;
                             const isBeatingSpy = entry.return > spyReturn;
                             return (
                               <Cell 
@@ -1305,14 +1469,14 @@ export default function App() {
                   </h3>
                   <div className="h-96">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => {
-                        const tel = inspectionStrategy.telemetry;
-                        const hist = inspectionStrategy.history;
+                      <AreaChart data={activeInspection.curve.dates.map((d, i) => {
+                        const tel = activeInspection.telemetry;
+                        const hist = activeInspection.history;
                         return {
                           date: d,
-                          equity: inspectionStrategy.curve.equities[i],
-                          spy_equity: spyData?.curve.equities[i],
-                          comp_equity: comparisonStrategy ? comparisonStrategy.curve.equities[i] : null,
+                          equity: activeInspection.curve.equities[i],
+                          spy_equity: activeSpy?.curve.equities[i],
+                          comp_equity: activeComparison ? activeComparison.curve.equities[i] : null,
                           // Probabilistic or Discrete Allocations
                           alloc_3x:   tel?.conf_3x?.[i]   ?? (hist?.regime[i] === '3xSPY' ? 1 : 0),
                           alloc_2x:   tel?.conf_2x?.[i]   ?? (hist?.regime[i] === '2xSPY' ? 1 : 0),
@@ -1332,9 +1496,9 @@ export default function App() {
                         <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 2x"   dataKey="alloc_2x"   stroke="none" fill="rgba(16, 185, 129, 0.3)"  isAnimationActive={false} />
                         <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 3x"   dataKey="alloc_3x"   stroke="none" fill="rgba(239, 68, 68, 0.3)"  isAnimationActive={false} />
                         
-                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(inspectionStrategy.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
-                        {comparisonStrategy && (
-                          <Area type="monotone" name={`${comparisonStrategy.name} (Log)`} dataKey="comp_equity" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
+                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(activeInspection.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
+                        {activeComparison && (
+                          <Area type="monotone" name={`${activeComparison.name} (Log)`} dataKey="comp_equity" stroke={getStrategyColor(activeComparison.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
                         )}
                         <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
                       </AreaChart>
@@ -1349,9 +1513,9 @@ export default function App() {
                   </h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
+                      <AreaChart data={activeInspection.curve.dates.map((d, i) => ({
                         date: d,
-                        leverage: inspectionStrategy.history?.leverage[i] || 0
+                        leverage: activeInspection.history?.leverage[i] || 0
                       }))}>
                         <defs>
                           <linearGradient id="levGradient" x1="0" y1="0" x2="0" y2="1">
@@ -1379,41 +1543,41 @@ export default function App() {
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Lock Days</div>
                       <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
-                        {(inspectionStrategy.genome?.lock_days || 0).toFixed(1)}
+                        {(activeInspection.genome?.lock_days || 0).toFixed(1)}
                       </div>
                     </div>
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Genome Version</div>
                       <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
-                        {inspectionStrategy.genome?.version || "2.0"}
+                        {activeInspection.genome?.version || "2.0"}
                       </div>
                     </div>
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Architecture</div>
                       <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors truncate">
-                        {getInspectionVersion(inspectionStrategy)}
+                        {getInspectionVersion(activeInspection)}
                       </div>
                     </div>
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-accent/40 transition-all">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Features</div>
                       <div className="text-xl font-mono font-black text-white group-hover:text-accent transition-colors">
-                        {inspectionStrategy.indicators?.length || 0}
+                        {activeInspection.indicators?.length || 0}
                       </div>
                     </div>
                   </div>
 
                   <div className="mb-8">
                     <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Indicator Behavioral Glossary</h4>
-                    <IndicatorGlossary indicators={inspectionStrategy.indicators} spyData={spyData} />
+                    <IndicatorGlossary indicators={activeInspection.indicators} spyData={activeSpy} />
                   </div>
 
                   <div className="mt-10 pt-8 border-t border-white/5">
-                    <IndicatorWeightProfile indicators={inspectionStrategy.indicators} />
+                    <IndicatorWeightProfile indicators={activeInspection.indicators} />
                   </div>
                 </section>
 
                 {/* Only show Regime Mix for strategies without high-fidelity signal traces */}
-                {inspectionStrategy.telemetry && inspectionStrategy.telemetry.monthly_avg && !inspectionStrategy.telemetry.signal_trace && (
+                {activeInspection.telemetry && activeInspection.telemetry.monthly_avg && !activeInspection.telemetry.signal_trace && (
                   <section className="glass rounded-3xl p-8">
                     <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
                       <span>Neural Regime Mix (Monthly Aggregated)</span>
@@ -1423,9 +1587,9 @@ export default function App() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
                           data={
-                            Array.isArray(inspectionStrategy.telemetry.monthly_avg) 
-                              ? inspectionStrategy.telemetry.monthly_avg 
-                              : Object.entries(inspectionStrategy.telemetry.monthly_avg).map(([month, val]) => ({ month, ...val }))
+                            Array.isArray(activeInspection.telemetry.monthly_avg) 
+                              ? activeInspection.telemetry.monthly_avg 
+                              : Object.entries(activeInspection.telemetry.monthly_avg).map(([month, val]) => ({ month, ...val }))
                           }
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -1447,18 +1611,18 @@ export default function App() {
                 )}
 
                 {/* Volatility Regime Matrix (V1/V2 Legacy) */}
-                {inspectionStrategy.telemetry?.regime_matrix && (
-                  <RegimeMatrix matrix={inspectionStrategy.telemetry.regime_matrix} />
+                {activeInspection.telemetry?.regime_matrix && (
+                  <RegimeMatrix matrix={activeInspection.telemetry.regime_matrix} />
                 )}
 
                 {/* Neural Intelligence Chart */}
-                {inspectionStrategy.telemetry?.signal_trace && (
-                  <NeuralIntelligenceChart telemetry={inspectionStrategy.telemetry} />
+                {activeInspection.telemetry?.signal_trace && (
+                  <NeuralIntelligenceChart telemetry={activeInspection.telemetry} />
                 )}
 
                 {/* Neural Decision Matrix */}
-                {inspectionStrategy.telemetry?.signal_trace && (
-                  <NeuralDecisionMatrix strategy={inspectionStrategy} />
+                {activeInspection.telemetry?.signal_trace && (
+                  <NeuralDecisionMatrix strategy={activeInspection} />
                 )}
 
                 <section className="glass rounded-3xl p-8">
@@ -1466,7 +1630,7 @@ export default function App() {
                     <span>Monthly Returns Matrix</span>
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Institutional Alpha Audit</span>
                   </h3>
-                  <MonthlyPerformanceGrid monthlyReturns={inspectionStrategy.metrics.monthly_returns} />
+                  <MonthlyPerformanceGrid monthlyReturns={activeInspection.metrics.monthly_returns} />
                 </section>
 
                 <section className="glass rounded-3xl p-8 flex flex-col gap-6">
@@ -1474,14 +1638,14 @@ export default function App() {
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <AuditCard 
                       title="Resilience Profile (10y Segments)" 
-                      audit={inspectionStrategy.resilience} 
-                      baselineCagr={inspectionStrategy.metrics.cagr * 100}
+                      audit={activeInspection.resilience} 
+                      baselineCagr={activeInspection.metrics.cagr * 100}
                       accentColor="text-accent"
                     />
                     <AuditCard 
                       title="Synthetic Universe Alpha" 
-                      audit={inspectionStrategy.synthetic} 
-                      baselineCagr={inspectionStrategy.metrics.cagr * 100}
+                      audit={activeInspection.synthetic} 
+                      baselineCagr={activeInspection.metrics.cagr * 100}
                       accentColor="text-success"
                     />
                   </div>
