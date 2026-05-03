@@ -8,7 +8,7 @@ function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export const RiskGaugeCard = ({ title, value, subValue, icon: Icon, colorClass, progress, trackClass, tooltipProps }) => {
+export const RiskGaugeCard = ({ title, value, compareValue, compareLabel, subValue, icon: Icon, colorClass, compareColorClass, progress, trackClass, tooltipProps }) => {
   const cardRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -28,8 +28,18 @@ export const RiskGaugeCard = ({ title, value, subValue, icon: Icon, colorClass, 
           <Info className="w-3 h-3 cursor-help opacity-30 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
-      <div className={cn("text-2xl font-outfit font-bold", colorClass || "text-slate-200")}>
-        {value}
+      <div className="flex items-end gap-3">
+        <div className={cn("text-2xl font-outfit font-bold", colorClass || "text-slate-200")}>
+          {value}
+        </div>
+        {compareValue !== undefined && (
+          <div className="flex flex-col pb-0.5">
+             <div className="text-[8px] font-bold uppercase tracking-widest text-slate-500 mb-[1px]">{compareLabel || 'VS COMPARE'}</div>
+             <div className={cn("text-lg font-outfit font-bold", compareColorClass || "text-slate-400")}>
+               {compareValue}
+             </div>
+          </div>
+        )}
       </div>
       {progress !== undefined && (
         <div className="mt-1">

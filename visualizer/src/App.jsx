@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, Shield, Zap, BarChart3, Activity, Globe, Check, ChevronLeft,
   Plus, Bolt, LineChart as LucideLineChart, Gem, Scale, ExternalLink, Info,
-  ArrowLeft, ArrowRight
+  ArrowLeft, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -71,8 +71,22 @@ const MonthlyPerformanceGrid = ({ monthlyReturns }) => {
 };
 
 const COLORS = [
-  "#6366f1", "#10b981", "#ef4444", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#14b8a6"
+  "#6366f1", "#10b981", "#ef4444", "#3b82f6", "#f59e0b", "#ec4899", 
+  "#8b5cf6", "#14b8a6", "#f97316", "#06b6d4", "#a855f7", "#84cc16",
+  "#e11d48", "#0ea5e9", "#d946ef", "#22d3ee", "#facc15", "#fb923c",
+  "#4ade80", "#818cf8", "#fb7185", "#2dd4bf", "#c084fc", "#fbbf24",
+  "#38bdf8", "#a3e635"
 ];
+
+// Stable color assignment: same strategy always gets the same color
+const strategyColorMap = new Map();
+const getStrategyColor = (name, allNames) => {
+  if (!strategyColorMap.has(name)) {
+    const idx = allNames ? allNames.indexOf(name) : strategyColorMap.size;
+    strategyColorMap.set(name, COLORS[idx % COLORS.length]);
+  }
+  return strategyColorMap.get(name);
+};
 
 const REGIME_COLORS = {
   '3x': '#00e676', // Emerald Green
@@ -129,7 +143,13 @@ const getRegimeColor = (name) => {
 };
 
 const getInspectionVersion = (strat) => {
-  return parseFloat(strat?.parameters?.["Genome Version"] || strat?.parameters?.["version"] || 0);
+  const raw = strat?.parameters?.["Genome Version"] 
+    || strat?.parameters?.["version"] 
+    || strat?.genome?.version 
+    || '';
+  // Extract leading number from strings like "v9_confidence", "v10_alpha", "7.0"
+  const match = String(raw).match(/(\d+)/);
+  return match ? parseFloat(match[1]) : 0;
 };
 
 const CustomChartTooltip = ({ active, payload, label }) => {
@@ -630,14 +650,52 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [selectedNames, setSelectedNames] = useState([]);
   const [inspectionStrategy, setInspectionStrategy] = useState(null);
+  const [comparisonStrategy, setComparisonStrategy] = useState(null);
   const [activeTab, setActiveTab] = useState('performance');
   const [scaleMode, setScaleMode] = useState('log');
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [showCheats, setShowCheats] = useState(false);
+  const [sortCol, setSortCol] = useState('cagr');
+  const [sortDir, setSortDir] = useState('desc');
 
   const sortedData = useMemo(() => [...data].sort((a,b) => b.metrics.cagr - a.metrics.cagr), [data]);
   const currentIndex = inspectionStrategy ? sortedData.findIndex(s => s.name === inspectionStrategy.name) : -1;
 
+  // Filtered view: hides [Cheat] strategies unless toggled on
+  const displayData = useMemo(() => {
+    let filtered = showCheats ? data : data.filter(s => !s.name.includes('[Cheat]'));
+    const col = sortCol;
+    const dir = sortDir === 'desc' ? -1 : 1;
+    const getValue = (s) => {
+      const m = s.metrics;
+      switch (col) {
+        case 'cagr': return m.cagr || 0;
+        case 'sharpe': return m.sharpe || 0;
+        case 'sortino': return m.sortino || 0;
+        case 'calmar': return m.calmar || 0;
+        case 'alpha': return m.alpha || 0;
+        case 'volatility': return m.volatility || 0;
+        case 'max_dd': return m.max_dd || 0;
+        case 'trades': return m.trades_per_year || 0;
+        case 'multiplier': return m.multiplier || 0;
+        default: return m.cagr || 0;
+      }
+    };
+    return [...filtered].sort((a, b) => (getValue(b) - getValue(a)) * dir);
+  }, [data, showCheats, sortCol, sortDir]);
+
+  const toggleSort = (col) => {
+    if (sortCol === col) {
+      setSortDir(prev => prev === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortCol(col);
+      setSortDir('desc');
+    }
+  };
+
   const handleInspect = (strat) => {
     setInspectionStrategy(strat);
+    setComparisonStrategy(null);
     if (strat) {
       window.location.hash = `/${encodeURIComponent(strat.name)}`;
     } else {
@@ -649,6 +707,7 @@ export default function App() {
     const nextIndex = currentIndex + direction;
     if (nextIndex >= 0 && nextIndex < sortedData.length) {
       handleInspect(sortedData[nextIndex]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -707,7 +766,8 @@ export default function App() {
   }, []);
 
   const spyData = useMemo(() => data.find(s => s.name.includes('B&H SPY')), [data]);
-  const bestCagr = useMemo(() => data.length ? [...data].sort((a, b) => b.metrics.cagr - a.metrics.cagr)[0] : null, [data]);
+  const realStrategies = useMemo(() => data.filter(s => !s.name.includes('[Cheat]') && !s.name.includes('[BASE]')), [data]);
+  const bestCagr = useMemo(() => realStrategies.length ? [...realStrategies].sort((a, b) => b.metrics.cagr - a.metrics.cagr)[0] : null, [realStrategies]);
 
   const chartData = useMemo(() => {
     if (!data.length || !selectedNames.length) return [];
@@ -773,23 +833,47 @@ export default function App() {
           </button>
         </nav>
         <div className="flex-1 flex flex-col overflow-hidden">
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 px-3">Active Selection</p>
+          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 px-3">Strategies</p>
+          <input
+            type="text"
+            placeholder="Search strategies..."
+            value={sidebarSearch}
+            onChange={(e) => setSidebarSearch(e.target.value)}
+            className="w-full px-3 py-2 mb-2 rounded-lg bg-white/5 border border-border text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-accent/40 transition-colors"
+          />
           <div className="flex-1 overflow-y-auto space-y-1 px-1 custom-scrollbar">
-            {data.map(strat => (
-              <button
+            {data.filter(s => s.name.toLowerCase().includes(sidebarSearch.toLowerCase())).map(strat => (
+              <div
                 key={strat.name}
-                onClick={() => toggleStrategy(strat.name)}
                 className={cn(
-                  "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-all",
+                  "w-full px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-all",
+                  inspectionStrategy?.name === strat.name ? "bg-accent/10 text-accent border border-accent/20" :
                   selectedNames.includes(strat.name) ? "bg-white/5 text-slate-200" : "text-slate-500 hover:text-slate-300"
                 )}
               >
-                <div className="flex items-center gap-2 truncate">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getRegimeColor(strat.name) }} />
+                <button
+                  onClick={() => handleInspect(strat)}
+                  className="flex items-center gap-2 truncate text-left flex-1 min-w-0"
+                >
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getStrategyColor(strat.name, data.map(s => s.name)) }} />
                   <span className="truncate">{strat.name}</span>
-                </div>
-                {selectedNames.includes(strat.name) && <Check className="w-3 h-3 text-accent shrink-0" />}
-              </button>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleStrategy(strat.name); }}
+                  className={cn(
+                    "p-1 rounded-md shrink-0 ml-1 transition-all",
+                    selectedNames.includes(strat.name) 
+                      ? "text-accent hover:bg-accent/10" 
+                      : "text-slate-600 hover:text-slate-400 hover:bg-white/5"
+                  )}
+                  title={selectedNames.includes(strat.name) ? 'Hide from chart' : 'Show on chart'}
+                >
+                  {selectedNames.includes(strat.name) 
+                    ? <Eye className="w-3.5 h-3.5" /> 
+                    : <EyeOff className="w-3.5 h-3.5" />
+                  }
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -820,6 +904,23 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-xl border border-border">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Compare VS:</span>
+                    <select 
+                      className="bg-transparent text-xs font-bold text-white outline-none cursor-pointer p-1 max-w-[150px] truncate"
+                      value={comparisonStrategy?.name || ''}
+                      onChange={(e) => {
+                        const strat = data.find(s => s.name === e.target.value);
+                        setComparisonStrategy(strat || null);
+                      }}
+                    >
+                      <option value="">None</option>
+                      {data.filter(s => s.name !== inspectionStrategy.name).map(s => (
+                        <option key={s.name} value={s.name} className="bg-slate-900">{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="flex bg-white/5 p-1 rounded-xl border border-border">
                     <button 
                       onClick={() => navigateAudit(-1)} 
@@ -873,10 +974,11 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                  <RiskGaugeCard 
                     title="Total Return" 
                     value={`${inspectionStrategy.metrics.multiplier?.toFixed(1) || 'N/A'}x`} 
+                    compareValue={comparisonStrategy ? `${comparisonStrategy.metrics.multiplier?.toFixed(1) || 'N/A'}x` : undefined}
                     subValue="Cumulative Multiplier" 
                     colorClass="text-success"
                     tooltipProps={{
@@ -889,6 +991,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Annual CAGR" 
                     value={`${(inspectionStrategy.metrics.cagr * 100).toFixed(1)}%`} 
+                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.cagr * 100).toFixed(1)}%` : undefined}
                     subValue="Geometric Mean" 
                     colorClass="text-success"
                     tooltipProps={{
@@ -901,6 +1004,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Max Drawdown" 
                     value={`${(inspectionStrategy.metrics.max_dd * 100).toFixed(1)}%`} 
+                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.max_dd * 100).toFixed(1)}%` : undefined}
                     subValue="Structural Risk" 
                     colorClass={inspectionStrategy.metrics.max_dd < -0.5 ? "text-danger" : "text-success"}
                     progress={(1 + inspectionStrategy.metrics.max_dd) * 100}
@@ -915,6 +1019,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Ann. Volatility" 
                     value={`${(inspectionStrategy.metrics.volatility * 100).toFixed(1)}%`} 
+                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.volatility * 100).toFixed(1)}%` : undefined}
                     subValue="Price Fluctuations" 
                     progress={100 - (inspectionStrategy.metrics.volatility * 200)}
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -928,6 +1033,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Annual Pivots" 
                     value={inspectionStrategy.metrics.trades_per_year.toFixed(1)} 
+                    compareValue={comparisonStrategy ? comparisonStrategy.metrics.trades_per_year.toFixed(1) : undefined}
                     subValue="Yearly Rebalances" 
                     tooltipProps={{
                       explanation: "The frequency of strategy rebalancing per year. High pivots increase slippage risk.",
@@ -950,6 +1056,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Avg Leverage" 
                     value={`${inspectionStrategy.metrics.avg_leverage?.toFixed(2)}x`} 
+                    compareValue={comparisonStrategy ? `${comparisonStrategy.metrics.avg_leverage?.toFixed(2)}x` : undefined}
                     subValue="Portfolio Heaviness" 
                     colorClass="text-info"
                     tooltipProps={{
@@ -962,6 +1069,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Expectancy" 
                     value={`${(inspectionStrategy.metrics.expectancy * 100).toFixed(2)}%`} 
+                    compareValue={comparisonStrategy ? `${(comparisonStrategy.metrics.expectancy * 100).toFixed(2)}%` : undefined}
                     subValue="Edge per Day" 
                     progress={inspectionStrategy.metrics.expectancy * 500}
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -974,10 +1082,11 @@ export default function App() {
                  />
               </div>
 
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                  <RiskGaugeCard 
                     title="Sharpe" 
                     value={inspectionStrategy.metrics.sharpe.toFixed(2)} 
+                    compareValue={comparisonStrategy ? comparisonStrategy.metrics.sharpe.toFixed(2) : undefined}
                     icon={Bolt}
                     progress={inspectionStrategy.metrics.sharpe * 33} 
                     trackClass="bg-gradient-to-r from-danger via-yellow-500 to-success"
@@ -991,6 +1100,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Beta" 
                     value={inspectionStrategy.metrics.beta?.toFixed(2) || 'N/A'} 
+                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.beta?.toFixed(2) || 'N/A') : undefined}
                     icon={LucideLineChart}
                     progress={100 - (Math.abs(inspectionStrategy.metrics.beta - 1) * 50)} 
                     trackClass="bg-gradient-to-r from-danger via-success to-danger"
@@ -1004,6 +1114,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Sortino" 
                     value={inspectionStrategy.metrics.sortino?.toFixed(2) || 'N/A'} 
+                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.sortino?.toFixed(2) || 'N/A') : undefined}
                     icon={Shield}
                     progress={inspectionStrategy.metrics.sortino * 33} 
                     trackClass="bg-gradient-to-r from-danger via-yellow-500 to-success"
@@ -1017,6 +1128,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Alpha" 
                     value={`${((inspectionStrategy.metrics.alpha || 0) * 100).toFixed(1)}%`} 
+                    compareValue={comparisonStrategy ? `${((comparisonStrategy.metrics.alpha || 0) * 100).toFixed(1)}%` : undefined}
                     icon={Gem}
                     progress={(inspectionStrategy.metrics.alpha + 0.1) * 500} 
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -1030,6 +1142,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Information" 
                     value={inspectionStrategy.metrics.information_ratio?.toFixed(2) || 'N/A'} 
+                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.information_ratio?.toFixed(2) || 'N/A') : undefined}
                     icon={Info}
                     progress={inspectionStrategy.metrics.information_ratio * 50} 
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -1043,6 +1156,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Calmar" 
                     value={inspectionStrategy.metrics.calmar?.toFixed(2) || 'N/A'} 
+                    compareValue={comparisonStrategy ? (comparisonStrategy.metrics.calmar?.toFixed(2) || 'N/A') : undefined}
                     icon={TrendingUp}
                     progress={inspectionStrategy.metrics.calmar * 50} 
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -1056,6 +1170,7 @@ export default function App() {
                  <RiskGaugeCard 
                     title="Treynor Ratio" 
                     value={`${((inspectionStrategy.metrics.treynor || 0) * 100).toFixed(1)}%`} 
+                    compareValue={comparisonStrategy ? `${((comparisonStrategy.metrics.treynor || 0) * 100).toFixed(1)}%` : undefined}
                     icon={ExternalLink}
                     progress={(inspectionStrategy.metrics.treynor || 0) * 500} 
                     trackClass="bg-gradient-to-r from-danger to-success"
@@ -1092,7 +1207,8 @@ export default function App() {
                       <AreaChart data={inspectionStrategy.curve.dates.map((d, i) => ({
                         date: d,
                         dd: (inspectionStrategy.metrics.drawdowns?.[i] || 0) * 100,
-                        spy_dd: (spyData?.metrics.drawdowns?.[i] || 0) * 100
+                        spy_dd: (spyData?.metrics.drawdowns?.[i] || 0) * 100,
+                        comp_dd: comparisonStrategy ? (comparisonStrategy.metrics.drawdowns?.[i] || 0) * 100 : null
                       }))}>
                         <defs>
                           <linearGradient id="ddGradient" x1="0" y1="0" x2="1" y2="0">
@@ -1110,6 +1226,9 @@ export default function App() {
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
                         <Area type="monotone" name="Portfolio DD" dataKey="dd" stroke="url(#ddGradient)" fill="rgba(255, 255, 255, 0.05)" strokeWidth={2} />
+                        {comparisonStrategy && (
+                          <Area type="monotone" name={`${comparisonStrategy.name} DD`} dataKey="comp_dd" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" />
+                        )}
                         <Area type="monotone" name="SPY DD" dataKey="spy_dd" stroke="#475569" fill="rgba(71, 85, 105, 0.02)" strokeWidth={1} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1122,7 +1241,8 @@ export default function App() {
                       <LineChart data={inspectionStrategy.curve.dates.map((d, i) => ({
                         date: d,
                         vol: inspectionStrategy.metrics.rolling_vol?.[i],
-                        spy_vol: spyData?.metrics.rolling_vol?.[i]
+                        spy_vol: spyData?.metrics.rolling_vol?.[i],
+                        comp_vol: comparisonStrategy ? comparisonStrategy.metrics.rolling_vol?.[i] : null
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />
@@ -1130,6 +1250,9 @@ export default function App() {
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         <Legend />
                         <Line type="monotone" name="Portfolio Vol" dataKey="vol" stroke={getRegimeColor(inspectionStrategy.name)} dot={false} strokeWidth={2} isAnimationActive={false} />
+                        {comparisonStrategy && (
+                          <Line type="monotone" name={`${comparisonStrategy.name} Vol`} dataKey="comp_vol" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} dot={false} strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
+                        )}
                         <Line type="monotone" name="SPY Vol" dataKey="spy_vol" stroke={REGIME_COLORS.SPY} dot={false} strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -1141,7 +1264,8 @@ export default function App() {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={inspectionStrategy.metrics.yearly_returns.map(yr => ({
                         ...yr,
-                        spy_return: spyData?.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0
+                        spy_return: spyData?.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0,
+                        comp_return: comparisonStrategy ? (comparisonStrategy.metrics.yearly_returns.find(s => s.year === yr.year)?.return || 0) : null
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="year" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -1160,6 +1284,9 @@ export default function App() {
                             );
                           })}
                         </Bar>
+                        {comparisonStrategy && (
+                          <Bar dataKey="comp_return" name={`${comparisonStrategy.name} %`} fill={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} opacity={0.6} />
+                        )}
                         <Bar dataKey="spy_return" name="SPY %" fill={`${REGIME_COLORS.SPY}4D`} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -1185,6 +1312,7 @@ export default function App() {
                           date: d,
                           equity: inspectionStrategy.curve.equities[i],
                           spy_equity: spyData?.curve.equities[i],
+                          comp_equity: comparisonStrategy ? comparisonStrategy.curve.equities[i] : null,
                           // Probabilistic or Discrete Allocations
                           alloc_3x:   tel?.conf_3x?.[i]   ?? (hist?.regime[i] === '3xSPY' ? 1 : 0),
                           alloc_2x:   tel?.conf_2x?.[i]   ?? (hist?.regime[i] === '2xSPY' ? 1 : 0),
@@ -1205,6 +1333,9 @@ export default function App() {
                         <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 3x"   dataKey="alloc_3x"   stroke="none" fill="rgba(239, 68, 68, 0.3)"  isAnimationActive={false} />
                         
                         <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(inspectionStrategy.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
+                        {comparisonStrategy && (
+                          <Area type="monotone" name={`${comparisonStrategy.name} (Log)`} dataKey="comp_equity" stroke={getStrategyColor(comparisonStrategy.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
+                        )}
                         <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1379,7 +1510,7 @@ export default function App() {
                    </div>
                    <div className="p-4 bg-white/5 rounded-3xl border border-white/10 text-center min-w-[140px]">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Alpha Population</div>
-                      <div className="text-2xl font-black text-white">{data.filter(d => !d.name.includes('[BASE]')).length}</div>
+                      <div className="text-2xl font-black text-white">{realStrategies.length}</div>
                    </div>
                 </div>
               </header>
@@ -1387,7 +1518,8 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  {/* Top Sharpe Champion */}
                  {(() => {
-                    const topSharpe = [...data].sort((a,b) => b.metrics.sharpe - a.metrics.sharpe)[0];
+                    const topSharpe = realStrategies.length ? [...realStrategies].sort((a,b) => (b.metrics.sharpe || 0) - (a.metrics.sharpe || 0))[0] : null;
+                    if (!topSharpe) return null;
                     return (
                        <div className="p-6 rounded-[32px] bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 relative overflow-hidden group">
                           <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"/>
@@ -1397,7 +1529,7 @@ export default function App() {
                           </div>
                           <div className="text-2xl font-black text-white mb-1 truncate">{topSharpe?.name}</div>
                           <div className="flex items-end gap-2">
-                             <span className="text-3xl font-black text-indigo-400">{topSharpe?.metrics.sharpe.toFixed(2)}</span>
+                             <span className="text-3xl font-black text-indigo-400">{topSharpe?.metrics.sharpe?.toFixed(2) || 'N/A'}</span>
                              <span className="text-[10px] text-slate-500 font-bold uppercase mb-2">Sharpe Ratio</span>
                           </div>
                        </div>
@@ -1406,7 +1538,8 @@ export default function App() {
 
                  {/* Top Calmar Champion */}
                  {(() => {
-                    const topCalmar = [...data].filter(d => d.metrics.calmar != null).sort((a,b) => (b.metrics.calmar || 0) - (a.metrics.calmar || 0))[0];
+                    const topCalmar = realStrategies.filter(d => d.metrics.calmar != null).sort((a,b) => (b.metrics.calmar || 0) - (a.metrics.calmar || 0))[0];
+                    if (!topCalmar) return null;
                     return (
                        <div className="p-6 rounded-[32px] bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 relative overflow-hidden group">
                           <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"/>
@@ -1425,7 +1558,8 @@ export default function App() {
 
                  {/* Top Alpha Champion */}
                  {(() => {
-                    const topAlpha = [...data].filter(d => d.metrics.alpha != null).sort((a,b) => (b.metrics.alpha || 0) - (a.metrics.alpha || 0))[0];
+                    const topAlpha = realStrategies.filter(d => d.metrics.alpha != null).sort((a,b) => (b.metrics.alpha || 0) - (a.metrics.alpha || 0))[0];
+                    if (!topAlpha) return null;
                     return (
                        <div className="p-6 rounded-[32px] bg-gradient-to-br from-accent/10 to-transparent border border-accent/20 relative overflow-hidden group">
                           <div className="absolute -right-4 -top-4 w-24 h-24 bg-accent/10 rounded-full blur-2xl group-hover:bg-accent/20 transition-all"/>
@@ -1460,7 +1594,7 @@ export default function App() {
                       <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '30px' }} />
                       {selectedNames.map((name, i) => (
-                        <Line key={name} type="monotone" dataKey={name} stroke={getRegimeColor(name)} strokeWidth={name.includes('B&H') ? 1.5 : 3} strokeDasharray={name.includes('B&H') ? "5 5" : ""} dot={false} isAnimationActive={false} />
+                        <Line key={name} type="monotone" dataKey={name} stroke={getStrategyColor(name, data.map(s => s.name))} strokeWidth={name.includes('B&H') ? 1.5 : 3} strokeDasharray={name.includes('B&H') ? "5 5" : ""} dot={false} isAnimationActive={false} />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -1469,18 +1603,47 @@ export default function App() {
               <section className="glass rounded-[40px] overflow-hidden border-white/5">
                 <div className="p-10 border-b border-border flex justify-between items-center bg-white/[0.01]">
                   <h3 className="text-2xl font-outfit font-bold text-white">Quantitative Performance Matrix</h3>
+                  <button
+                    onClick={() => setShowCheats(prev => !prev)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+                      showCheats
+                        ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                        : "bg-white/5 border-border text-slate-500 hover:text-slate-300"
+                    )}
+                  >
+                    {showCheats ? '✦ Cheats Visible' : 'Show Cheats'}
+                  </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left border-collapse">
                     <thead className="bg-white/5 text-[10px] uppercase tracking-widest font-bold text-slate-500">
                       <tr>
                         <th className="px-10 py-6">Strategy Identity</th>
-                        <th className="px-6 py-6 text-center">CAGR</th>
-                        <th className="px-6 py-6 text-center">Sharpe</th>
-                        <th className="px-6 py-6 text-center">Calmar</th>
-                        <th className="px-6 py-6 text-center">Volat.</th>
-                        <th className="px-6 py-6 text-center">Max DD</th>
-                        <th className="px-6 py-6 text-center">Pivots/Yr</th>
+                        {[
+                          { key: 'cagr', label: 'CAGR' },
+                          { key: 'multiplier', label: 'Return' },
+                          { key: 'sharpe', label: 'Sharpe' },
+                          { key: 'sortino', label: 'Sortino' },
+                          { key: 'calmar', label: 'Calmar' },
+                          { key: 'alpha', label: 'Alpha' },
+                          { key: 'volatility', label: 'Volat.' },
+                          { key: 'max_dd', label: 'Max DD' },
+                          { key: 'trades', label: 'Pivots/Yr' },
+                        ].map(col => (
+                          <th
+                            key={col.key}
+                            onClick={() => toggleSort(col.key)}
+                            className="px-6 py-6 text-center cursor-pointer hover:text-accent transition-colors select-none"
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {col.label}
+                              {sortCol === col.key && (
+                                <span className="text-accent">{sortDir === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </span>
+                          </th>
+                        ))}
                         <th className="px-6 py-6">
                           <div className="flex flex-col gap-1">
                             <span>Leverage Profile</span>
@@ -1492,24 +1655,23 @@ export default function App() {
                             </div>
                           </div>
                         </th>
-                        <th className="px-6 py-6 text-right pr-10">Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.sort((a,b) => b.metrics.cagr - a.metrics.cagr).map((strat, i) => (
-                        <tr key={strat.name} className={cn("border-b border-border transition-all hover:bg-white/[0.04] group", selectedNames.includes(strat.name) ? "bg-accent/[0.05]" : "")}>
-                          <td className="px-10 py-6 font-semibold text-slate-200">{strat.name}</td>
+                      {displayData.map((strat, i) => (
+                        <tr key={strat.name} className={cn("border-b border-border transition-all hover:bg-white/[0.04] group cursor-pointer", selectedNames.includes(strat.name) ? "bg-accent/[0.05]" : "")} onClick={() => handleInspect(strat)}>
+                          <td className="px-10 py-6 font-semibold text-slate-200 hover:text-accent transition-colors">{strat.name}</td>
                           <td className="px-6 py-6 font-outfit font-bold text-success text-lg text-center">{(strat.metrics.cagr * 100).toFixed(1)}%</td>
+                          <td className="px-6 py-6 font-mono font-bold text-white text-center">{strat.metrics.multiplier?.toFixed(0) || 'N/A'}x</td>
                           <td className="px-6 py-6 text-slate-400 font-medium text-center">{strat.metrics.sharpe.toFixed(2)}</td>
+                          <td className="px-6 py-6 text-slate-400 font-medium text-center">{strat.metrics.sortino?.toFixed(2) || 'N/A'}</td>
                           <td className="px-6 py-6 text-accent font-medium text-center">{strat.metrics.calmar?.toFixed(2) || 'N/A'}</td>
+                          <td className={cn("px-6 py-6 font-medium text-center", (strat.metrics.alpha || 0) > 0 ? 'text-success' : 'text-slate-500')}>{strat.metrics.alpha != null ? `${((strat.metrics.alpha) * 100).toFixed(1)}%` : 'N/A'}</td>
                           <td className="px-6 py-6 text-slate-500 font-medium text-center">{(strat.metrics.volatility * 100).toFixed(1)}%</td>
                           <td className="px-6 py-6 text-danger font-medium text-center">{(strat.metrics.max_dd * 100).toFixed(1)}%</td>
                           <td className="px-6 py-6 text-slate-500 font-medium text-center">{strat.metrics.trades_per_year?.toFixed(1)}</td>
                           <td className="px-6 py-6">
                             <LeverageBar allocation={strat.metrics.allocation_pct} />
-                          </td>
-                          <td className="px-6 py-6 text-right pr-10">
-                            <button onClick={() => handleInspect(strat)} className="px-6 py-2 rounded-xl bg-white/5 border border-border text-xs font-bold hover:bg-accent hover:border-accent hover:text-white transition-all shadow-sm">Inspect Audit</button>
                           </td>
                         </tr>
                       ))}
