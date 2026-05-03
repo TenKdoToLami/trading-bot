@@ -20,7 +20,7 @@ V10 Alpha (Expert) is the ultimate evolution of the tactical bot. It uses a **Hi
 | Goal | Command |
 | :--- | :--- |
 | **New Run** | `python tests/run_evolution_universal.py --version v10_alpha --pop 100 --gen 100` |
-| **Seed Run** | `python tests/run_evolution_universal.py --version v10_alpha --pop 100 --gen 50 --vault champions/v10_alpha/vault --mut 0.4` |
+| **Seed Run** | `python tests/run_evolution_universal.py --version v10_alpha --pop 100 --gen 100 --vault champions/v10_alpha/vault --mut 0.4` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |
@@ -28,6 +28,12 @@ V10 Alpha (Expert) is the ultimate evolution of the tactical bot. It uses a **Hi
 | **Audit** | `python tests/performance_audit.py champions/v10_alpha/genome.json` |
 | **X-Ray** | `python tests/genome_xray.py champions/v10_alpha/genome.json` |
 | **Sweep** | `python tests/vault_sweep.py --vault champions/v10_alpha/vault --promote --top 20` |
+
+### 📉 Data Management (Refresh Indicators)
+The V10 engine calculates its internal expert signals automatically from the master cache. To ensure the bot is training on the latest market data, refresh the cache before running:
+```bash
+python src/helpers/data_provider.py
+```
 
 ---
 

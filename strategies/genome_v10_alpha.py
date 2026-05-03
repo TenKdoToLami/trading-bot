@@ -15,9 +15,9 @@ from strategies.base import BaseStrategy
 from src.tournament.registry import register_strategy
 from src.tournament.market_state import MarketState
 
-@register_strategy(["v10_expert", 10.0])
-class GenomeV10Expert(BaseStrategy):
-    NAME = "Genome V10 (Expert Ensemble)"
+@register_strategy(["v10_alpha", 10.0])
+class GenomeV10Alpha(BaseStrategy):
+    NAME = "Genome V10 (Alpha Ensemble)"
     version = 10
 
     def __init__(self, genome=None, profile_path="champions/v10_alpha/indicator_profiles.json"):

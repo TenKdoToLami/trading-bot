@@ -5,7 +5,7 @@ import json
 import os
 import numpy as np
 from copy import deepcopy
-from strategies.genome_v10_expert import GenomeV10Expert
+from strategies.genome_v10_alpha import GenomeV10Alpha
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import CACHE_FILE
 
@@ -28,7 +28,7 @@ def _evaluate_v10_worker(genome):
     with open(os.devnull, 'w') as fnull:
         with redirect_stdout(fnull):
             res = _execute_simulation(
-                strategy_type=GenomeV10Expert,
+                strategy_type=GenomeV10Alpha,
                 price_data_list=_worker_price_data,
                 dates=_worker_dates,
                 strategy_kwargs={'genome': genome, 'profile_path': _worker_profile_path}
@@ -40,15 +40,15 @@ def _evaluate_v10_worker(genome):
     if metrics['num_rebalances'] == 0: fitness -= 2000
     return fitness, metrics, genome
 
-@register_evolution("v10_expert")
-class EvolutionEngineV10Expert(BaseEvolutionEngine):
+@register_evolution("v10_alpha")
+class EvolutionEngineV10Alpha(BaseEvolutionEngine):
     def __init__(self, **kwargs):
         self.profile_path = "champions/v10_alpha/indicator_profiles.json"
         with open(self.profile_path, 'r') as f:
             self.profile_data = json.load(f)['profiles']
         self.expert_keys = sorted(list(self.profile_data.keys()))
         self.num_experts = len(self.expert_keys)
-        super().__init__(version_id="v10_expert", **kwargs)
+        super().__init__(version_id="v10_alpha", **kwargs)
 
     def _random_genome(self):
         w_a = np.random.uniform(0, 1, (self.num_experts, 1)).tolist()
@@ -62,7 +62,7 @@ class EvolutionEngineV10Expert(BaseEvolutionEngine):
             'brain_c': {'w': w_c, 'b': b_c},
             'overrides': {'bear_veto_threshold': random.uniform(0.7, 0.95)},
             'indicator_profiles': self.profile_data,
-            'version': 'v10_expert'
+            'version': 'v10_alpha'
         }
 
     def _mutate(self, genome):

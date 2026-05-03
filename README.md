@@ -92,7 +92,7 @@ python tests/run_evolution_universal.py --version v6_balancer --pop 100 --gen 50
 ### Supported Versions
 | Version ID | Strategy Type | Goal |
 |------------|---------------|------|
-| `v10_expert` | Institutional Ensemble | Triple-Brain Consensus Logic |
+| `v10_alpha` | Institutional Ensemble | Triple-Brain Consensus Logic |
 | `v9_confidence` | Conviction-Gated | Neuro-Ensemble with Hysteresis |
 | `v7_deep` | Fluid Deep Allocation | Dynamic Float Allocation (CASH to 3x) |
 | `v6_balancer` | Probabilistic Balancer | Softmax Allocator (Institutional Grade) |

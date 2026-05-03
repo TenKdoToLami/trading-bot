@@ -29,7 +29,7 @@ def structural_detect(genome: dict) -> Any:
     Detects the version of a genome by analyzing its structure.
     Used for legacy genomes that lack a 'version' key.
     """
-    if "brain_a" in genome: return "v10_expert"
+    if "brain_a" in genome: return "v10_alpha"
     if "hysteresis" in genome: return "v9_confidence"
     if "layers" in genome: return "v7_deep"
     if "brains" in genome:
