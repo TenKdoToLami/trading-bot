@@ -48,13 +48,20 @@ def run_audit(identifier: str):
     df.set_index('date', inplace=True)
     df['ret'] = df['equity'].pct_change()
     
-    # ── Leverage Residency ──
+    # ── Effective Leverage Distribution ──
     LEV_MAP = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
-    residency = {0.0: 0, 1.0: 0, 2.0: 0, 3.0: 0}
+    daily_levs = []
     for _, holdings in holdings_log:
-        dom = max(holdings, key=holdings.get)
-        lev = LEV_MAP.get(dom, 0.0)
-        residency[lev] += 1
+        day_lev = sum(holdings.get(a, 0.0) * LEV_MAP.get(a, 0.0) for a in LEV_MAP)
+        daily_levs.append(day_lev)
+    
+    lev_arr = np.array(daily_levs)
+    residency = {
+        "0x (Cash)":   np.sum(lev_arr <= 0.01),
+        "1x (SPY)":    np.sum((lev_arr > 0.01) & (lev_arr <= 1.1)),
+        "2x (SSO)":    np.sum((lev_arr > 1.1) & (lev_arr <= 2.1)),
+        "3x+ (UPRO)":  np.sum(lev_arr > 2.1),
+    }
     
     total_days = len(holdings_log)
     
@@ -77,10 +84,10 @@ def run_audit(identifier: str):
     print("\n  " + "-"*66)
     print(f"  LEVERAGE RESIDENCY")
     print("  " + "-"*66)
-    for lev, days in residency.items():
+    for label, days in residency.items():
         pct = (days / total_days) * 100
         bar = "#" * int(pct / 2)
-        print(f"  {lev:>3.0f}x Leverage:  {days:>8,} days | {pct:>6.1f}%  {bar}")
+        print(f"  {label:<15}: {days:>8,} days | {pct:>6.1f}%  {bar}")
     
     # Yearly Returns Table
     print("\n  " + "-"*66)
