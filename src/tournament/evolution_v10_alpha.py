@@ -67,17 +67,35 @@ class EvolutionEngineV10Alpha(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         new_genome = deepcopy(genome)
-        def _mutate_matrix(m):
+        def _mutate_matrix(m, strength=0.2):
             m = np.array(m)
             mask = np.random.rand(*m.shape) < self.mut_rate
-            m[mask] += np.random.normal(0, 0.1, m[mask].shape)
+            m[mask] += np.random.normal(0, strength, m[mask].shape)
             return m.tolist()
+        
+        # Mutate Weights
         new_genome['brain_a']['w'] = _mutate_matrix(new_genome['brain_a']['w'])
         new_genome['brain_b']['w'] = _mutate_matrix(new_genome['brain_b']['w'])
         new_genome['brain_c']['w'] = _mutate_matrix(new_genome['brain_c']['w'])
+        
+        # Mutate Biases (New)
+        new_genome['brain_a']['b'] = _mutate_matrix(new_genome['brain_a']['b'], 0.1)
+        new_genome['brain_b']['b'] = _mutate_matrix(new_genome['brain_b']['b'], 0.1)
+        new_genome['brain_c']['b'] = _mutate_matrix(new_genome['brain_c']['b'], 0.2)
+        
         if random.random() < self.mut_rate:
             new_genome['overrides']['bear_veto_threshold'] = max(0.1, min(0.99, new_genome['overrides']['bear_veto_threshold'] + random.gauss(0, 0.05)))
         return new_genome
+
+    def _crossover(self, p1, p2):
+        """Hierarchical Brain Crossover."""
+        child = deepcopy(p1)
+        # Randomly swap entire brain modules
+        if random.random() < 0.5: child['brain_a'] = deepcopy(p2['brain_a'])
+        if random.random() < 0.5: child['brain_b'] = deepcopy(p2['brain_b'])
+        if random.random() < 0.3: child['brain_c'] = deepcopy(p2['brain_c'])
+        if random.random() < 0.3: child['overrides'] = deepcopy(p2['overrides'])
+        return child
 
     def _get_worker_config(self):
         return _evaluate_v10_worker, (_init_worker, (CACHE_FILE, self.profile_path))

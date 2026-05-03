@@ -186,11 +186,24 @@ class BaseEvolutionEngine(ABC):
         num_elites = max(2, self.pop_size // 5)
         elites = [x[2] for x in scored_population[:num_elites]]
         
-        # 2. Fill the rest with mutated versions of random elites
+        # 2. Fill the rest with mutated versions of random elites or crossovers
         new_population = list(elites)
+        has_crossover = hasattr(self, '_crossover')
+        
         while len(new_population) < self.pop_size:
-            parent = random.choice(elites)
-            child = self._mutate(parent)
+            if has_crossover and random.random() < 0.4:
+                # Crossover 40% of the time
+                p1, p2 = random.sample(elites, 2)
+                child = self._crossover(p1, p2)
+            else:
+                # Mutation the rest of the time
+                parent = random.choice(elites)
+                child = self._mutate(parent)
+            
+            # Apply a final mutation pass to crossover children to maintain variance
+            if has_crossover and len(new_population) >= len(elites):
+                child = self._mutate(child)
+                
             new_population.append(child)
             
         self.population = new_population
