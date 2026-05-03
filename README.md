@@ -57,6 +57,7 @@ python tests/run_tournament.py --resilience --samples 20
 These "God Mode" strategies use lookahead and Dynamic Programming to calculate the mathematically perfect holding sequence. They serve as the **absolute upper bound** of performance under specific constraints.
 
 | Strategy | Constraint | Purpose |
+
 |----------|------------|---------|
 | `Most Optimal (God Mode)` | None | The theoretical maximum return with daily rebalancing. |
 | `[Cheat] Guided God (Weekly)` | 5 Trading Days | Optimal path if trades are locked for a full week. |

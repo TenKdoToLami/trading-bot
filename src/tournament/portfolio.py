@@ -46,20 +46,30 @@ class Portfolio:
     def rebalance(self, date: str, new_holdings: dict):
         """
         Update allocation weights. Applies slippage and commission to turnover.
+        Ensures total holdings always normalize to 1.0.
         """
-        if new_holdings == self.holdings:
+        # --- NORMALIZATION LAYER ---
+        # 1. Handle empty or zeroed holdings
+        total_w = sum(new_holdings.values())
+        if total_w <= 0:
+            normalized = {"CASH": 1.0}
+        else:
+            # 2. Proportionally scale to 1.0
+            normalized = {k: v / total_w for k, v in new_holdings.items()}
+
+        if normalized == self.holdings:
             return
             
-        # Calculate turnover (Total traded volume)
-        all_assets = set(list(self.holdings.keys()) + list(new_holdings.keys()))
-        turnover = sum(abs(new_holdings.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
+        # Calculate turnover based on normalized weights
+        all_assets = set(list(self.holdings.keys()) + list(normalized.keys()))
+        turnover = sum(abs(normalized.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
         
         # Apply friction to equity
         friction_cost = turnover * (self.SLIPPAGE_BPS + self.COMMISSION)
         self.equity *= (1.0 - friction_cost)
         
-        self.holdings = dict(new_holdings)
-        self.rebalance_log.append((date, dict(new_holdings)))
+        self.holdings = normalized
+        self.rebalance_log.append((date, dict(normalized)))
 
     def apply_daily_return(self, date: str, spy_daily_return: float):
         """

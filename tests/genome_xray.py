@@ -21,7 +21,8 @@ LEVERAGE_MAP = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
 TIER_ORDER = ["3xSPY", "2xSPY", "SPY", "CASH"]
 
 def dominant_holding(holdings: dict) -> str:
-    return max(holdings, key=holdings.get)
+    # Prioritize higher leverage tiers if weights are equal
+    return max(holdings, key=lambda k: (holdings[k], LEVERAGE_MAP.get(k, 0.0)))
 
 def run_xray(identifier: str):
     try:
@@ -91,10 +92,10 @@ def run_xray(identifier: str):
     # ── 4. Leverage Distribution ──
     lev_array = np.array(daily_leverages)
     lev_buckets = {
-        "0x (Cash)": np.sum(lev_array == 0.0),
-        "1x (SPY)": np.sum((lev_array > 0) & (lev_array <= 1.0)),
-        "2x (SSO)": np.sum((lev_array > 1.0) & (lev_array <= 2.0)),
-        "3x (UPRO)": np.sum((lev_array > 2.0) & (lev_array <= 3.0)),
+        "0x (Cash)": np.sum(lev_array <= 0.01),
+        "1x (SPY)": np.sum((lev_array > 0.01) & (lev_array <= 1.1)),
+        "2x (SSO)": np.sum((lev_array > 1.1) & (lev_array <= 2.1)),
+        "3x+ (UPRO)": np.sum(lev_array > 2.1),
     }
 
     # ── PRINT REPORT ──
@@ -160,7 +161,9 @@ def run_xray(identifier: str):
             version = 2.0
         elif 'base_weights' in genome or 'panic_weights' in genome:
             version = 1.1
-        
+        elif 'bounds_p' in genome:
+            version = 1.0 # V1 Manual
+
         importance = {}
         
         # FEATURE LISTS
@@ -168,7 +171,9 @@ def run_xray(identifier: str):
         V9_FEATURES = ['SMA Dist', 'EMA Dist', 'RSI', 'MACD', 'ADX', 'TRIX', 'Slope', 'Vol', 'ATR', 'VIX', 'Yield Curve', 'MFI', 'BBW']
         
         try:
-            if version >= 7.0: # Neural (V7, V9)
+            v_num = float(version) if isinstance(version, (int, float, str)) and str(version).replace('.','',1).isdigit() else 0.0
+
+            if v_num >= 7.0: # Neural (V7, V9)
                 w1 = np.array(genome['layers'][0]['w'])
                 # Sum absolute weights connecting each input to all hidden neurons
                 scores = np.sum(np.abs(w1), axis=1)
@@ -176,39 +181,48 @@ def run_xray(identifier: str):
                     name = V9_FEATURES[i] if i < len(V9_FEATURES) else f"Input_{i}"
                     importance[name] = score
             
-            elif version == 6.0: # Balancer
+            elif v_num == 6.0: # Balancer
                 for brain_name in ['cash', '1x', '2x', '3x']:
                     if brain_name in genome['brains']:
                         w = genome['brains'][brain_name].get('w', {})
                         for feature, val in w.items():
                             importance[feature] = importance.get(feature, 0) + abs(val)
 
-            elif version == 2.0: # V2 Multi-Brain
+            elif v_num == 2.0: # V2 Multi-Brain
                 for module in ['panic', '1x', '2x', '3x']:
                     if module in genome:
                         w = genome[module].get('w', {})
                         for feature, val in w.items():
                             importance[feature] = importance.get(feature, 0) + abs(val)
 
-            elif version in [3.0, 4.0]: # Precision
+            elif v_num in [3.0, 4.0]: # Precision
                 for module in ['bull', 'panic']:
                     if module in genome:
                         w = genome[module].get('w', {})
                         for feature, val in w.items():
                             importance[feature] = importance.get(feature, 0) + abs(val)
 
-            elif version == 5.0: # Sniper
+            elif v_num == 5.0: # Sniper
                 if 'sniper' in genome:
                     w = genome['sniper'].get('w', {})
                     for feature, val in w.items():
                         importance[feature] = importance.get(feature, 0) + abs(val)
                     
-            elif version == 1.1: # V1 Classic
+            elif v_num == 1.1: # V1 Classic
                 for key in ['base_weights', 'panic_weights']:
                     if key in genome:
                         w = genome[key]
                         for k, v in w.items():
                             importance[k] = importance.get(k, 0) + abs(v)
+            
+            elif v_num == 1.0: # V1 Manual
+                print(f"  {'SMA Lookback':<15} {genome.get('sma', 'N/A'):>10}d")
+                print(f"  {'Min Bond Days':<15} {genome.get('min_b_days', 'N/A'):>10}d")
+                print(f"  {'-' * (W - 4)}")
+                print(f"  {'VIX Brackets (Bounds)':<15}")
+                bounds = genome.get('bounds_p', [])
+                for i, b in enumerate(bounds):
+                    print(f"    Bracket {i+1}: VIX > {b:.1f}")
 
             if importance:
                 sorted_imp = sorted(importance.items(), key=lambda x: x[1], reverse=True)
