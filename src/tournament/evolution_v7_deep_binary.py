@@ -1,14 +1,12 @@
+from src.tournament.base_evolution import BaseEvolutionEngine
 from src.tournament.evolution_registry import register_evolution
 import random
 import json
-import concurrent.futures
-import time
 import os
 import numpy as np
-from tqdm import tqdm
 from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
 from src.tournament.runner import _execute_simulation
-from src.helpers.data_provider import load_spy_data, CACHE_FILE
+from src.helpers.data_provider import CACHE_FILE
 
 # --- GLOBAL WORKER STATE ---
 _worker_price_data = None
@@ -39,15 +37,10 @@ def _evaluate_v7db_worker(genome):
     return fitness, metrics, genome
 
 @register_evolution("v7_deep_binary")
-class EvolutionEngineV7DeepBinary:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0, workers=None, **kwargs):
-        self.workers = workers or os.cpu_count()
-        self.use_ablation = use_ablation
-        self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
-        self.min_cagr = min_cagr
+class EvolutionEngineV7DeepBinary(BaseEvolutionEngine):
+    def __init__(self, **kwargs):
         self.lb_bounds = {'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30), 'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50), 'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)}
-        self.population = [self._random_genome() for _ in range(self.pop_size)]
-        self._best_seen = {"cagr": 0, "dd": 100}
+        super().__init__(version_id="v7_deep_binary", **kwargs)
 
     def _random_genome(self):
         return {'version': 'v7_deep_binary', 'layers': [{'w': np.random.uniform(-1, 1, (13, 24)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 24).tolist()}, {'w': np.random.uniform(-1, 1, (24, 2)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 2).tolist()}], 'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()}, 'lock_days': random.uniform(1, 10)}
@@ -63,33 +56,6 @@ class EvolutionEngineV7DeepBinary:
         mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1))) if random.random() < self.mut_rate else mut['lock_days']
         return mut
 
-    def run(self):
-        vault_dir = "champions/v7_deep_binary/vault"
-        os.makedirs(vault_dir, exist_ok=True)
-        print(f"Starting V7DB Evolution: {self.generations} gens, pop {self.pop_size}, mut {self.mut_rate:.2f}")
-        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
-        print("-" * 60)
+    def _get_worker_config(self):
+        return _evaluate_v7db_worker, (_init_worker, (CACHE_FILE,))
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
-            for gen in range(self.generations):
-                start_time = time.time()
-                futures = [executor.submit(_evaluate_v7db_worker, g) for g in self.population]
-                scored = []
-                for f in tqdm(concurrent.futures.as_completed(futures), total=self.pop_size, desc=f"G{gen+1}", leave=False):
-                    try: scored.append(f.result())
-                    except Exception as e: print(f"\nWorker Error: {e}")
-                
-                scored.sort(key=lambda x: x[0], reverse=True)
-                fit, stats, best_g = scored[0]
-                elapsed = time.time() - start_time
-                print(f"{gen+1:02d}  | {fit:7.1f} | {stats['cagr']*100:7.2f}% | {abs(stats['max_dd'])*100:6.1f}% | {stats['num_rebalances']:6.0f} | {elapsed:4.1f}s")
-                
-                cagr, dd = stats['cagr'] * 100, abs(stats['max_dd']) * 100
-                if cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5):
-                    self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
-                    v_path = os.path.join(vault_dir, f"v7db_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
-                    with open(v_path, 'w') as f: json.dump(best_g, f, indent=4)
-                
-                elites = [x[2] for x in scored[:max(2, self.pop_size // 5)]]
-                self.population = elites + [self._mutate(random.choice(elites)) for _ in range(self.pop_size - len(elites))]
-        return scored[0][2]

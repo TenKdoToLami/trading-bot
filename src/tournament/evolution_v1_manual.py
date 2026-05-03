@@ -1,14 +1,11 @@
+from src.tournament.base_evolution import BaseEvolutionEngine
 from src.tournament.evolution_registry import register_evolution
 import random
 import json
-import concurrent.futures
-import time
 import os
-import numpy as np
-from tqdm import tqdm
 from strategies.genome_v1_manual import ManualV1
 from src.tournament.runner import _execute_simulation
-from src.helpers.data_provider import load_spy_data, CACHE_FILE
+from src.helpers.data_provider import CACHE_FILE
 
 # --- GLOBAL WORKER STATE ---
 _worker_price_data = None
@@ -40,46 +37,9 @@ def _evaluate_v1m_worker(genome):
     return fitness, metrics, genome
 
 @register_evolution("v1_manual")
-class EvolutionEngineV1Manual:
-    def __init__(self, population_size=100, generations=50, mutation_rate=0.2, seed_vault=None, use_ablation=False, min_cagr=0.0, workers=None, **kwargs):
-        self.workers = workers or os.cpu_count()
-        self.pop_size, self.generations, self.mut_rate = population_size, generations, mutation_rate
-        self.use_ablation = use_ablation
-        self.population = []
-        
-        # Seeding ONLY occurs if seed_vault is provided
-        if seed_vault:
-            # 1. Try parent genome
-            parent_genome = os.path.join(os.path.dirname(seed_vault), "genome.json")
-            if os.path.exists(parent_genome):
-                try:
-                    with open(parent_genome, "r") as f:
-                        self.population.append(json.load(f))
-                except: pass
-
-            # 2. Load vault seeds sorted by CAGR
-            if os.path.exists(seed_vault):
-                seeds = []
-                for f in os.listdir(seed_vault):
-                    if f.endswith(".json"):
-                        try:
-                            cagr = float(f.split("cagr_")[1].split("_")[0])
-                            seeds.append((cagr, f))
-                        except:
-                            seeds.append((0, f))
-                seeds.sort(key=lambda x: x[0], reverse=True)
-                for _, f in seeds:
-                    if len(self.population) >= self.pop_size: break
-                    try:
-                        with open(os.path.join(seed_vault, f), "r") as jf:
-                            self.population.append(json.load(jf))
-                    except: pass
-        
-        self.min_cagr = min_cagr
-        while len(self.population) < self.pop_size:
-            self.population.append(self._random_genome())
-        self.population = self.population[:self.pop_size]
-        self._best_seen = {"cagr": 0, "dd": 100}
+class EvolutionEngineV1Manual(BaseEvolutionEngine):
+    def __init__(self, **kwargs):
+        super().__init__(version_id="v1_manual", **kwargs)
 
     def _random_genome(self):
         return {
@@ -101,33 +61,6 @@ class EvolutionEngineV1Manual:
                 if random.random() < self.mut_rate: mut['weights_p'][i][j] = max(0, min(1.0, mut['weights_p'][i][j] + random.gauss(0, 0.1)))
         return mut
 
-    def run(self):
-        vault_dir = "champions/v1_manual/vault"
-        os.makedirs(vault_dir, exist_ok=True)
-        print(f"Starting V1 Manual Evolution: {self.generations} gens, pop {self.pop_size}, mut {self.mut_rate:.2f}")
-        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
-        print("-" * 60)
+    def _get_worker_config(self):
+        return _evaluate_v1m_worker, (_init_worker, (CACHE_FILE,))
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.workers, initializer=_init_worker, initargs=(CACHE_FILE,)) as executor:
-            for gen in range(self.generations):
-                start_time = time.time()
-                futures = [executor.submit(_evaluate_v1m_worker, g) for g in self.population]
-                scored = []
-                for f in tqdm(concurrent.futures.as_completed(futures), total=self.pop_size, desc=f"G{gen+1}", leave=False):
-                    try: scored.append(f.result())
-                    except Exception as e: print(f"\nWorker Error: {e}")
-                
-                scored.sort(key=lambda x: x[0], reverse=True)
-                fit, stats, best_g = scored[0]
-                elapsed = time.time() - start_time
-                print(f"{gen+1:02d}  | {fit:7.1f} | {stats['cagr']*100:7.2f}% | {abs(stats['max_dd'])*100:6.1f}% | {stats['num_rebalances']:6.0f} | {elapsed:4.1f}s")
-                
-                cagr, dd = stats['cagr'] * 100, abs(stats['max_dd']) * 100
-                if cagr >= self.min_cagr and (cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5)):
-                    self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
-                    v_path = os.path.join(vault_dir, f"v1m_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
-                    with open(v_path, 'w') as f: json.dump(best_g, f, indent=4)
-                
-                elites = [x[2] for x in scored[:max(2, self.pop_size // 5)]]
-                self.population = elites + [self._mutate(random.choice(elites)) for _ in range(self.pop_size - len(elites))]
-        return scored[0][2]
