@@ -1,0 +1,54 @@
+{
+    "panic_weights": {
+        "sma": -0.6011431396253388,
+        "ema": 0.60303594579933,
+        "rsi": 2.1022301921250444,
+        "macd": -0.8249287378644103,
+        "adx": -3.4120636838044947,
+        "trix": 1.1552967424199594,
+        "slope": -0.732658236255052,
+        "vol": 0.979531362502055,
+        "atr": -1.5059831840918576
+    },
+    "panic_active": {
+        "sma": true,
+        "ema": true,
+        "rsi": true,
+        "macd": false,
+        "adx": true,
+        "trix": false,
+        "slope": true,
+        "vol": true,
+        "atr": false
+    },
+    "panic_threshold": 2.335834103450906,
+    "base_weights": {
+        "sma": 6.073221284854879,
+        "ema": 1.3498068989663692,
+        "rsi": -1.1821837999601046,
+        "macd": 0.9850390574146739,
+        "adx": 1.8807409673083826,
+        "trix": 1.8745754143551148,
+        "slope": 0.2467324259846402,
+        "vol": 2.6580230526860538,
+        "atr": 1.396954964445659
+    },
+    "base_active": {
+        "sma": true,
+        "ema": false,
+        "rsi": true,
+        "macd": false,
+        "adx": true,
+        "trix": false,
+        "slope": true,
+        "vol": true,
+        "atr": true
+    },
+    "lock_days": 9.336185397755298,
+    "version": "v1_classic",
+    "base_thresholds": {
+        "tier_3x": 1.0,
+        "tier_2x": 0.3,
+        "tier_1x": -0.5
+    }
+}

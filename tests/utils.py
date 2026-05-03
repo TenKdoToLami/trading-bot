@@ -21,12 +21,20 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
         with open(identifier, "r") as f:
             genome = json.load(f)
             
-        # --- PRIORITY 1: Modern Champions (V10, V9, V7, V6, V5) ---
-        if "brain_a" in genome and "brain_b" in genome:
+        # --- PRIORITY 0: Explicit Version Strings ---
+        v_str = str(genome.get('version', ''))
+        if v_str == "v10_expert" or ("brain_a" in genome and "brain_b" in genome):
             from strategies.genome_v10_expert import GenomeV10Expert
             return GenomeV10Expert(genome=genome)
+        elif v_str == "v1_manual":
+            from strategies.genome_v1_manual import ManualV1
+            return ManualV1(genome=genome)
+        elif v_str == "v1_classic":
+            from strategies.genome_v1_classic import GenomeV1
+            return GenomeV1(genome=genome)
             
-        elif genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
+        # --- PRIORITY 1: Modern Champions (V9, V7, V6, V5) ---
+        if genome.get('version') == 9.0 or "hysteresis" in genome or "smoothing" in genome:
             from strategies.genome_v9_confidence import GenomeV9Confidence
             return GenomeV9Confidence(genome=genome)
             
@@ -36,6 +44,9 @@ def resolve_strategy(identifier: str) -> BaseStrategy:
             from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
             
             v = genome.get('version', 7.0)
+            try: v = float(v)
+            except: v = 7.0
+            
             if v == 7.2: return GenomeV7DeepFluid(genome=genome)
             if v == 7.1: return GenomeV7DeepBinary(genome=genome)
             return GenomeV7Deep(genome=genome)

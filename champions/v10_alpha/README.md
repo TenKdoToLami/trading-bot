@@ -41,3 +41,4 @@ python src/tournament/v10_profiler.py --data data/history_SPY.csv --horizon 20 -
 | `--gen` | 20 | Number of generations to train. |
 | `--mut` | 0.2 | Mutation rate (probability of DNA change). |
 | `--vault`| `vault/` | Directory where winning brains are saved. |
+| `--min-cagr`| `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |

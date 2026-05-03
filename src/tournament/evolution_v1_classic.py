@@ -89,7 +89,39 @@ class EvolutionEngineV1Classic:
         self.use_ablation = use_ablation
         self.min_cagr = min_cagr
         self.indicators = ['sma', 'ema', 'rsi', 'macd', 'adx', 'trix', 'slope', 'vol', 'atr']
-        self.population = [self._random_genome() for _ in range(self.pop_size)]
+        self.population = []
+        
+        # Seeding ONLY occurs if seed_vault is provided
+        if seed_vault:
+            # 1. Try parent genome
+            parent_genome = os.path.join(os.path.dirname(seed_vault), "genome.json")
+            if os.path.exists(parent_genome):
+                try:
+                    with open(parent_genome, "r") as f:
+                        self.population.append(json.load(f))
+                except: pass
+
+            # 2. Load vault seeds sorted by CAGR
+            if os.path.exists(seed_vault):
+                seeds = []
+                for f in os.listdir(seed_vault):
+                    if f.endswith(".json"):
+                        try:
+                            cagr = float(f.split("cagr_")[1].split("_")[0])
+                            seeds.append((cagr, f))
+                        except:
+                            seeds.append((0, f))
+                seeds.sort(key=lambda x: x[0], reverse=True)
+                for _, f in seeds:
+                    if len(self.population) >= self.pop_size: break
+                    try:
+                        with open(os.path.join(seed_vault, f), "r") as jf:
+                            self.population.append(json.load(jf))
+                    except: pass
+
+        while len(self.population) < self.pop_size:
+            self.population.append(self._random_genome())
+        self.population = self.population[:self.pop_size]
         self._best_seen = {"cagr": 0, "dd": 100}
 
     def _random_genome(self):
@@ -98,6 +130,7 @@ class EvolutionEngineV1Classic:
         return {
             'panic_weights': _rw(), 'panic_active': _ra(), 'panic_threshold': random.uniform(0.5, 3.0),
             'base_weights': _rw(), 'base_active': _ra(), 'lock_days': random.uniform(0, 20),
+            'version': 'v1_classic',
             'base_thresholds': {'tier_3x': 1.0, 'tier_2x': 0.3, 'tier_1x': -0.5}
         }
 
@@ -133,7 +166,7 @@ class EvolutionEngineV1Classic:
                 print(f"{gen+1:02d}  | {fit:7.1f} | {stats['cagr']*100:7.2f}% | {abs(stats['max_dd'])*100:6.1f}% | {stats['num_rebalances']:6.0f} | {elapsed:4.1f}s")
                 
                 cagr, dd = stats['cagr'] * 100, abs(stats['max_dd']) * 100
-                if cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5):
+                if cagr >= self.min_cagr and (cagr > (self._best_seen["cagr"] + 0.1) or dd < (self._best_seen["dd"] - 0.5)):
                     self._best_seen["cagr"], self._best_seen["dd"] = max(cagr, self._best_seen["cagr"]), min(dd, self._best_seen["dd"])
                     v_path = os.path.join(vault_dir, f"v1_cagr_{cagr:.1f}_dd_{dd:.1f}.json")
                     with open(v_path, 'w') as f: json.dump(best_g, f, indent=4)

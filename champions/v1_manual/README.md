@@ -35,6 +35,7 @@ The evolved version of the original "Golden Rules." While the structure remains 
 | `--gen` | `50` | Number of generations. |
 | `--mut` | `0.20` | Mutation rate. Use `0.35 - 0.50` for aggressive jumps when seeding. |
 | `--vault`| `None` | Path to load seeds from. |
+| `--min-cagr`| `30.0` | **Vault-Lock**. Minimum CAGR threshold for saving results. |
 
 ---
 

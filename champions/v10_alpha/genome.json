@@ -217,5 +217,6 @@
                 "lookback": 40.0
             }
         }
-    }
+    },
+    "version": "v10_expert"
 }

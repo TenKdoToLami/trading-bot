@@ -29,6 +29,7 @@ from strategies.genome_v7_deep import GenomeV7Deep
 from strategies.genome_v7_deep_binary import GenomeV7DeepBinary
 from strategies.genome_v7_deep_fluid import GenomeV7DeepFluid
 from strategies.genome_v9_confidence import GenomeV9Confidence
+from strategies.genome_v10_expert import GenomeV10Expert
 
 # ──────────────────────────────────────────────────────
 # Genome Identification
@@ -41,58 +42,59 @@ V4_BRAINS = {'panic', 'bull'}
 V5_KEYS = {'sniper'}
 V6_BRAINS = {'cash', '1x', '2x', '3x'}
 
-def get_genome_version(genome: dict) -> int:
-    """Detect genome version based on keys."""
-    # First, trust the explicit version key if present
+def get_genome_version(genome: dict):
+    """Detect genome version based on keys or explicit string."""
     v = genome.get('version')
-    if v is not None:
-        return int(float(v))
-
-    if 'hysteresis' in genome:
-        return 9
-    if 'layers' in genome:
-        return 7
-    if V6_BRAINS.issubset(genome.get('brains', {}).keys()):
-        return 6
-    if V5_KEYS.issubset(genome.keys()):
-        return 5
-    if V3_BRAINS.issubset(genome.keys()) and all('lookbacks' in genome[b] for b in V3_BRAINS):
-        # Could be V3 or V4 if version is missing, but V4 usually has the key
-        return 3
-    if V2_BRAINS.issubset(genome.keys()):
-        return 2
-    if V1_KEYS.issubset(genome.keys()) or 'weights_p' in genome:
-        return 1
-    return 0
+    if v is None:
+        if 'hysteresis' in genome: return 9
+        if 'layers' in genome: return 7
+        if V6_BRAINS.issubset(genome.get('brains', {}).keys()): return 6
+        if V5_KEYS.issubset(genome.keys()): return 5
+        if V3_BRAINS.issubset(genome.keys()): return 3
+        if V2_BRAINS.issubset(genome.keys()): return 2
+        if V1_KEYS.issubset(genome.keys()) or 'weights_p' in genome: return 1
+        return 0
+    return v
 
 def validate_genome(genome: dict) -> bool:
     """Check if a dict has a known genome structure."""
     ver = get_genome_version(genome)
-    if ver == 9:
-        return 'layers' in genome and len(genome['layers']) > 0
-    if ver == 7:
-        return 'layers' in genome and len(genome['layers']) > 0
-    if ver == 6:
-        return 'brains' in genome and all('w' in genome['brains'][b] for b in V6_BRAINS)
-    if ver == 5:
-        return 'sniper' in genome and 'w' in genome['sniper'] and 't_low' in genome['sniper']
-    if ver == 4:
-        return all(k in genome for k in V4_BRAINS)
-    if ver == 3:
-        return all('w' in genome[b] and 't' in genome[b] and 'lookbacks' in genome[b] for b in V3_BRAINS)
-    if ver == 2:
-        return all('w' in genome[b] and 't' in genome[b] for b in V2_BRAINS)
-    if ver == 1:
-        return True
+    
+    # Handle String Versions
+    if ver == "v10_expert": return "brain_a" in genome
+    if ver == "v1_manual": return "bounds_p" in genome
+    if ver == "v1_classic": return "panic_weights" in genome
+    
+    # Handle Numeric Versions
+    try:
+        v_num = float(ver)
+        if v_num == 9: return 'layers' in genome
+        if v_num == 7: return 'layers' in genome
+        if v_num == 6: return 'brains' in genome
+        if v_num == 5: return 'sniper' in genome
+        if v_num == 4: return all(k in genome for k in V4_BRAINS)
+        if v_num == 3: return all(k in genome for k in V3_BRAINS)
+        if v_num == 2: return all(k in genome for k in V2_BRAINS)
+        if v_num == 1: return True
+    except:
+        pass
+        
     return False
 
 def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=200):
     """Run simulation on a slice using the correct strategy class with pre-audit warmup."""
-    ver = get_genome_version(genome)
-    if ver == 9:
-        strat_type = GenomeV9Confidence
+    ver = genome.get('version', 0)
+    
+    if ver == "v10_expert": strat_type = GenomeV10Expert
+    elif ver == "v1_manual": strat_type = ManualV1
+    elif ver == "v1_classic": 
+        from strategies.genome_v1_classic import GenomeV1
+        strat_type = GenomeV1
+    elif ver == 9: strat_type = GenomeV9Confidence
     elif ver == 7:
         v = genome.get('version', 7.0)
+        try: v = float(v)
+        except: v = 7.0
         if v == 7.2: strat_type = GenomeV7DeepFluid
         elif v == 7.1: strat_type = GenomeV7DeepBinary
         else: strat_type = GenomeV7Deep
@@ -101,7 +103,14 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=
     elif ver == 4: strat_type = GenomeV4Precision
     elif ver == 3: strat_type = GenomeV3Strategy
     elif ver == 2: strat_type = GenomeV2Strategy
-    else: strat_type = ManualV1
+    else:
+        # Structural fallback
+        if "brain_a" in genome: strat_type = GenomeV10Expert
+        elif "panic_weights" in genome:
+            from strategies.genome_v1_classic import GenomeV1
+            strat_type = GenomeV1
+        elif "bounds_p" in genome: strat_type = ManualV1
+        else: strat_type = ManualV1
     
     # Run simulation on the full slice (warmup + audit)
     res = _execute_simulation(
