@@ -98,12 +98,20 @@ class EvolutionEngineV1Classic(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for g in ['panic', 'base']:
             for k in self.indicators:
-                if random.random() < self.mut_rate: mut[f'{g}_weights'][k] += random.gauss(0, 0.5)
-                if self.use_ablation and random.random() < 0.05: mut[f'{g}_active'][k] = not mut[f'{g}_active'][k]
-        if random.random() < self.mut_rate: mut['panic_threshold'] += random.gauss(0, 0.5)
-        if random.random() < self.mut_rate: mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2)))
+                if random.random() < self.mut_rate: 
+                    mut[f'{g}_weights'][k] += random.gauss(0, 0.5 * strength_multiplier)
+                if self.use_ablation and random.random() < 0.05: 
+                    mut[f'{g}_active'][k] = not mut[f'{g}_active'][k]
+                    
+        if random.random() < self.mut_rate: 
+            mut['panic_threshold'] += random.gauss(0, 0.5 * strength_multiplier)
+        if random.random() < self.mut_rate: 
+            mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
         return mut
 
     def _get_worker_config(self):

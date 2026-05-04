@@ -48,14 +48,28 @@ class EvolutionEngineV5Sniper(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for k, v in mut['sniper']['lookbacks'].items():
-            if random.random() < self.mut_rate: mn, mx = self.lb_bounds[k]; mut['sniper']['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn)*0.1))))
-        if random.random() < self.mut_rate: mut['sniper']['t_low'] += random.gauss(0, 0.5)
-        if random.random() < self.mut_rate: mut['sniper']['t_high'] = max(mut['sniper']['t_low'] + 0.1, mut['sniper']['t_high'] + random.gauss(0, 0.5))
+            if random.random() < self.mut_rate: 
+                mn, mx = self.lb_bounds[k]
+                mut['sniper']['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
+                
+        if random.random() < self.mut_rate: 
+            mut['sniper']['t_low'] += random.gauss(0, 0.5 * strength_multiplier)
+        if random.random() < self.mut_rate: 
+            mut['sniper']['t_high'] = max(mut['sniper']['t_low'] + 0.1, mut['sniper']['t_high'] + random.gauss(0, 0.5 * strength_multiplier))
+            
         for k, v in mut['sniper']['w'].items():
-            if random.random() < self.mut_rate: mut['sniper']['w'][k] += random.gauss(0, 0.8)
-            if self.use_ablation and random.random() < 0.05: mut['sniper']['a'][k] = not mut['sniper']['a'][k]
-        mut['lock_days'] = max(1, min(20, mut['lock_days'] + random.gauss(0, 2))) if random.random() < self.mut_rate else mut['lock_days']
+            if random.random() < self.mut_rate: 
+                mut['sniper']['w'][k] += random.gauss(0, 0.8 * strength_multiplier)
+            if self.use_ablation and random.random() < 0.05: 
+                mut['sniper']['a'][k] = not mut['sniper']['a'][k]
+                
+        if random.random() < self.mut_rate:
+            mut['lock_days'] = max(1, min(20, mut['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
+            
         return mut
 
     def _get_worker_config(self):

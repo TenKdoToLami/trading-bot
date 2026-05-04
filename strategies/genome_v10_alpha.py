@@ -129,14 +129,8 @@ class GenomeV10Alpha(BaseStrategy):
             # Bull Expert Input
             if p['bullish']:
                 val = self._get_indicator_val(key, p['bullish']['lookback'])
-                # If the profiler said "Greater Than" is bull, check that
-                # (Profiler logic: bull is always 'greater than' unless it's RSI/MFI/Oversold)
-                # We'll use a simple threshold check based on the profiler's found threshold
-                is_bull = False
-                if key in ["RSI", "MFI"]: # Oversold logic
-                    is_bull = (val < p['bullish']['thresh'])
-                else:
-                    is_bull = (val > p['bullish']['thresh'])
+                cond = p['bullish'].get('condition', 'greater')
+                is_bull = (val > p['bullish']['thresh']) if cond == 'greater' else (val < p['bullish']['thresh'])
                 expert_bull.append(1.0 if is_bull else 0.0)
             else:
                 expert_bull.append(0.0)
@@ -144,13 +138,8 @@ class GenomeV10Alpha(BaseStrategy):
             # Bear Expert Input
             if p['bearish']:
                 val = self._get_indicator_val(key, p['bearish']['lookback'])
-                is_bear = False
-                if key in ["TRIX", "SLOPE", "VOL"]: # Greater than logic for bear/panic
-                    is_bear = (val > p['bearish']['thresh'])
-                elif key == "VOL":
-                    is_bear = (val > p['bearish']['thresh'])
-                else: # Default: Less than is bearish (Price below MA, etc)
-                    is_bear = (val < p['bearish']['thresh'])
+                cond = p['bearish'].get('condition', 'less')
+                is_bear = (val > p['bearish']['thresh']) if cond == 'greater' else (val < p['bearish']['thresh'])
                 expert_bear.append(1.0 if is_bear else 0.0)
             else:
                 expert_bear.append(0.0)

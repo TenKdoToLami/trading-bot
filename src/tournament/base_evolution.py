@@ -41,6 +41,9 @@ class BaseEvolutionEngine(ABC):
         
         self.population = []
         self._best_seen = {"cagr": -100.0, "dd": 100.0}
+        self._best_seen_fitness = -1e9
+        self.stagnation_counter = 0
+        self.base_mut_rate = mutation_rate
         self.vault_dir = f"champions/{version_id}/vault"
         
         # Initialize population (MUST be at the end so subclasses can set attributes)
@@ -143,6 +146,21 @@ class BaseEvolutionEngine(ABC):
                 best_fit, best_stats, best_genome = scored[0]
                 elapsed = time.time() - start_time
                 
+                # --- STAGNATION RECOVERY ---
+                if best_fit > (self._best_seen_fitness + 0.001):
+                    if self.stagnation_counter >= 5:
+                        print(f"  [RECOVERY] Improvement found! Resetting mutation rate to {self.base_mut_rate:.2f}")
+                    self._best_seen_fitness = best_fit
+                    self.stagnation_counter = 0
+                    self.mut_rate = self.base_mut_rate
+                else:
+                    self.stagnation_counter += 1
+                    if self.stagnation_counter > 0 and self.stagnation_counter % 5 == 0:
+                        new_mut = min(0.8, self.mut_rate * 2.0)
+                        if new_mut > self.mut_rate:
+                            self.mut_rate = new_mut
+                            print(f"  [STAGNATION] No improvement for {self.stagnation_counter} gens. Boosting mutation rate to {self.mut_rate:.2f}")
+
                 self._print_generation_summary(gen + 1, best_fit, best_stats, best_genome, elapsed)
                 self._save_champion(best_stats, best_genome)
                 

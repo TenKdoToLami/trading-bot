@@ -47,14 +47,23 @@ class EvolutionEngineV7DeepFluid(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for layer in mut['layers']:
             w, b = np.array(layer['w']), np.array(layer['b'])
-            if random.random() < self.mut_rate: w += np.random.normal(0, 0.05, w.shape); b += np.random.normal(0, 0.02, b.shape)
+            if random.random() < self.mut_rate: 
+                w += np.random.normal(0, 0.05 * strength_multiplier, w.shape)
+                b += np.random.normal(0, 0.02 * strength_multiplier, b.shape)
             layer['w'], layer['b'] = w.tolist(), b.tolist()
         for k, v in mut['lookbacks'].items():
-            if random.random() < self.mut_rate: mn, mx = self.lb_bounds[k]; mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn)*0.1))))
-        mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1))) if random.random() < self.mut_rate else mut['lock_days']
-        mut['rebalance_threshold'] = max(0.01, min(0.25, mut['rebalance_threshold'] + random.gauss(0, 0.02))) if random.random() < self.mut_rate else mut['rebalance_threshold']
+            if random.random() < self.mut_rate: 
+                mn, mx = self.lb_bounds[k]
+                mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
+        if random.random() < self.mut_rate:
+            mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1 * strength_multiplier)))
+        if random.random() < self.mut_rate:
+            mut['rebalance_threshold'] = max(0.01, min(0.25, mut['rebalance_threshold'] + random.gauss(0, 0.02 * strength_multiplier)))
         return mut
 
     def _get_worker_config(self):

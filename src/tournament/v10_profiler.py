@@ -35,33 +35,40 @@ class V10Profiler:
         self.lows = self.df['low'].tolist()
         self.volumes = self.df.get('volume', pd.Series([0]*len(self.df))).tolist()
         
-    def _test_thresholds(self, values, type_bull=True):
-        """Helper to find best threshold for a set of calculated values."""
+    def _find_best_rule(self, values, target_col):
+        """Helper to find best threshold and condition for a set of calculated values."""
         results = []
         self.df['val'] = values
         
-        if type_bull:
-            # Test 'Greater Than' thresholds
-            v_min, v_max = self.df['val'].min(), self.df['val'].max()
-            steps = np.linspace(v_min, v_max, 20)
+        v_min, v_max = self.df['val'].min(), self.df['val'].max()
+        steps = np.linspace(v_min, v_max, 20)
+        
+        for condition in ['greater', 'less']:
             for thresh in steps:
-                subset = self.df[self.df['val'] > thresh]
+                if condition == 'greater':
+                    subset = self.df[self.df['val'] > thresh]
+                else:
+                    subset = self.df[self.df['val'] < thresh]
+                    
                 if len(subset) > 50:
-                    precision = subset['is_bullish'].mean()
-                    results.append({'thresh': float(thresh), 'precision': float(precision), 'freq': len(subset)/len(self.df)})
-        else:
-            # Test 'Less Than' thresholds
-            v_min, v_max = self.df['val'].min(), self.df['val'].max()
-            steps = np.linspace(v_min, v_max, 20)
-            for thresh in steps:
-                subset = self.df[self.df['val'] < thresh]
-                if len(subset) > 50:
-                    precision = subset['is_bearish'].mean()
-                    results.append({'thresh': float(thresh), 'precision': float(precision), 'freq': len(subset)/len(self.df)})
+                    precision = subset[target_col].mean()
+                    results.append({
+                        'thresh': float(thresh), 
+                        'precision': float(precision), 
+                        'freq': len(subset)/len(self.df),
+                        'condition': condition
+                    })
         
         if not results: return None
         res_df = pd.DataFrame(results)
-        res_df['score'] = res_df['precision'] * np.sqrt(res_df['freq'])
+        
+        baseline = self.df[target_col].mean()
+        # Only keep results where precision is meaningfully better than baseline
+        res_df = res_df[res_df['precision'] > baseline * 1.1]
+        if res_df.empty: return None
+        
+        # Maximize excess precision (edge) while maintaining some frequency
+        res_df['score'] = (res_df['precision'] - baseline) * np.sqrt(res_df['freq'])
         return res_df.loc[res_df['score'].idxmax()].to_dict()
 
     def profile_moving_averages(self, mode='SMA'):
@@ -80,10 +87,10 @@ class V10Profiler:
                 dist = (self.prices[i] - ma) / ma if ma else 0
                 values.append(dist)
             
-            best_bull = self._test_thresholds(values, type_bull=True)
+            best_bull = self._find_best_rule(values, 'is_bullish')
             if best_bull: bull_results.append({**best_bull, 'lookback': lb})
             
-            best_bear = self._test_thresholds(values, type_bull=False)
+            best_bear = self._find_best_rule(values, 'is_bearish')
             if best_bear: bear_results.append({**best_bear, 'lookback': lb})
             
         return self._extract_best(bull_results, bear_results, f"{mode}_DIST")
@@ -104,22 +111,9 @@ class V10Profiler:
                     val = trix(self.prices[:i+1], lb, state=state)
                 values.append(val if val is not None else 50 if mode != 'TRIX' else 0)
             
-            # Oscillators are tricky: low can be bull (oversold) and high can be bull (momentum)
-            # We test both
-            best_bull = self._test_thresholds(values, type_bull=True) # Momentum bull
-            best_bull_os = self._test_thresholds(values, type_bull=False) # Mean reversion bull
-            # Logic: we'll take whichever is better in the _extract_best logic
+            b_bull = self._find_best_rule(values, 'is_bullish')
+            b_bear = self._find_best_rule(values, 'is_bearish')
             
-            # For simplicity in this profiler, we map: 
-            # Bull = Oversold (Less than) for RSI/MFI, Greater than for TRIX
-            # Bear = Overbought (Greater than) for RSI/MFI, Less than for TRIX
-            if mode == 'TRIX':
-                b_bull = self._test_thresholds(values, type_bull=True)
-                b_bear = self._test_thresholds(values, type_bull=False)
-            else:
-                b_bull = self._test_thresholds(values, type_bull=False) # Oversold
-                b_bear = self._test_thresholds(values, type_bull=True)  # Overbought
-                
             if b_bull: bull_results.append({**b_bull, 'lookback': lb})
             if b_bear: bear_results.append({**b_bear, 'lookback': lb})
             
@@ -136,7 +130,7 @@ class V10Profiler:
             for i in range(len(self.prices)):
                 val = adx(self.highs[:i+1], self.lows[:i+1], self.prices[:i+1], lb, state=state)
                 values.append(val if val is not None else 20)
-            b_bull = self._test_thresholds(values, type_bull=True) # High ADX = Strong trend
+            b_bull = self._find_best_rule(values, 'is_bullish')
             if b_bull: adx_bull.append({**b_bull, 'lookback': lb})
         
         # Slope
@@ -147,8 +141,8 @@ class V10Profiler:
             for i in range(len(self.prices)):
                 val = linear_regression_slope(self.prices[:i+1], lb)
                 values.append(val / self.prices[i] * 1000 if val and self.prices[i] else 0)
-            b_bull = self._test_thresholds(values, type_bull=True)
-            b_bear = self._test_thresholds(values, type_bull=False)
+            b_bull = self._find_best_rule(values, 'is_bullish')
+            b_bear = self._find_best_rule(values, 'is_bearish')
             if b_bull: slope_bull.append({**b_bull, 'lookback': lb})
             if b_bear: slope_bear.append({**b_bear, 'lookback': lb})
             
@@ -191,7 +185,7 @@ class V10Profiler:
         vol_bear = []
         for lb in tqdm(range(10, 61, 10)):
             values = [realized_volatility(self.prices[:i+1], lb) or 0.15 for i in range(len(self.prices))]
-            res = self._test_thresholds(values, type_bull=False) # High vol = Bearish
+            res = self._find_best_rule(values, 'is_bearish')
             if res: vol_bear.append({**res, 'lookback': lb})
         profiles['VOL'] = self._extract_best([], vol_bear, "VOL")
         

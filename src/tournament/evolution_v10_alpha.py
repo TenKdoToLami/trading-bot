@@ -67,10 +67,13 @@ class EvolutionEngineV10Alpha(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         new_genome = deepcopy(genome)
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         def _mutate_matrix(m, strength=0.2):
             m = np.array(m)
             mask = np.random.rand(*m.shape) < self.mut_rate
-            m[mask] += np.random.normal(0, strength, m[mask].shape)
+            m[mask] += np.random.normal(0, strength * strength_multiplier, m[mask].shape)
             return m.tolist()
         
         # Mutate Weights
@@ -78,13 +81,13 @@ class EvolutionEngineV10Alpha(BaseEvolutionEngine):
         new_genome['brain_b']['w'] = _mutate_matrix(new_genome['brain_b']['w'])
         new_genome['brain_c']['w'] = _mutate_matrix(new_genome['brain_c']['w'])
         
-        # Mutate Biases (New)
+        # Mutate Biases
         new_genome['brain_a']['b'] = _mutate_matrix(new_genome['brain_a']['b'], 0.1)
         new_genome['brain_b']['b'] = _mutate_matrix(new_genome['brain_b']['b'], 0.1)
         new_genome['brain_c']['b'] = _mutate_matrix(new_genome['brain_c']['b'], 0.2)
         
         if random.random() < self.mut_rate:
-            new_genome['overrides']['bear_veto_threshold'] = max(0.1, min(0.99, new_genome['overrides']['bear_veto_threshold'] + random.gauss(0, 0.05)))
+            new_genome['overrides']['bear_veto_threshold'] = max(0.1, min(0.99, new_genome['overrides']['bear_veto_threshold'] + random.gauss(0, 0.05 * strength_multiplier)))
         return new_genome
 
     def _crossover(self, p1, p2):

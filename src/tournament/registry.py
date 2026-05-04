@@ -78,8 +78,9 @@ def discover_all_strategies():
             try:
                 importlib.import_module(module_name)
             except Exception as e:
-                # Silently skip modules that fail to load or aren't strategy plugins
-                pass
+                print(f"  [WARN] Failed to import strategy {module_name}: {e}")
+                import traceback
+                traceback.print_exc()
 
 def get_strategy_class(version_id: Any, genome: dict = None) -> Type:
     """

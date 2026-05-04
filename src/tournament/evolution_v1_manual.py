@@ -52,13 +52,19 @@ class EvolutionEngineV1Manual(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
-        if random.random() < self.mut_rate: mut['sma'] = max(50, min(500, mut['sma'] + int(random.gauss(0, 20))))
-        if random.random() < self.mut_rate: mut['min_b_days'] = max(1, min(60, mut['min_b_days'] + int(random.gauss(0, 2))))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         if random.random() < self.mut_rate: 
-            mut['bounds_p'] = sorted([max(5, min(100, b + random.gauss(0, 5))) for b in mut['bounds_p']])
+            mut['sma'] = max(50, min(500, mut['sma'] + int(random.gauss(0, 20 * strength_multiplier))))
+        if random.random() < self.mut_rate: 
+            mut['min_b_days'] = max(1, min(60, mut['min_b_days'] + int(random.gauss(0, 2 * strength_multiplier))))
+        if random.random() < self.mut_rate: 
+            mut['bounds_p'] = sorted([max(5, min(100, b + random.gauss(0, 5 * strength_multiplier))) for b in mut['bounds_p']])
         for i in range(len(mut['weights_p'])):
             for j in range(len(mut['weights_p'][i])):
-                if random.random() < self.mut_rate: mut['weights_p'][i][j] = max(0, min(1.0, mut['weights_p'][i][j] + random.gauss(0, 0.1)))
+                if random.random() < self.mut_rate: 
+                    mut['weights_p'][i][j] = max(0, min(1.0, mut['weights_p'][i][j] + random.gauss(0, 0.1 * strength_multiplier)))
         return mut
 
     def _get_worker_config(self):

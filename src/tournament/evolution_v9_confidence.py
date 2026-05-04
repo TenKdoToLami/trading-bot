@@ -59,11 +59,14 @@ class EvolutionEngineV9Confidence(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mutated = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for layer in mutated['layers']:
             w, b = np.array(layer['w']), np.array(layer['b'])
             if random.random() < self.mut_rate:
-                w += np.random.normal(0, 0.05, w.shape)
-                b += np.random.normal(0, 0.02, b.shape)
+                w += np.random.normal(0, 0.05 * strength_multiplier, w.shape)
+                b += np.random.normal(0, 0.02 * strength_multiplier, b.shape)
             if self.use_ablation and random.random() < 0.1:
                 w[random.randint(0, w.shape[0] - 1), :] = 0.0
             layer['w'], layer['b'] = w.tolist(), b.tolist()
@@ -71,11 +74,14 @@ class EvolutionEngineV9Confidence(BaseEvolutionEngine):
         for k, v in mutated['lookbacks'].items():
             if random.random() < self.mut_rate:
                 mn, mx = self.lb_bounds[k]
-                mutated['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn)*0.1))))
+                mutated['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
         
-        if random.random() < self.mut_rate: mutated['hysteresis'] = max(0.005, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05)))
-        if random.random() < self.mut_rate: mutated['lock_days'] = max(1, min(30, mutated['lock_days'] + random.gauss(0, 2)))
-        if random.random() < self.mut_rate: mutated['smoothing'] = max(0.05, min(0.98, mutated['smoothing'] + random.gauss(0, 0.1)))
+        if random.random() < self.mut_rate: 
+            mutated['hysteresis'] = max(0.005, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05 * strength_multiplier)))
+        if random.random() < self.mut_rate: 
+            mutated['lock_days'] = max(1, min(30, mutated['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
+        if random.random() < self.mut_rate: 
+            mutated['smoothing'] = max(0.05, min(0.98, mutated['smoothing'] + random.gauss(0, 0.1 * strength_multiplier)))
         return mutated
 
     def _get_worker_config(self):

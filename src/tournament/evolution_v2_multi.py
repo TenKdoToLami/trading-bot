@@ -102,12 +102,20 @@ class EvolutionEngineV2(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for b in self.brains:
-            if random.random() < self.mut_rate: mut[b]['t'] += random.gauss(0, 0.2)
+            if random.random() < self.mut_rate: 
+                mut[b]['t'] += random.gauss(0, 0.2 * strength_multiplier)
             for k in self.indicators:
-                if random.random() < self.mut_rate: mut[b]['w'][k] += random.gauss(0, 0.5)
-                if self.use_ablation and random.random() < 0.05: mut[b]['a'][k] = not mut[b]['a'][k]
-        if random.random() < self.mut_rate: mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2)))
+                if random.random() < self.mut_rate: 
+                    mut[b]['w'][k] += random.gauss(0, 0.5 * strength_multiplier)
+                if self.use_ablation and random.random() < 0.05: 
+                    mut[b]['a'][k] = not mut[b]['a'][k]
+                    
+        if random.random() < self.mut_rate: 
+            mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
         return mut
 
     def _get_worker_config(self):

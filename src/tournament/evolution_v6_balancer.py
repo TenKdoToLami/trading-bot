@@ -49,17 +49,26 @@ class EvolutionEngineV6(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
+        # Adaptive strength: scale with mutation rate boost
+        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
+        
         for k, v in mut['lookbacks'].items():
-            if random.random() < self.mut_rate: mn, mx = self.lb_bounds[k]; mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn)*0.1))))
+            if random.random() < self.mut_rate: 
+                mn, mx = self.lb_bounds[k]
+                mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
         for b in self.brains:
             for k, v in mut['brains'][b]['w'].items():
-                if random.random() < self.mut_rate: mut['brains'][b]['w'][k] += random.gauss(0, 0.8)
-                if self.use_ablation and random.random() < 0.05: mut['brains'][b]['a'][k] = not mut['brains'][b]['a'][k]
+                if random.random() < self.mut_rate: 
+                    mut['brains'][b]['w'][k] += random.gauss(0, 0.8 * strength_multiplier)
+                if self.use_ablation and random.random() < 0.05: 
+                    mut['brains'][b]['a'][k] = not mut['brains'][b]['a'][k]
             if random.random() < self.mut_rate:
                 t = mut['brains'][b].get('t', 0.0)
-                mut['brains'][b]['t'] = t + random.gauss(0, 0.5)
-        if random.random() < self.mut_rate: mut['temp'] = max(0.1, min(3.0, mut['temp'] + random.gauss(0, 0.1)))
-        if random.random() < self.mut_rate: mut['lock_days'] = max(1, min(20, mut['lock_days'] + random.gauss(0, 2)))
+                mut['brains'][b]['t'] = t + random.gauss(0, 0.5 * strength_multiplier)
+        if random.random() < self.mut_rate: 
+            mut['temp'] = max(0.1, min(3.0, mut['temp'] + random.gauss(0, 0.1 * strength_multiplier)))
+        if random.random() < self.mut_rate: 
+            mut['lock_days'] = max(1, min(20, mut['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
         return mut
 
     def _get_worker_config(self):
