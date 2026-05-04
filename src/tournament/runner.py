@@ -51,15 +51,39 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
             portfolio.rebalance(date_str, pending_holdings)
             pending_holdings = None
 
-        # 3. Generate signal for tomorrow
-        result = strategy.on_data(date_str, row, prev_row)
+        # 3. Generate signal for tomorrow (OR for today if Intra)
+        is_intra = getattr(strategy, 'IS_INTRA', False)
+        
+        # In Intra mode, we feed the strategy the CURRENT mid-price snapshot
+        mid_row = row.copy()
+        mid_row['close'] = spy_price 
+        
+        result = strategy.on_data(date_str, mid_row, prev_row)
+        
         if result is not None:
             if isinstance(result, tuple) and len(result) == 2:
-                pending_holdings, telemetry = result
+                new_holdings, telemetry = result
                 if telemetry:
                     portfolio.log_telemetry(date_str, telemetry)
             else:
-                pending_holdings = result
+                new_holdings = result
+            
+            if is_intra:
+                # REBALANCE IMMEDIATELY if in Intra mode
+                if new_holdings != portfolio.holdings:
+                    portfolio.rebalance(date_str, new_holdings)
+                pending_holdings = None # Clear it so it doesn't execute again tomorrow
+            else:
+                # Standard mode: save for tomorrow
+                pending_holdings = new_holdings
+
+        # 4. Finalize day for the strategy (Update history with TRUE close)
+        if hasattr(strategy, 'update_history'):
+            strategy.update_history(row)
+        elif not is_intra:
+            # Legacy strategies that don't have update_history but manage their own history in on_data
+            # already have the 'row' from the on_data call above.
+            pass
             
     return {
         "metrics": portfolio.get_metrics(),
