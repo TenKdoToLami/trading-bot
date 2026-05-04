@@ -37,6 +37,7 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
         # Execution price: Avg of Open and Close
         spy_price = (float(row['open']) + float(row['close'])) / 2
         prev_row = price_data_list[i-1] if i > 0 else None
+        is_intra = getattr(strategy, 'IS_INTRA', False)
 
         # 1. Apply today's return using CURRENT holdings
         if i > 0:
@@ -52,11 +53,22 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
             pending_holdings = None
 
         # 3. Generate signal for tomorrow (OR for today if Intra)
-        is_intra = getattr(strategy, 'IS_INTRA', False)
-        
-        # In Intra mode, we feed the strategy the CURRENT mid-price snapshot
-        mid_row = row.copy()
-        mid_row['close'] = spy_price 
+        if is_intra:
+            # INTRA-DAY MODE: Strategy sees mid-day TWAP estimate.
+            # - Price: (Open + Close) / 2 — simulates average execution price
+            # - H/L/V/VIX: Yesterday's values (today's are unknown until EOD)
+            intra_price = spy_price
+            mid_row = row.copy()
+            mid_row['close'] = intra_price
+            mid_row['high'] = float(prev_row['high']) if prev_row else intra_price
+            mid_row['low'] = float(prev_row['low']) if prev_row else intra_price
+            mid_row['volume'] = float(prev_row.get('volume', 0)) if prev_row else 0
+            mid_row['vix'] = float(prev_row.get('vix', 15.0)) if prev_row else 15.0
+            mid_row['yield_curve'] = float(prev_row.get('yield_curve', 0.0)) if prev_row else 0.0
+        else:
+            # STANDARD MODE: Strategy sees mid-price snapshot
+            mid_row = row.copy()
+            mid_row['close'] = spy_price
         
         result = strategy.on_data(date_str, mid_row, prev_row)
         

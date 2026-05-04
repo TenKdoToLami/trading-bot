@@ -16,8 +16,8 @@ V9 Intra is an evolution of the V9 architecture designed for **Same-Day Executio
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Run** | `python tests/run_evolution_universal.py --version v9_intra --pop 200 --gen 100` |
-| **Seed from V9** | `python tests/run_evolution_universal.py --version v9_intra --pop 500 --gen 100 --vault champions/v9_confidence/vault --tournament` |
+| **New Run** | `python tests/run_evolution_universal.py --version v9_intra --pop 100 --gen 100` |
+| **Seed from V9** | `python tests/run_evolution_universal.py --version v9_intra --pop 500 --gen 100 --vault champions/v9_intra/vault --tournament` |
 
 ### 🔬 Diagnostics (Audit)
 | Goal | Command |
