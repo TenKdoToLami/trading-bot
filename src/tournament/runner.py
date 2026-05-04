@@ -192,6 +192,9 @@ class TournamentRunner:
     def load_data(self, force_refresh=False):
         print(f"Loading market data from {self.start_date}...")
         self.data = load_spy_data(self.start_date, force_refresh=force_refresh)
+        if self.data is None or len(self.data) == 0:
+            print("WARNING: Market data is empty. YFinance rate limit or network error occurred.")
+            return self.data
         if self.end_date:
             self.data = self.data[:self.end_date]
         return self.data
@@ -331,6 +334,10 @@ class TournamentRunner:
         return self._run_set([match])
 
     def _run_set(self, strategies):
+        if self.data is None or len(self.data) == 0:
+            print("\n[ERROR] Cannot run tournament: Market data is empty. Exiting.")
+            sys.exit(1)
+            
         print(f"\nRunning simulation for {len(strategies)} strategies...")
         cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
         price_list = self.data[cols].to_dict('records')
@@ -372,7 +379,12 @@ class TournamentRunner:
     def print_results(self):
         if not self.results: return
         print("\n" + "=" * 95)
-        print(f"  TOURNAMENT RESULTS ({self.start_date} -> {self.data.index[-1].date()})")
+        
+        end_date_str = "Unknown"
+        if self.data is not None and len(self.data) > 0:
+            end_date_str = self.data.index[-1].date()
+            
+        print(f"  TOURNAMENT RESULTS ({self.start_date} -> {end_date_str})")
         print("=" * 95)
         print(f"  {'Strategy':<30} | {'CAGR':>8} | {'Sharpe':>8} | {'Max DD':>8} | {'Volat.':>8} | {'Trades':>6}")
         print("-" * 95)
