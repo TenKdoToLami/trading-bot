@@ -64,24 +64,22 @@ class EvolutionEngineV9Intra(BaseEvolutionEngine):
         mutated = json.loads(json.dumps(genome))
         mutated.pop('lock_days', None); mutated['version'] = 'v9_intra' # Scrub seeding metadata
         
-        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
-        
         for layer in mutated['layers']:
             w, b = np.array(layer['w']), np.array(layer['b'])
             if random.random() < self.mut_rate:
-                w += np.random.normal(0, 0.05 * strength_multiplier, w.shape)
-                b += np.random.normal(0, 0.02 * strength_multiplier, b.shape)
+                w += np.random.normal(0, 0.05 * self.mut_strength, w.shape)
+                b += np.random.normal(0, 0.02 * self.mut_strength, b.shape)
             layer['w'], layer['b'] = w.tolist(), b.tolist()
 
         for k, v in mutated['lookbacks'].items():
             if random.random() < self.mut_rate:
                 mn, mx = self.lb_bounds[k]
-                mutated['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
+                mutated['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * self.mut_strength))))
         
         if random.random() < self.mut_rate: 
-            mutated['hysteresis'] = max(0.005, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05 * strength_multiplier)))
+            mutated['hysteresis'] = max(0.005, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05 * self.mut_strength)))
         if random.random() < self.mut_rate: 
-            mutated['smoothing'] = max(0.05, min(0.98, mutated['smoothing'] + random.gauss(0, 0.1 * strength_multiplier)))
+            mutated['smoothing'] = max(0.05, min(0.98, mutated['smoothing'] + random.gauss(0, 0.1 * self.mut_strength)))
         return mutated
 
     def _get_worker_config(self):

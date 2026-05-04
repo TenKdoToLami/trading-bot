@@ -61,23 +61,22 @@ class EvolutionEngineV3(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
-        # Adaptive strength: scale with mutation rate boost
-        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
         
-        for b in self.brains:
-            for k, (mn, mx) in self.lb_bounds.items():
+        for b in ['panic', 'bull']:
+            for k, v in mut[b]['lookbacks'].items():
                 if random.random() < self.mut_rate: 
-                    mut[b]['lookbacks'][k] = max(mn, min(mx, mut[b]['lookbacks'][k] + int(random.gauss(0, (mx-mn) * 0.15 * strength_multiplier))))
+                    mn, mx = self.lb_bounds[k]
+                    mut[b]['lookbacks'][k] = max(mn, min(mx, mut[b]['lookbacks'][k] + int(random.gauss(0, (mx-mn) * 0.15 * self.mut_strength))))
             if random.random() < self.mut_rate: 
-                mut[b]['t'] += random.gauss(0, 0.2 * strength_multiplier)
-            for k in self.indicators:
+                mut[b]['t'] += random.gauss(0, 0.2 * self.mut_strength)
+            for k, v in mut[b]['w'].items():
                 if random.random() < self.mut_rate: 
-                    mut[b]['w'][k] += random.gauss(0, 0.5 * strength_multiplier)
+                    mut[b]['w'][k] += random.gauss(0, 0.5 * self.mut_strength)
                 if self.use_ablation and random.random() < 0.05: 
                     mut[b]['a'][k] = not mut[b]['a'][k]
                     
         if random.random() < self.mut_rate: 
-            mut['lock_days'] = max(0, min(20, mut['lock_days'] + random.gauss(0, 2 * strength_multiplier)))
+            mut['lock_days'] = max(0, min(40, mut['lock_days'] + random.gauss(0, 4 * self.mut_strength)))
         return mut
 
     def _get_worker_config(self):

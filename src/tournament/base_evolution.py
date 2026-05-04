@@ -50,6 +50,14 @@ class BaseEvolutionEngine(ABC):
         # Initialize population (MUST be at the end so subclasses can set attributes)
         self._initialize_population()
 
+    @property
+    def mut_strength(self) -> float:
+        """
+        Calculates the adaptive mutation strength based on the current mutation rate.
+        Used by subclasses to scale the variance of Gaussian noise during mutation.
+        """
+        return max(1.0, self.mut_rate / self.base_mut_rate)
+
     def _initialize_population(self):
         """Loads seeds if available, then fills the rest with random genomes."""
         # Seeding ONLY occurs if seed_vault is provided
@@ -147,20 +155,28 @@ class BaseEvolutionEngine(ABC):
                 best_fit, best_stats, best_genome = scored[0]
                 elapsed = time.time() - start_time
                 
-                # --- STAGNATION RECOVERY ---
+                # --- STAGNATION RECOVERY (Aggressive) ---
                 if best_fit > (self._best_seen_fitness + 0.001):
-                    if self.stagnation_counter >= 5:
+                    if self.stagnation_counter >= 10:
                         print(f"  [RECOVERY] Improvement found! Resetting mutation rate to {self.base_mut_rate:.2f}")
                     self._best_seen_fitness = best_fit
                     self.stagnation_counter = 0
                     self.mut_rate = self.base_mut_rate
                 else:
                     self.stagnation_counter += 1
-                    if self.stagnation_counter > 0 and self.stagnation_counter % 5 == 0:
-                        new_mut = min(0.8, self.mut_rate * 2.0)
-                        if new_mut > self.mut_rate:
-                            self.mut_rate = new_mut
-                            print(f"  [STAGNATION] No improvement for {self.stagnation_counter} gens. Boosting mutation rate to {self.mut_rate:.2f}")
+                    
+                    if self.stagnation_counter == 10:
+                        self.mut_rate = min(0.9, self.mut_rate * 2.0)
+                        print(f"  [STAGNATION] 10 gens no improvement. Doubling mutation: {self.mut_rate:.2f}")
+                    
+                    elif self.stagnation_counter == 20:
+                        self.mut_rate = min(0.95, self.mut_rate * 2.0)
+                        print(f"  [STAGNATION] 20 gens no improvement. Doubling mutation again: {self.mut_rate:.2f}")
+                    
+                    elif self.stagnation_counter >= 30:
+                        print(f"\n[FATAL] STAGNATION REACHED: 30 generations with no progress. Canceling search.")
+                        import sys
+                        sys.exit(2) # Exit with code 2 to notify the wrapper (PowerShell) of stagnation stop
 
                 self._print_generation_summary(gen + 1, best_fit, best_stats, best_genome, elapsed)
                 self._save_champion(best_stats, best_genome)

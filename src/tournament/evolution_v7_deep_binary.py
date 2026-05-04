@@ -47,21 +47,19 @@ class EvolutionEngineV7DeepBinary(BaseEvolutionEngine):
 
     def _mutate(self, genome):
         mut = json.loads(json.dumps(genome))
-        # Adaptive strength: scale with mutation rate boost
-        strength_multiplier = max(1.0, self.mut_rate / self.base_mut_rate)
         
         for layer in mut['layers']:
             w, b = np.array(layer['w']), np.array(layer['b'])
             if random.random() < self.mut_rate: 
-                w += np.random.normal(0, 0.05 * strength_multiplier, w.shape)
-                b += np.random.normal(0, 0.02 * strength_multiplier, b.shape)
+                w += np.random.normal(0, 0.05 * self.mut_strength, w.shape)
+                b += np.random.normal(0, 0.02 * self.mut_strength, b.shape)
             layer['w'], layer['b'] = w.tolist(), b.tolist()
         for k, v in mut['lookbacks'].items():
             if random.random() < self.mut_rate: 
                 mn, mx = self.lb_bounds[k]
-                mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * strength_multiplier))))
+                mut['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * self.mut_strength))))
         if random.random() < self.mut_rate:
-            mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1 * strength_multiplier)))
+            mut['lock_days'] = max(1, min(14, mut['lock_days'] + random.gauss(0, 1 * self.mut_strength)))
         return mut
 
     def _get_worker_config(self):
