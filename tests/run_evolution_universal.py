@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--ablation", action="store_true", help="Enable ablation study during evolution")
     parser.add_argument("--cagr", type=float, default=0.0, help="Minimum CAGR filter")
     parser.add_argument("--workers", type=int, default=max(1, os.cpu_count() - 2), help="Number of worker processes")
+    parser.add_argument("--tournament", action="store_true", help="Use tournament selection instead of elitism")
     
     args = parser.parse_args()
     
@@ -43,7 +44,8 @@ def main():
         seed_vault=args.vault,
         use_ablation=args.ablation,
         min_cagr=args.cagr,
-        workers=args.workers
+        workers=args.workers,
+        use_tournament=args.tournament
     )
     
     try:

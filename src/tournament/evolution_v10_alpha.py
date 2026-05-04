@@ -51,16 +51,27 @@ class EvolutionEngineV10Alpha(BaseEvolutionEngine):
         super().__init__(version_id="v10_alpha", **kwargs)
 
     def _random_genome(self):
-        w_a = np.random.uniform(0, 1, (self.num_experts, 1)).tolist()
-        w_b = np.random.uniform(-1, 1, (self.num_experts, 1)).tolist()
-        w_c = np.random.uniform(-1, 1, (3, 4)).tolist()
-        b_c = [-1.0, 1.0, 0.0, -1.0]
+        # Bull Brain (A): Wider range to allow experts to be weighted more strongly
+        w_a = np.random.uniform(-1, 3, (self.num_experts, 1)).tolist()
+        
+        # Bear Brain (B): Wider range to allow for stronger "veto" signals
+        w_b = np.random.uniform(-3, 3, (self.num_experts, 1)).tolist()
+        
+        # MixMaster (C): High variance to allow for bold switching logic
+        w_c = np.random.uniform(-5, 5, (3, 4)).tolist()
+        
+        # Biases for MixMaster: More diverse starting points for state preferences
+        b_c = [random.uniform(-2, 2) for _ in range(4)]
         
         return {
-            'brain_a': {'w': w_a, 'b': [0.0]},
-            'brain_b': {'w': w_b, 'b': [0.0]},
+            'brain_a': {'w': w_a, 'b': [random.uniform(-0.5, 0.5)]},
+            'brain_b': {'w': w_b, 'b': [random.uniform(-0.5, 0.5)]},
             'brain_c': {'w': w_c, 'b': b_c},
-            'overrides': {'bear_veto_threshold': random.uniform(0.7, 0.95)},
+            'overrides': {
+                'bear_veto_threshold': random.uniform(0.3, 0.95),
+                'smoothing': random.uniform(0.1, 0.9),
+                'hysteresis': random.uniform(0.05, 0.4)
+            },
             'indicator_profiles': self.profile_data,
             'version': 'v10_alpha'
         }
@@ -88,6 +99,11 @@ class EvolutionEngineV10Alpha(BaseEvolutionEngine):
         
         if random.random() < self.mut_rate:
             new_genome['overrides']['bear_veto_threshold'] = max(0.1, min(0.99, new_genome['overrides']['bear_veto_threshold'] + random.gauss(0, 0.05 * strength_multiplier)))
+        if random.random() < self.mut_rate:
+            new_genome['overrides']['smoothing'] = max(0.01, min(0.99, new_genome['overrides']['smoothing'] + random.gauss(0, 0.1 * strength_multiplier)))
+        if random.random() < self.mut_rate:
+            new_genome['overrides']['hysteresis'] = max(0.01, min(0.8, new_genome['overrides']['hysteresis'] + random.gauss(0, 0.05 * strength_multiplier)))
+            
         return new_genome
 
     def _crossover(self, p1, p2):

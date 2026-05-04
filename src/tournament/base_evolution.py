@@ -45,6 +45,7 @@ class BaseEvolutionEngine(ABC):
         self.stagnation_counter = 0
         self.base_mut_rate = mutation_rate
         self.vault_dir = f"champions/{version_id}/vault"
+        self.use_tournament = kwargs.get("use_tournament", False)
         
         # Initialize population (MUST be at the end so subclasses can set attributes)
         self._initialize_population()
@@ -198,29 +199,46 @@ class BaseEvolutionEngine(ABC):
             with open(v_path, 'w') as f:
                 json.dump(genome, f, indent=4)
 
+    def _tournament_select(self, scored_population: List[Tuple[float, Dict, Dict]], k: int = 3) -> Dict[str, Any]:
+        """
+        Selects the best genome out of a random sample of k.
+        Provides better diversity than strict elitism.
+        """
+        sample = random.sample(scored_population, k)
+        sample.sort(key=lambda x: x[0], reverse=True)
+        return sample[0][2]
+
     def _evolve_population(self, scored_population: List[Tuple[float, Dict, Dict]]):
         """Handles elitism and mutation for the next generation."""
-        # 1. Keep top 20% as elites
-        num_elites = max(2, self.pop_size // 5)
+        # 1. Elitism: Keep absolute top 2 genomes safe
+        num_elites = 2
         elites = [x[2] for x in scored_population[:num_elites]]
         
-        # 2. Fill the rest with mutated versions of random elites or crossovers
+        # 2. Reproduction pool: top 20% if not using tournament
+        repro_pool = [x[2] for x in scored_population[:max(2, self.pop_size // 5)]]
+        
         new_population = list(elites)
         has_crossover = hasattr(self, '_crossover')
         
         while len(new_population) < self.pop_size:
+            if self.use_tournament:
+                p1 = self._tournament_select(scored_population, k=3)
+            else:
+                p1 = random.choice(repro_pool)
+                
             if has_crossover and random.random() < 0.4:
-                # Crossover 40% of the time
-                p1, p2 = random.sample(elites, 2)
+                if self.use_tournament:
+                    p2 = self._tournament_select(scored_population, k=3)
+                else:
+                    p2 = random.choice(repro_pool)
                 child = self._crossover(p1, p2)
             else:
-                # Mutation the rest of the time
-                parent = random.choice(elites)
-                child = self._mutate(parent)
+                child = self._mutate(p1)
             
-            # Apply a final mutation pass to crossover children to maintain variance
-            if has_crossover and len(new_population) >= len(elites):
-                child = self._mutate(child)
+            # Apply a final mutation pass to crossover children
+            if has_crossover and len(new_population) >= num_elites:
+                if random.random() < self.mut_rate:
+                    child = self._mutate(child)
                 
             new_population.append(child)
             

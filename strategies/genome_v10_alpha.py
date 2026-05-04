@@ -69,6 +69,9 @@ class GenomeV10Alpha(BaseStrategy):
     def reset(self):
         self.market = MarketState()
         self.current_holdings = {"CASH": 1.0}
+        self.last_conf_bull = 0.5
+        self.last_conf_bear = 0.5
+        self.last_state_idx = 0 # CASH
         
     def _relu(self, x): return np.maximum(0, x)
     def _sigmoid(self, x): 
@@ -114,39 +117,55 @@ class GenomeV10Alpha(BaseStrategy):
         elif key == "VIX":
             return m.get_macro('vix', 20.0)
         return 0
+
     def on_data(self, date, price_data, prev_data):
         self.market.update(date, price_data)
         
         if len(self.market.prices) < 10: return self.current_holdings, {}
 
-        # 1. Expert Layer (Weighted Pre-calculation)
+        # 1. Expert Layer (Continuous "Soft" Signals)
         expert_bull = []
         expert_bear = []
         
         for key in self.expert_keys:
             p = self.profile_data[key]
             
-            # Bull Expert Input
+            # Bull Expert Signal: Distance from threshold normalized by threshold magnitude
             if p['bullish']:
                 val = self._get_indicator_val(key, p['bullish']['lookback'])
+                thresh = p['bullish']['thresh']
                 cond = p['bullish'].get('condition', 'greater')
-                is_bull = (val > p['bullish']['thresh']) if cond == 'greater' else (val < p['bullish']['thresh'])
-                expert_bull.append(1.0 if is_bull else 0.0)
+                
+                # Continuous signal: positive if condition met, negative if not
+                dist = (val - thresh) if cond == 'greater' else (thresh - val)
+                # Normalize by a reasonable scale (e.g., 10% of thresh or fixed small value)
+                norm_scale = max(0.001, abs(thresh) * 0.2) 
+                expert_bull.append(dist / norm_scale)
             else:
                 expert_bull.append(0.0)
                 
-            # Bear Expert Input
+            # Bear Expert Signal
             if p['bearish']:
                 val = self._get_indicator_val(key, p['bearish']['lookback'])
+                thresh = p['bearish']['thresh']
                 cond = p['bearish'].get('condition', 'less')
-                is_bear = (val > p['bearish']['thresh']) if cond == 'greater' else (val < p['bearish']['thresh'])
-                expert_bear.append(1.0 if is_bear else 0.0)
+                
+                dist = (thresh - val) if cond == 'less' else (val - thresh)
+                norm_scale = max(0.001, abs(thresh) * 0.2)
+                expert_bear.append(dist / norm_scale)
             else:
                 expert_bear.append(0.0)
         
         # 2. Expert Brain Inference
-        conf_bull = self._sigmoid(np.dot(expert_bull, self.wa) + self.ba)[0]
-        conf_bear = self._sigmoid(np.dot(expert_bear, self.wb) + self.bb)[0]
+        conf_bull_raw = self._sigmoid(np.dot(expert_bull, self.wa) + self.ba)[0]
+        conf_bear_raw = self._sigmoid(np.dot(expert_bear, self.wb) + self.bb)[0]
+        
+        # SMOOTHING Logic
+        smoothing = self.genome.get('overrides', {}).get('smoothing', 0.5)
+        conf_bull = (conf_bull_raw * (1 - smoothing)) + (self.last_conf_bull * smoothing)
+        conf_bear = (conf_bear_raw * (1 - smoothing)) + (self.last_conf_bear * smoothing)
+        self.last_conf_bull = conf_bull
+        self.last_conf_bear = conf_bear
         
         # 3. Priority Override (Veto Logic)
         veto_thresh = self.genome['overrides']['bear_veto_threshold']
@@ -160,8 +179,16 @@ class GenomeV10Alpha(BaseStrategy):
         raw_alloc = np.dot(mix_inputs, self.wc) + self.bc
         probs = self._softmax(raw_alloc)
         
-        # 5. Result
-        best_state_idx = np.argmax(probs)
+        # 5. HYSTERESIS Logic (Buffer to prevent flip-flopping)
+        hysteresis = self.genome.get('overrides', {}).get('hysteresis', 0.15)
+        
+        # Boost the probability of the current state to require a stronger signal to switch
+        probs_with_buffer = probs.copy()
+        probs_with_buffer[self.last_state_idx] += hysteresis
+        
+        best_state_idx = np.argmax(probs_with_buffer)
+        self.last_state_idx = best_state_idx
+        
         state_map = {0: {"CASH": 1.0}, 1: {"SPY": 1.0}, 2: {"2xSPY": 1.0}, 3: {"3xSPY": 1.0}}
         self.current_holdings = state_map[best_state_idx]
         
@@ -169,7 +196,8 @@ class GenomeV10Alpha(BaseStrategy):
             "conf_bull": float(conf_bull),
             "conf_bear": float(conf_bear),
             "veto": bool(conf_bear >= veto_thresh),
-            "probs": probs.tolist()
+            "probs": probs.tolist(),
+            "state": int(best_state_idx)
         }
         
         return self.current_holdings, telemetry
