@@ -64,7 +64,8 @@ class GenomeV12MOE(BaseStrategy):
                 'mfi': 14, 'bb': 20
             },
             'smoothing': 0.3, # Faster for Regime, Slower for Allocation
-            'regime_hysteresis': 0.1
+            'regime_hysteresis': 0.1,
+            'allocation_hysteresis': 0.05 # Only change portfolio if turnover > 5%
         }
 
     def reset(self):
@@ -170,35 +171,43 @@ class GenomeV12MOE(BaseStrategy):
         self.smoothed_bull_alloc = alpha * bull_probs + (1 - alpha) * self.smoothed_bull_alloc
         self.smoothed_bear_alloc = alpha * bear_probs + (1 - alpha) * self.smoothed_bear_alloc
 
-        # 6. Final Weight Assembly
+        # 6. Final Weight Assembly (Candidate)
         # Pool A (Bull): 1xSPY, 2xSPY, 3xSPY
         # Pool B (Bear): TLT, SHY, GOLD, 2x SHORT SPY
         
-        weights = {}
+        cand_weights = {}
         bull_factor = self.smoothed_regime
         bear_factor = 1.0 - bull_factor
         
         # Bullish components
-        weights["SPY"] = round(float(self.smoothed_bull_alloc[0] * bull_factor), 2)
-        weights["2xSPY"] = round(float(self.smoothed_bull_alloc[1] * bull_factor), 2)
-        weights["3xSPY"] = round(float(self.smoothed_bull_alloc[2] * bull_factor), 2)
+        cand_weights["SPY"] = float(self.smoothed_bull_alloc[0] * bull_factor)
+        cand_weights["2xSPY"] = float(self.smoothed_bull_alloc[1] * bull_factor)
+        cand_weights["3xSPY"] = float(self.smoothed_bull_alloc[2] * bull_factor)
         
         # Bearish components
-        weights["TLT"] = round(float(self.smoothed_bear_alloc[0] * bear_factor), 2)
-        weights["SHY"] = round(float(self.smoothed_bear_alloc[1] * bear_factor), 2)
-        weights["GOLD"] = round(float(self.smoothed_bear_alloc[2] * bear_factor), 2)
-        weights["2xSHORT_SPY"] = round(float(self.smoothed_bear_alloc[3] * bear_factor), 2)
+        cand_weights["TLT"] = float(self.smoothed_bear_alloc[0] * bear_factor)
+        cand_weights["SHY"] = float(self.smoothed_bear_alloc[1] * bear_factor)
+        cand_weights["GOLD"] = float(self.smoothed_bear_alloc[2] * bear_factor)
+        cand_weights["2xSHORT_SPY"] = float(self.smoothed_bear_alloc[3] * bear_factor)
         
-        self.current_weights = weights
+        # 7. Allocation Hysteresis (The "Neural Brake")
+        # Only switch if the combined weight shift is meaningful
+        all_assets = set(list(self.current_weights.keys()) + list(cand_weights.keys()))
+        turnover = sum(abs(cand_weights.get(a, 0.0) - self.current_weights.get(a, 0.0)) for a in all_assets)
+        
+        threshold = self.genome.get('allocation_hysteresis', 0.05)
+        if turnover > threshold or self.current_weights == {"CASH": 1.0}:
+            self.current_weights = cand_weights
         
         telemetry = {
             "regime": float(bull_factor),
-            "bull_split": [round(x, 2) for x in self.smoothed_bull_alloc],
-            "bear_split": [round(x, 2) for x in self.smoothed_bear_alloc],
-            "top_asset": max(weights, key=weights.get)
+            "turnover_delta": float(turnover),
+            "bull_split": [round(float(x), 2) for x in self.smoothed_bull_alloc],
+            "bear_split": [round(float(x), 2) for x in self.smoothed_bear_alloc],
+            "top_asset": max(self.current_weights, key=self.current_weights.get)
         }
 
-        return weights, telemetry
+        return self.current_weights, telemetry
 
     def update_history(self, price_data):
         self.prices.append(price_data['close'])

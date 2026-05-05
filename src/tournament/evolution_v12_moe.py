@@ -80,7 +80,8 @@ class EvolutionEngineV12MOE(BaseEvolutionEngine):
             'bear': rand_brain(18, 16, 4),
             'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()},
             'smoothing': random.uniform(0.1, 0.6),
-            'regime_hysteresis': random.uniform(0.05, 0.25)
+            'regime_hysteresis': random.uniform(0.05, 0.25),
+            'allocation_hysteresis': random.uniform(0.01, 0.15)
         }
 
     def _mutate(self, genome):
@@ -113,6 +114,8 @@ class EvolutionEngineV12MOE(BaseEvolutionEngine):
             mutated['smoothing'] = np.clip(mutated['smoothing'] + random.gauss(0, 0.05 * self.mut_strength), 0.01, 0.9)
         if random.random() < m:
             mutated['regime_hysteresis'] = np.clip(mutated['regime_hysteresis'] + random.gauss(0, 0.02 * self.mut_strength), 0.01, 0.5)
+        if random.random() < m:
+            mutated['allocation_hysteresis'] = np.clip(mutated['allocation_hysteresis'] + random.gauss(0, 0.02 * self.mut_strength), 0.01, 0.4)
 
         return mutated
 
