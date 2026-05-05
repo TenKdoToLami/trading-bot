@@ -1501,17 +1501,33 @@ export default function App() {
                       <AreaChart data={activeInspection.curve.dates.map((d, i) => {
                         const tel = activeInspection.telemetry;
                         const hist = activeInspection.history;
-                        return {
-                          date: d,
-                          equity: activeInspection.curve.equities[i],
-                          spy_equity: activeSpy?.curve.equities[i],
-                          comp_equity: activeComparison ? activeComparison.curve.equities[i] : null,
-                          // Probabilistic or Discrete Allocations
-                          alloc_3x:   tel?.conf_3x?.[i]   ?? (hist?.regime[i] === '3xSPY' ? 1 : 0),
-                          alloc_2x:   tel?.conf_2x?.[i]   ?? (hist?.regime[i] === '2xSPY' ? 1 : 0),
-                          alloc_1x:   tel?.conf_1x?.[i]   ?? (hist?.regime[i] === 'SPY'   ? 1 : 0),
-                          alloc_cash: tel?.conf_cash?.[i] ?? (hist?.regime[i] === 'CASH'  ? 1 : 0)
-                        };
+                          // Robust Allocation Mapping (Exclusive logic to prevent 200% stacking)
+                          const a = hist?.allocations?.[i];
+                          const r = hist?.regime?.[i];
+                          
+                          let a3 = 0, a2 = 0, a1 = 0, ac = 0;
+                          
+                          if (a && Object.keys(a).length > 0) {
+                            // Use precise fractional data
+                            a3 = a['3xSPY'] ?? a['3x']   ?? a['UPRO'] ?? 0;
+                            a2 = a['2xSPY'] ?? a['2x']   ?? a['SSO']  ?? 0;
+                            a1 = a['SPY']   ?? a['1x']   ?? a['VOO']  ?? 0;
+                            ac = a['CASH']  ?? a['0x']   ?? a['USD']  ?? 0;
+                          } else {
+                            // Fallback to discrete regime name
+                            a3 = (r === '3xSPY' || r === '3x' || r === 'UPRO') ? 1 : 0;
+                            a2 = (r === '2xSPY' || r === '2x' || r === 'SSO')  ? 1 : 0;
+                            a1 = (r === 'SPY'   || r === '1x' || r === 'VOO')  ? 1 : 0;
+                            ac = (r === 'CASH'  || r === '0x' || r === 'USD')  ? 1 : 0;
+                          }
+                          
+                          return {
+                            date: d,
+                            equity: activeInspection.curve.equities[i],
+                            spy_equity: activeSpy?.curve.equities[i],
+                            comp_equity: activeComparison ? activeComparison.curve.equities[i] : null,
+                            alloc_3x: a3, alloc_2x: a2, alloc_1x: a1, alloc_cash: ac
+                          };
                       })}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" hide />

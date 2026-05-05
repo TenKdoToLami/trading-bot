@@ -27,8 +27,10 @@ class Portfolio:
     SLIPPAGE_BPS = 0.0005 # 5 bps (0.05%) per trade
     COMMISSION   = 0.0001 # 1 bps (0.01%) or flat fee equivalent
 
-    def __init__(self, initial_equity: float = 1.0):
+    def __init__(self, initial_equity: float = 1.0, slippage_bps: float = 0.0005, commission_bps: float = 0.0001):
         self.initial_equity = initial_equity
+        self.slippage_bps = slippage_bps
+        self.commission_bps = commission_bps
         self.reset()
 
     def reset(self, initial_equity: float = None):
@@ -65,7 +67,7 @@ class Portfolio:
         turnover = sum(abs(normalized.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
         
         # Apply friction to equity
-        friction_cost = turnover * (self.SLIPPAGE_BPS + self.COMMISSION)
+        friction_cost = turnover * (self.slippage_bps + self.commission_bps)
         self.equity *= (1.0 - friction_cost)
         
         self.holdings = normalized
@@ -227,7 +229,8 @@ class Portfolio:
         leverage_map = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
         history = {
             "leverage": [],
-            "regime": [] # The primary asset (highest weight)
+            "regime": [], # The primary asset (highest weight)
+            "allocations": [] # Full weighting history
         }
         for _, holdings in self.holdings_log:
             lev = sum(holdings.get(a, 0.0) * leverage_map[a] for a in leverage_map)
@@ -236,6 +239,7 @@ class Portfolio:
             # Find the primary asset
             primary = max(holdings.items(), key=lambda x: x[1])[0]
             history["regime"].append(primary)
+            history["allocations"].append(dict(holdings))
             
         return history
 

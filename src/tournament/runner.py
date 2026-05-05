@@ -21,13 +21,13 @@ from src.tournament.portfolio import Portfolio
 from src.helpers.dashboard_exporter import export_to_dashboard
 from strategies.base import BaseStrategy
 
-def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None):
+def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None, slippage_bps=0.0005, commission_bps=0.0001):
     """Standalone simulation function for parallel execution."""
     kwargs = strategy_kwargs or {}
     strategy = strategy_type(**kwargs)
     strategy.reset()
     
-    portfolio = Portfolio()
+    portfolio = Portfolio(slippage_bps=slippage_bps, commission_bps=commission_bps)
     pending_holdings = None
     
     for i in range(len(price_data_list)):

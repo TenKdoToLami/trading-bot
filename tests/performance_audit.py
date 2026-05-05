@@ -17,7 +17,7 @@ from utils import resolve_strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-def run_audit(identifier: str):
+def run_audit(identifier: str, slippage_bps: float = 0.0005, commission_bps: float = 0.0001):
     try:
         strategy = resolve_strategy(identifier)
     except Exception as e:
@@ -34,7 +34,9 @@ def run_audit(identifier: str):
         strategy_type=strategy.__class__,
         price_data_list=price_data_list,
         dates=dates,
-        strategy_kwargs={'genome': getattr(strategy, 'genome', None)} if hasattr(strategy, 'genome') else {}
+        strategy_kwargs={'genome': getattr(strategy, 'genome', None)} if hasattr(strategy, 'genome') else {},
+        slippage_bps=slippage_bps,
+        commission_bps=commission_bps
     )
 
     metrics = res['metrics']
@@ -108,6 +110,8 @@ def run_audit(identifier: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("strategy", type=str, help="Path to genome JSON or Strategy Name")
+    parser.add_argument("--slippage", type=float, default=0.0005, help="Slippage bps (e.g. 0.0005 = 5bps)")
+    parser.add_argument("--commission", type=float, default=0.0001, help="Commission bps (e.g. 0.0001 = 1bps)")
     args = parser.parse_args()
 
-    run_audit(args.strategy)
+    run_audit(args.strategy, slippage_bps=args.slippage, commission_bps=args.commission)

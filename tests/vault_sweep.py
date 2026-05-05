@@ -125,17 +125,18 @@ def print_leaderboard(results, top_n=3):
             'avg_sharpe': np.mean([m['sharpe'] for m in metrics]),
             'avg_dd': np.mean([m['max_dd'] * 100 for m in metrics]),
             'worst_dd': np.min([m['max_dd'] * 100 for m in metrics]),
+            'avg_pivots': np.mean([m.get('trades_per_year', 0) for m in metrics]),
             'n': len(metrics)
         })
     leaderboard.sort(key=lambda x: x['avg_cagr'], reverse=True)
     
-    print("\n" + "="*110)
-    print(f"  {'#':<3} {'Genome':<40} | {'AvgCAGR':>8} | {'MedCAGR':>8} | {'AvgShp':>7} | {'AvgDD':>8} | {'WorstDD':>8} | {'N':>3}")
-    print("-" * 110)
+    print("\n" + "="*125)
+    print(f"  {'#':<3} {'Genome':<40} | {'AvgCAGR':>8} | {'MedCAGR':>8} | {'AvgShp':>7} | {'AvgDD':>8} | {'WorstDD':>8} | {'Pivots/Y':>8} | {'N':>3}")
+    print("-" * 125)
     for i, row in enumerate(leaderboard):
         m = "*" if i < top_n else " "
-        print(f"{m}{i+1:<3} {row['name']:<40} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['n']:>3}")
-    print("="*110)
+        print(f"{m}{i+1:<3} {row['name']:<40} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['avg_pivots']:>8.1f} | {row['n']:>3}")
+    print("="*125)
     return leaderboard
 
 if __name__ == "__main__":
