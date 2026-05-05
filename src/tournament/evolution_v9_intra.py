@@ -32,9 +32,21 @@ def _evaluate_v9_intra_worker(genome):
             )
     metrics = res['metrics']
     cagr_pct, dd_pct = metrics['cagr'] * 100, abs(metrics['max_dd']) * 100
-    fitness = cagr_pct - (dd_pct * 0.1) # Standard low DD weight
+    
+    # 1. Base Fitness
+    fitness = cagr_pct - (dd_pct * 0.1) 
 
-    # Dormancy protection (Keep this to ensure bot is actually trading)
+    # 2. SURGICAL DD CEILING (Non-linear penalty for DD > 35%)
+    if dd_pct > 35.0:
+        excess = dd_pct - 35.0
+        fitness -= (excess ** 1.5) # Escalating penalty
+
+    # 3. ANTI-WHIPSAW PENALTY
+    # Penalize if trading more than once a day on average
+    if metrics.get('trades_per_year', 0) > 252:
+        fitness -= (metrics['trades_per_year'] - 252) * 5
+
+    # 4. Dormancy protection
     if metrics['num_rebalances'] <= 1: fitness -= 2000 
 
     return fitness, metrics, genome
@@ -43,21 +55,21 @@ def _evaluate_v9_intra_worker(genome):
 class EvolutionEngineV9Intra(BaseEvolutionEngine):
     def __init__(self, **kwargs):
         self.lb_bounds = {
-            'sma': (20, 300), 'ema': (10, 200), 'rsi': (5, 50), 'macd_f': (5, 30),
-            'macd_s': (15, 60), 'adx': (5, 50), 'trix': (5, 50), 'slope': (5, 50),
-            'vol': (5, 60), 'atr': (5, 50), 'mfi': (5, 60), 'bb': (5, 60)
+            'sma': (20, 500), 'ema': (10, 300), 'rsi': (5, 60), 'macd_f': (5, 40),
+            'macd_s': (15, 80), 'adx': (5, 60), 'trix': (5, 60), 'slope': (5, 80),
+            'vol': (5, 100), 'atr': (5, 60), 'mfi': (5, 80), 'bb': (5, 80)
         }
         super().__init__(version_id="v9_intra", **kwargs)
 
     def _random_genome(self):
         layers = []
-        # Tighter weights for hidden layer, more sensitive for output layer
-        layers.append({'w': (np.random.randn(14, 24) * 0.5).tolist(), 'b': (np.random.randn(24) * 0.1).tolist()})
-        layers.append({'w': np.random.uniform(-1, 1, (24, 4)).tolist(), 'b': np.random.uniform(-0.1, 0.1, 4).tolist()})
+        # Expand conviction: Hidden weights up to 0.8, Output weights up to 3.0
+        layers.append({'w': (np.random.randn(14, 24) * 0.8).tolist(), 'b': (np.random.randn(24) * 0.1).tolist()})
+        layers.append({'w': np.random.uniform(-3, 3, (24, 4)).tolist(), 'b': np.random.uniform(-0.2, 0.2, 4).tolist()})
         return {
             'version': 'v9_intra', 'layers': layers,
             'lookbacks': {k: random.randint(mn, mx) for k, (mn, mx) in self.lb_bounds.items()},
-            'hysteresis': random.uniform(0.01, 0.4), 'smoothing': random.uniform(0.1, 0.8)
+            'hysteresis': random.uniform(0.05, 0.5), 'smoothing': random.uniform(0.1, 0.8)
         }
 
     def _mutate(self, genome):
@@ -69,6 +81,12 @@ class EvolutionEngineV9Intra(BaseEvolutionEngine):
             if random.random() < self.mut_rate:
                 w += np.random.normal(0, 0.05 * self.mut_strength, w.shape)
                 b += np.random.normal(0, 0.02 * self.mut_strength, b.shape)
+            
+            # ABLATIVE PRUNING: Randomly zero out rows (input indicators) to simplify logic
+            if random.random() < 0.1:
+                idx = random.randint(0, w.shape[0] - 1)
+                w[idx, :] = 0.0
+                
             layer['w'], layer['b'] = w.tolist(), b.tolist()
 
         for k, v in mutated['lookbacks'].items():
@@ -77,7 +95,8 @@ class EvolutionEngineV9Intra(BaseEvolutionEngine):
                 mutated['lookbacks'][k] = max(mn, min(mx, v + int(random.gauss(0, (mx-mn) * 0.1 * self.mut_strength))))
         
         if random.random() < self.mut_rate: 
-            mutated['hysteresis'] = max(0.005, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05 * self.mut_strength)))
+            # Raised Hysteresis floor to 0.05 to kill off whipsaw machines
+            mutated['hysteresis'] = max(0.05, min(0.8, mutated['hysteresis'] + random.gauss(0, 0.05 * self.mut_strength)))
         if random.random() < self.mut_rate: 
             mutated['smoothing'] = max(0.05, min(0.98, mutated['smoothing'] + random.gauss(0, 0.1 * self.mut_strength)))
         return mutated
