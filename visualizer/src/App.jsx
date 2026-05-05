@@ -161,13 +161,14 @@ const CustomChartTooltip = ({ active, payload, label }) => {
     const isPercentage = payload.some(p => p.name.includes('DD') || p.name.includes('Vol') || p.name.includes('%') || p.name.includes('Growth'));
     const isLeverage = payload.some(p => p.name.includes('Leverage'));
     
-    const formatValue = (v) => {
-      if (isLeverage) return `${v.toFixed(1)}x`;
-      if (isPercentage) return `${v.toFixed(1)}%`;
-      if (payload.some(p => p.name.toLowerCase().includes('score') || p.name.toLowerCase().includes('thresh'))) {
+    const formatValue = (v, name = "") => {
+      if (isLeverage || name.includes('Leverage')) return `${v.toFixed(1)}x`;
+      if (name.includes('Alloc:')) return `${(v * 100).toFixed(3)}%`;
+      if (isPercentage || name.includes('DD') || name.includes('Vol') || name.includes('%')) return `${v.toFixed(1)}%`;
+      if (name.toLowerCase().includes('score') || name.toLowerCase().includes('thresh')) {
          return v.toFixed(3);
       }
-      if (payload.some(p => p.name.includes('Bullish') || p.name.includes('Panic') || p.name.includes('Neutral'))) {
+      if (name.includes('Bullish') || name.includes('Panic') || name.includes('Neutral') || name.includes('Aggressive')) {
          return `${(v * 100).toFixed(1)}%`;
       }
       return `${((v - 1) * 100).toLocaleString()}%`; // Growth Curve logic
@@ -184,7 +185,7 @@ const CustomChartTooltip = ({ active, payload, label }) => {
                 <span className="text-xs font-semibold text-slate-300">{entry.name}</span>
               </div>
               <span className="text-xs font-mono font-bold" style={{ color: getRegimeColor(entry.name) }}>
-                {formatValue(entry.value)}
+                {formatValue(entry.value, entry.name)}
               </span>
             </div>
           ))}
@@ -661,6 +662,8 @@ export default function App() {
   const [showCheats, setShowCheats] = useState(false);
   const [sortCol, setSortCol] = useState('cagr');
   const [sortDir, setSortDir] = useState('desc');
+  const [showPortfolioLine, setShowPortfolioLine] = useState(true);
+  const [showSpyLine, setShowSpyLine] = useState(true);
 
   // Slicing Logic for Dynamic Timeframes
   const sliceStrategy = (strat, tf, customRange = null) => {
@@ -1459,12 +1462,38 @@ export default function App() {
 
                 <section className="glass rounded-3xl p-8">
                   <h3 className="text-xl font-outfit font-bold mb-6 flex items-center justify-between text-white">
-                    <span>Regime-Aware Log Performance</span>
-                    <div className="flex gap-4 text-[8px] font-bold uppercase tracking-widest opacity-60">
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-danger/20 border border-danger/40"/> 3x</span>
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-success/20 border border-success/40"/> 2x</span>
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-info/20 border border-info/40"/> 1x</span>
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-slate-800/20 border border-slate-700/40"/> CASH</span>
+                    <div className="flex items-center gap-4">
+                      <span>Regime-Aware Log Performance</span>
+                      <div className="flex items-center bg-white/5 p-1 rounded-lg border border-white/5">
+                        <button
+                          onClick={() => setShowPortfolioLine(!showPortfolioLine)}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-bold transition-all",
+                            showPortfolioLine ? "bg-accent/20 text-accent" : "text-slate-500 hover:text-slate-400"
+                          )}
+                          title="Toggle Portfolio Line"
+                        >
+                          {showPortfolioLine ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          Portfolio
+                        </button>
+                        <button
+                          onClick={() => setShowSpyLine(!showSpyLine)}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-bold transition-all",
+                            showSpyLine ? "bg-slate-700/50 text-slate-200" : "text-slate-500 hover:text-slate-400"
+                          )}
+                          title="Toggle SPY/VOO Line"
+                        >
+                          {showSpyLine ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          VOO
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 text-[8px] font-bold uppercase tracking-widest opacity-80">
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS['3x'] }}/> 3x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS['2x'] }}/> 2x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS['1x'] }}/> 1x</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS.CASH }}/> CASH</span>
                     </div>
                   </h3>
                   <div className="h-96">
@@ -1491,16 +1520,20 @@ export default function App() {
                         <RechartsTooltip content={<CustomChartTooltip />} allowEscapeViewBox={{ x: false, y: false }} />
                         
                         {/* Stacked Regime Background (Stepped for Bar look) */}
-                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: CASH" dataKey="alloc_cash" stroke="none" fill="rgba(71, 85, 105, 0.35)" isAnimationActive={false} />
-                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 1x"   dataKey="alloc_1x"   stroke="none" fill="rgba(59, 130, 246, 0.3)"  isAnimationActive={false} />
-                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 2x"   dataKey="alloc_2x"   stroke="none" fill="rgba(16, 185, 129, 0.3)"  isAnimationActive={false} />
-                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 3x"   dataKey="alloc_3x"   stroke="none" fill="rgba(239, 68, 68, 0.3)"  isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: CASH" dataKey="alloc_cash" stroke="none" fill={REGIME_COLORS.CASH} fillOpacity={0.55} isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 1x"   dataKey="alloc_1x"   stroke="none" fill={REGIME_COLORS['1x']} fillOpacity={0.45} isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 2x"   dataKey="alloc_2x"   stroke="none" fill={REGIME_COLORS['2x']} fillOpacity={0.45} isAnimationActive={false} />
+                        <Area yAxisId="alloc" type="stepAfter" stackId="regime" name="Alloc: 3x"   dataKey="alloc_3x"   stroke="none" fill={REGIME_COLORS['3x']} fillOpacity={0.45} isAnimationActive={false} />
                         
-                        <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(activeInspection.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
+                        {showPortfolioLine && (
+                          <Area type="monotone" name="Portfolio (Log)" dataKey="equity" stroke={getRegimeColor(activeInspection.name)} fill="transparent" strokeWidth={3} isAnimationActive={false} />
+                        )}
                         {activeComparison && (
                           <Area type="monotone" name={`${activeComparison.name} (Log)`} dataKey="comp_equity" stroke={getStrategyColor(activeComparison.name, data.map(s => s.name))} fill="transparent" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} />
                         )}
-                        <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#475569" fill="transparent" strokeWidth={1} strokeDasharray="5 5" isAnimationActive={false} />
+                        {showSpyLine && (
+                          <Area type="monotone" name="SPY (Log)" dataKey="spy_equity" stroke="#cbd5e1" fill="transparent" strokeWidth={2} strokeDasharray="4 4" isAnimationActive={false} />
+                        )}
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

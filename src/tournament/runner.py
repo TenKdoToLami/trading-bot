@@ -551,7 +551,8 @@ class TournamentRunner:
                         feat_keys = [
                             ('SMA', 'sma'), ('EMA', 'ema'), ('RSI', 'rsi'), ('MACD', 'macd_f'),
                             ('ADX', 'adx'), ('TRIX', 'trix'), ('Slope', 'slope'), ('Vol', 'vol'),
-                            ('ATR', 'atr'), ('VIX', None), ('YC', None), ('MFI', 'mfi'), ('BBW', 'bb')
+                            ('ATR', 'atr'), ('VIX', None), ('YC', None), ('MFI', 'mfi'), ('BBW', 'bb'),
+                            ('Intra-Day', None)
                         ]
                         for i, (f_name, lb_k) in enumerate(feat_keys):
                             if i < len(weights):
