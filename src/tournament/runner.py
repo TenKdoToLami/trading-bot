@@ -226,9 +226,7 @@ class TournamentRunner:
         if category == "BASE":
             return f"[BASE] {n}"
         if genome:
-            g_str = json.dumps(genome, sort_keys=True)
-            g_hash = hashlib.md5(g_str.encode()).hexdigest()[:4]
-            return f"[GENE] {n} ({g_hash})"
+            return f"[GENE] {n}"
         return n
 
     def discover_strategies(self):
@@ -272,7 +270,7 @@ class TournamentRunner:
                 
                 # A. Look for JSON genomes (Dynamic Champions) - ONLY genome.json
                 for f in files:
-                    if f.lower() == "genome.json":
+                    if f.endswith(".json") and f.lower() not in ["package.json", "indicator_profiles.json"]:
                         json_path = os.path.join(root, f)
                         try:
                             with open(json_path, "r") as jf:
