@@ -21,11 +21,18 @@ class Portfolio:
     EXPENSE_SPY = 0.0003  # 0.03% (VOO/SPY standard)
     EXPENSE_2X  = 0.0091  # 0.91% (SSO standard)
     EXPENSE_3X  = 0.0091  # 0.91% (UPRO standard)
+    EXPENSE_TLT = 0.0015  # 0.15% (TLT standard)
+    EXPENSE_SHY = 0.0015  # 0.15% (SHY standard)
+    EXPENSE_GOLD = 0.0040 # 0.40% (GLD standard)
+    EXPENSE_SHORT = 0.0095 # 0.95% (SH/SDS short cost)
     CASH_YIELD  = 0.0350  # 3.50% (Conservative historical avg risk-free rate)
     
     # Execution Friction
     SLIPPAGE_BPS = 0.0005 # 5 bps (0.05%) per trade
     COMMISSION   = 0.0001 # 1 bps (0.01%) or flat fee equivalent
+    
+    # Minimal turnover required to trigger a trade (1%)
+    REBALANCE_THRESHOLD = 0.01
 
     def __init__(self, initial_equity: float = 1.0, slippage_bps: float = 0.0005, commission_bps: float = 0.0001):
         self.initial_equity = initial_equity
@@ -59,31 +66,41 @@ class Portfolio:
             # 2. Proportionally scale to 1.0
             normalized = {k: v / total_w for k, v in new_holdings.items()}
 
-        if normalized == self.holdings:
-            return
-            
         # Calculate turnover based on normalized weights
         all_assets = set(list(self.holdings.keys()) + list(normalized.keys()))
         turnover = sum(abs(normalized.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
         
-        # ONLY apply friction if there is actual turnover
-        if turnover > 0.00001:
+        # 3. ONLY rebalance if turnover exceeds threshold to prevent high-frequency noise
+        if turnover > self.REBALANCE_THRESHOLD:
             friction_cost = turnover * (self.slippage_bps + self.commission_bps)
             self.equity *= (1.0 - friction_cost)
-        
-        self.holdings = normalized
-        self.rebalance_log.append((date, dict(normalized)))
+            self.holdings = normalized
+            self.rebalance_log.append((date, dict(normalized)))
+        else:
+            # Update internal holdings reference but don't count as a trade/apply friction
+            # This keeps the strategy state synced without burning cash
+            self.holdings = normalized
 
-    def apply_daily_return(self, date: str, spy_daily_return: float):
+    def apply_daily_return(self, date: str, returns_dict: dict):
         """
         Apply one day of returns based on current holdings.
+        'returns_dict' should contain: spy, tlt, shy, gold
         """
+        spy_ret = returns_dict.get("spy", 0.0)
+        tlt_ret = returns_dict.get("tlt", 0.0)
+        shy_ret = returns_dict.get("shy", 0.0)
+        gold_ret = returns_dict.get("gold", 0.0)
+
         # Compounded internal expense ratios (Annual -> Daily)
         asset_returns = {
-            "SPY":   spy_daily_return - (self.EXPENSE_SPY / 252),
-            "2xSPY": (spy_daily_return * 2.0) - (self.EXPENSE_2X / 252),
-            "3xSPY": (spy_daily_return * 3.0) - (self.EXPENSE_3X / 252),
+            "SPY":   spy_ret - (self.EXPENSE_SPY / 252),
+            "2xSPY": (spy_ret * 2.0) - (self.EXPENSE_2X / 252),
+            "3xSPY": (spy_ret * 3.0) - (self.EXPENSE_3X / 252),
             "CASH":  self.CASH_YIELD / 252,
+            "TLT":   tlt_ret - (self.EXPENSE_TLT / 252),
+            "SHY":   shy_ret - (self.EXPENSE_SHY / 252),
+            "GOLD":  gold_ret - (self.EXPENSE_GOLD / 252),
+            "2xSHORT_SPY": (spy_ret * -2.0) - (self.EXPENSE_SHORT / 252)
         }
 
         if self.is_liquidated:
@@ -111,7 +128,7 @@ class Portfolio:
                 "total_return": 0.0, "volatility": 0.0,
                 "num_rebalances": 0, "trades_per_year": 0.0,
                 "avg_leverage": 0.0,
-                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH")},
+                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "2xSHORT_SPY")},
             }
 
         equities = np.array([e for _, e in self.equity_curve])
@@ -141,8 +158,11 @@ class Portfolio:
         trades_per_year = num_rebalances / years if years > 0 else 0.0
 
         # Average leverage and per-asset allocation from holdings log
-        leverage_map = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
-        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH")
+        leverage_map = {
+            "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "2xSHORT_SPY": -2.0
+        }
+        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "2xSHORT_SPY")
         asset_weight_sums = {a: 0.0 for a in all_assets}
         leverage_sum = 0.0
         n_days = len(self.holdings_log)
@@ -211,7 +231,10 @@ class Portfolio:
 
     def get_history(self) -> dict:
         """Returns time-series history of leverage and asset allocations."""
-        leverage_map = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
+        leverage_map = {
+            "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "2xSHORT_SPY": -2.0
+        }
         history = {
             "leverage": [],
             "regime": [], # The primary asset (highest weight)

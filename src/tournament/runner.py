@@ -43,11 +43,28 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
         prev_row = price_data_list[i-1] if i > 0 else None
         is_intra = getattr(strategy, 'IS_INTRA', False)
 
-        # 1. Apply today's return: Yesterday's Mid to Today's Mid
+        # 1. Apply today's returns for all assets
         if i > 0:
+            prev_row = price_data_list[i-1]
+            
+            # Mid-to-Mid returns for all assets
+            def get_ret(col):
+                curr = float(row[col])
+                prev = float(prev_row[col])
+                return (curr - prev) / prev if prev != 0 else 0.0
+
+            # SPY uses (Mid Price)
             prev_exec = (float(prev_row['open']) + float(prev_row['close'])) / 2
-            daily_ret = (exec_price - prev_exec) / prev_exec
-            portfolio.apply_daily_return(date_str, daily_ret)
+            spy_ret = (exec_price - prev_exec) / prev_exec
+            
+            returns = {
+                "spy": spy_ret,
+                "tlt": get_ret('tlt_proxy'),
+                "shy": get_ret('shy_proxy'),
+                "gold": get_ret('gold')
+            }
+            
+            portfolio.apply_daily_return(date_str, returns)
             if portfolio.is_liquidated:
                 break
 
@@ -66,7 +83,14 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
                 'close': signal_price, # Strategy ONLY sees the Open as the current price
                 'volume': float(prev_row.get('volume', 0)) if prev_row else 0,
                 'vix': float(prev_row.get('vix', 15.0)) if prev_row else 15.0,
-                'yield_curve': float(prev_row.get('yield_curve', 0.0)) if prev_row else 0.0
+                'yield_curve': float(prev_row.get('yield_curve', 0.0)) if prev_row else 0.0,
+                'credit_spread': float(prev_row.get('credit_spread', 2.0)) if prev_row else 2.0,
+                'month_sin': float(row.get('month_sin', 0.0)),
+                'month_cos': float(row.get('month_cos', 1.0)),
+                'is_tom': float(row.get('is_tom', 0.0)),
+                'gold': float(prev_row.get('gold', 0.0)) if prev_row else 0.0,
+                'tlt_proxy': float(prev_row.get('tlt_proxy', 0.0)) if prev_row else 0.0,
+                'shy_proxy': float(prev_row.get('shy_proxy', 0.0)) if prev_row else 0.0
             }
             # Provide previous day's full data for technicals
             prev_data_dict = {
@@ -74,7 +98,8 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
                 'high': float(prev_row['high']),
                 'low': float(prev_row['low']),
                 'vix': float(prev_row['vix']),
-                'yield_curve': float(prev_row['yield_curve'])
+                'yield_curve': float(prev_row['yield_curve']),
+                'credit_spread': float(prev_row.get('credit_spread', 2.0))
             } if prev_row else None
             
             result = strategy.on_data(date_str, mid_row, prev_data_dict)
@@ -341,7 +366,7 @@ class TournamentRunner:
             sys.exit(1)
             
         print(f"\nRunning simulation for {len(strategies)} strategies...")
-        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']
+        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 'month_sin', 'month_cos', 'is_tom', 'tlt_proxy', 'shy_proxy', 'gold']
         price_list = self.data[cols].to_dict('records')
         dates = self.data.index
 
