@@ -36,10 +36,16 @@ def load_spy_data(start_date: str = "1993-01-01", force_refresh: bool = False) -
     
     # 3. Yield Curve (FRED: T10Y2Y)
     try:
+        # Use T10Y3M for 10Y-3M spread or T10Y2Y for 10Y-2Y
         fred_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y"
-        fred_data = pd.read_csv(fred_url, index_col="DATE", parse_dates=True, na_values=".")
-        # Filter dates
-        fred_data = fred_data[fred_data.index >= pd.to_datetime(start_date)]
+        fred_data = pd.read_csv(fred_url, na_values=".")
+        if "DATE" in fred_data.columns:
+            fred_data["DATE"] = pd.to_datetime(fred_data["DATE"])
+            fred_data.set_index("DATE", inplace=True)
+            # Filter dates
+            fred_data = fred_data[fred_data.index >= pd.to_datetime(start_date)]
+        else:
+            raise ValueError("'DATE' column not found in FRED data")
     except Exception as e:
         print(f"Warning: Could not fetch FRED data: {e}. Filling with 0.")
         fred_data = pd.DataFrame(index=spy_raw.index)

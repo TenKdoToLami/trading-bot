@@ -34,68 +34,72 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
         date_str = str(dates[i].date()) if hasattr(dates[i], 'date') else str(dates[i])
         row = price_data_list[i]
         
-        # Execution price: Avg of Open and Close
-        spy_price = (float(row['open']) + float(row['close'])) / 2
+        # EXECUTION PRICE: Mid-point (Avg of Open and Close)
+        exec_price = (float(row['open']) + float(row['close'])) / 2
+        
+        # SIGNAL PRICE: Today's Open (Strictly Causal - no knowledge of today's Close)
+        signal_price = float(row['open'])
+        
         prev_row = price_data_list[i-1] if i > 0 else None
         is_intra = getattr(strategy, 'IS_INTRA', False)
 
-        # 1. Apply today's return using CURRENT holdings
+        # 1. Apply today's return: Yesterday's Mid to Today's Mid
         if i > 0:
-            prev_price = (float(prev_row['open']) + float(prev_row['close'])) / 2
-            daily_ret = (spy_price - prev_price) / prev_price
+            prev_exec = (float(prev_row['open']) + float(prev_row['close'])) / 2
+            daily_ret = (exec_price - prev_exec) / prev_exec
             portfolio.apply_daily_return(date_str, daily_ret)
             if portfolio.is_liquidated:
                 break
 
-        # 2. Execute yesterday's signal
-        if pending_holdings is not None:
+        # 2. Execute pending rebalance from yesterday (Standard Mode)
+        if not is_intra and pending_holdings is not None:
             portfolio.rebalance(date_str, pending_holdings)
             pending_holdings = None
 
-        # 3. Generate signal for tomorrow (OR for today if Intra)
+        # 3. Generate signal for rebalancing
         if is_intra:
-            # INTRA-DAY MODE: Strategy sees mid-day TWAP estimate.
-            # - Price: (Open + Close) / 2 — simulates average execution price
-            # - H/L/V/VIX: Yesterday's values (today's are unknown until EOD)
-            intra_price = spy_price
-            mid_row = row.copy()
-            mid_row['close'] = intra_price
-            mid_row['high'] = float(prev_row['high']) if prev_row else intra_price
-            mid_row['low'] = float(prev_row['low']) if prev_row else intra_price
-            mid_row['volume'] = float(prev_row.get('volume', 0)) if prev_row else 0
-            mid_row['vix'] = float(prev_row.get('vix', 15.0)) if prev_row else 15.0
-            mid_row['yield_curve'] = float(prev_row.get('yield_curve', 0.0)) if prev_row else 0.0
-        else:
-            # STANDARD MODE: Strategy sees mid-price snapshot
-            mid_row = row.copy()
-            mid_row['close'] = spy_price
-        
-        result = strategy.on_data(date_str, mid_row, prev_row)
-        
-        if result is not None:
-            if isinstance(result, tuple) and len(result) == 2:
-                new_holdings, telemetry = result
-                if telemetry:
-                    portfolio.log_telemetry(date_str, telemetry)
-            else:
-                new_holdings = result
+            # INTRA-DAY MODE: Strategy sees current OPEN and YESTERDAY'S MACRO
+            mid_row = {
+                'open': float(row['open']),
+                'high': float(prev_row['high']) if prev_row else signal_price,
+                'low': float(prev_row['low']) if prev_row else signal_price,
+                'close': signal_price, # Strategy ONLY sees the Open as the current price
+                'volume': float(prev_row.get('volume', 0)) if prev_row else 0,
+                'vix': float(prev_row.get('vix', 15.0)) if prev_row else 15.0,
+                'yield_curve': float(prev_row.get('yield_curve', 0.0)) if prev_row else 0.0
+            }
+            # Provide previous day's full data for technicals
+            prev_data_dict = {
+                'close': float(prev_row['close']),
+                'high': float(prev_row['high']),
+                'low': float(prev_row['low']),
+                'vix': float(prev_row['vix']),
+                'yield_curve': float(prev_row['yield_curve'])
+            } if prev_row else None
             
-            if is_intra:
-                # REBALANCE IMMEDIATELY if in Intra mode
+            result = strategy.on_data(date_str, mid_row, prev_data_dict)
+            
+            # REBALANCE IMMEDIATELY at Today's Mid-Price
+            if result is not None:
+                new_holdings = result[0] if isinstance(result, tuple) else result
+                telemetry = result[1] if isinstance(result, tuple) and len(result) > 1 else {}
+                if telemetry: portfolio.log_telemetry(date_str, telemetry)
+                
                 if new_holdings != portfolio.holdings:
                     portfolio.rebalance(date_str, new_holdings)
-                pending_holdings = None # Clear it so it doesn't execute again tomorrow
-            else:
-                # Standard mode: save for tomorrow
+        else:
+            # STANDARD MODE: Signal based on EOD, fills at next Mid
+            result = strategy.on_data(date_str, row, prev_row)
+            
+            if result is not None:
+                new_holdings = result[0] if isinstance(result, tuple) else result
+                telemetry = result[1] if isinstance(result, tuple) and len(result) > 1 else {}
+                if telemetry: portfolio.log_telemetry(date_str, telemetry)
                 pending_holdings = new_holdings
 
-        # 4. Finalize day for the strategy (Update history with TRUE close)
+        # 4. Finalize day for the strategy (Update history uses TRUE Close)
         if hasattr(strategy, 'update_history'):
             strategy.update_history(row)
-        elif not is_intra:
-            # Legacy strategies that don't have update_history but manage their own history in on_data
-            # already have the 'row' from the on_data call above.
-            pass
             
     return {
         "metrics": portfolio.get_metrics(),

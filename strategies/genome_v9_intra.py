@@ -95,11 +95,7 @@ class GenomeV9Intra(BaseStrategy):
         # But we need a history. We'll use the price_data as an "unclosed" candle.
             
         if not self.prices:
-            # First day initialization
-            self.prices.append(spy_mid)
-            self.highs.append(price_data['high'])
-            self.lows.append(price_data['low'])
-            self.volumes.append(price_data.get('volume', 0))
+            # First day initialization - wait for first finalized close
             return self.current_holdings, {}
 
         # The 'True' close of yesterday

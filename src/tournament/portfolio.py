@@ -66,9 +66,10 @@ class Portfolio:
         all_assets = set(list(self.holdings.keys()) + list(normalized.keys()))
         turnover = sum(abs(normalized.get(a, 0.0) - self.holdings.get(a, 0.0)) for a in all_assets)
         
-        # Apply friction to equity
-        friction_cost = turnover * (self.slippage_bps + self.commission_bps)
-        self.equity *= (1.0 - friction_cost)
+        # ONLY apply friction if there is actual turnover
+        if turnover > 0.00001:
+            friction_cost = turnover * (self.slippage_bps + self.commission_bps)
+            self.equity *= (1.0 - friction_cost)
         
         self.holdings = normalized
         self.rebalance_log.append((date, dict(normalized)))
@@ -76,12 +77,8 @@ class Portfolio:
     def apply_daily_return(self, date: str, spy_daily_return: float):
         """
         Apply one day of returns based on current holdings.
-
-        Args:
-            date:             ISO date string.
-            spy_daily_return: SPY's percentage return for this day
-                              (e.g. 0.01 = +1%).
         """
+        # Compounded internal expense ratios (Annual -> Daily)
         asset_returns = {
             "SPY":   spy_daily_return - (self.EXPENSE_SPY / 252),
             "2xSPY": (spy_daily_return * 2.0) - (self.EXPENSE_2X / 252),
@@ -94,8 +91,8 @@ class Portfolio:
             return
 
         portfolio_return = sum(
-            self.holdings.get(asset, 0.0) * ret
-            for asset, ret in asset_returns.items()
+            self.holdings.get(asset, 0.0) * asset_returns.get(asset, 0.0)
+            for asset in self.holdings
         )
 
         self.equity *= (1.0 + portfolio_return)
@@ -108,13 +105,6 @@ class Portfolio:
         self.holdings_log.append((date, dict(self.holdings)))
 
     def get_metrics(self) -> dict:
-        """
-        Compute summary performance metrics from the equity curve.
-
-        Returns:
-            dict with keys: cagr, sharpe, max_dd, total_return, volatility,
-                            num_rebalances.
-        """
         if len(self.equity_curve) < 2:
             return {
                 "cagr": 0.0, "sharpe": 0.0, "max_dd": 0.0,
@@ -125,33 +115,28 @@ class Portfolio:
             }
 
         equities = np.array([e for _, e in self.equity_curve])
-
-        # Total return
+        
+        # 1. CAGR
+        years = len(equities) / 252.0
+        cagr = (equities[-1] / equities[0]) ** (1.0 / years) - 1.0 if equities[-1] > 0 else -1.0
         total_return = (equities[-1] / equities[0]) - 1.0
 
-        # CAGR
-        years = len(equities) / 252.0
-        if equities[-1] > 0 and years > 0:
-            cagr = (equities[-1] / equities[0]) ** (1.0 / years) - 1.0
-        else:
-            cagr = -1.0
-
-        # Daily returns
+        # 2. Daily returns (The basis for Vol and Sharpe)
         daily_rets = np.diff(equities) / equities[:-1]
+        
+        # 3. Volatility (Annualized)
+        vol = np.std(daily_rets) * np.sqrt(252)
+        if vol < 0.000000001: vol = 0.000000001 # Prevent infinite Sharpe
 
-        # Annualized volatility
-        ann_vol = np.std(daily_rets) * np.sqrt(252)
-
-        # Sharpe ratio (excess return over risk-free rate)
+        # 4. Sharpe (Risk-free rate assumed at 3%)
         ann_ret = np.mean(daily_rets) * 252
-        sharpe = (ann_ret - 0.03) / ann_vol if ann_vol > 0 else 0.0
+        sharpe = (ann_ret - 0.03) / vol
 
         # Max drawdown
         peak = np.maximum.accumulate(equities)
         dd = (equities - peak) / peak
         max_dd = float(np.min(dd))
-
-        # Trades per year
+        
         num_rebalances = len(self.rebalance_log)
         trades_per_year = num_rebalances / years if years > 0 else 0.0
 
@@ -195,8 +180,8 @@ class Portfolio:
         
         # Omega Ratio (threshold 0%)
         gains = np.sum(daily_rets[daily_rets > 0])
-        losses = np.sum(np.abs(daily_rets[daily_rets < 0]))
-        omega = (gains / losses) if losses > 0 else 1.0
+        losses_sum = np.sum(np.abs(daily_rets[daily_rets < 0]))
+        omega = (gains / losses_sum) if losses_sum > 0 else 1.0
         
         # Expectancy (Average return per day)
         expectancy = np.mean(daily_rets)
@@ -209,7 +194,7 @@ class Portfolio:
             "sharpe": sharpe,
             "max_dd": max_dd,
             "total_return": total_return,
-            "volatility": ann_vol,
+            "volatility": vol,
             "num_rebalances": num_rebalances,
             "trades_per_year": trades_per_year,
             "avg_leverage": avg_leverage,

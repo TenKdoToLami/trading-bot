@@ -32,20 +32,10 @@ def _evaluate_v9_intra_worker(genome):
             )
     metrics = res['metrics']
     cagr_pct, dd_pct = metrics['cagr'] * 100, abs(metrics['max_dd']) * 100
-    fitness = cagr_pct - (dd_pct * 0.5) # Increased from 0.15
-    
-    # Surgical DD Ceiling: Exponential penalty for drawdowns > 35%
-    if dd_pct > 35.0:
-        fitness -= ((dd_pct - 35) ** 1.5)
-    
-    # INSTITUTIONAL STANDARDS
-    if dd_pct >= 90.0: fitness -= 1000   # Protect against near-total wipeouts
-    if metrics['num_rebalances'] <= 1: fitness -= 2000 # Penalize Buy & Hold / Dormancy
-    
-    # OVER-TRADING PENALTY (Towards 1 trade a week / 52 trades per year)
-    tpy = metrics.get('trades_per_year', 0)
-    if tpy > 60:
-        fitness -= (tpy - 60) * 0.5
+    fitness = cagr_pct - (dd_pct * 0.1) # Standard low DD weight
+
+    # Dormancy protection (Keep this to ensure bot is actually trading)
+    if metrics['num_rebalances'] <= 1: fitness -= 2000 
 
     return fitness, metrics, genome
 
