@@ -26,7 +26,15 @@ def run_audit(identifier: str, slippage_bps: float = 0.0005, commission_bps: flo
 
     print(f"Loading market data...")
     data = load_spy_data("1993-01-01")
-    price_data_list = data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
+    
+    # Include all features for V12/V13 compatibility
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 
+            'credit_spread', 'month_sin', 'month_cos', 'is_tom', 
+            'tlt_proxy', 'shy_proxy', 'gold']
+    
+    # Ensure columns exist before converting
+    existing_cols = [c for c in cols if c in data.columns]
+    price_data_list = data[existing_cols].to_dict('records')
     dates = data.index
 
     print(f"Auditing {strategy.NAME}...")

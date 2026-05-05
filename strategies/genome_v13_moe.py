@@ -1,8 +1,9 @@
 """
-Genome V13 Lite — "Dual-Brain" Neural Strategy.
-Architecture: 
-1. Sentinel Brain (18 -> 10 -> 2): Determines Bull vs Bear regime.
-2. Pilot Brain (18 -> 10 -> 3): Determines 1x, 2x, 3x SPY allocation.
+Genome V13 MOE Pro — "Fluid Command" Strategy.
+Triple-Brain Architecture:
+1. Sentinel (Regime): Blends Offense vs Defense with Aggressive Thresholds (80/60).
+2. Bull Expert: Splits across 1x, 2x, 3x SPY.
+3. Bear Expert: Splits across TLT, SHY, GOLD, -1x SPY, -2x SPY.
 """
 
 import numpy as np
@@ -12,26 +13,29 @@ from src.helpers.indicators import (
     sma, ema, rsi, macd, adx, atr, trix, linear_regression_slope, realized_volatility, mfi, bollinger_bands
 )
 
-@register_strategy(["v13_lite", 13.0])
-class GenomeV13Lite(BaseStrategy):
-    NAME = "Genome V13 (Dual-Brain Lite)"
-    version = 13.0
+@register_strategy(["v13_moe", 13.5])
+class GenomeV13MOE(BaseStrategy):
+    NAME = "Genome V13 (Fluid MOE Pro)"
+    version = 13.5
 
     def __init__(self, genome=None):
         self.genome = genome or self._default_genome()
         self.reset()
         
-        # Sentinel Brain (Regime)
         self.w_sent = np.array(self.genome['sentinel']['w'])
         self.b_sent = np.array(self.genome['sentinel']['b'])
         self.out_w_sent = np.array(self.genome['sentinel']['out_w'])
         self.out_b_sent = np.array(self.genome['sentinel']['out_b'])
         
-        # Pilot Brain (Allocation)
-        self.w_pilot = np.array(self.genome['pilot']['w'])
-        self.b_pilot = np.array(self.genome['pilot']['b'])
-        self.out_w_pilot = np.array(self.genome['pilot']['out_w'])
-        self.out_b_pilot = np.array(self.genome['pilot']['out_b'])
+        self.w_bull = np.array(self.genome['bull_expert']['w'])
+        self.b_bull = np.array(self.genome['bull_expert']['b'])
+        self.out_w_bull = np.array(self.genome['bull_expert']['out_w'])
+        self.out_b_bull = np.array(self.genome['bull_expert']['out_b'])
+
+        self.w_bear = np.array(self.genome['bear_expert']['w'])
+        self.b_bear = np.array(self.genome['bear_expert']['b'])
+        self.out_w_bear = np.array(self.genome['bear_expert']['out_w'])
+        self.out_b_bear = np.array(self.genome['bear_expert']['out_b'])
 
     def _default_genome(self):
         def rand_brain(in_dim, hid_dim, out_dim):
@@ -41,17 +45,17 @@ class GenomeV13Lite(BaseStrategy):
                 'out_w': np.random.uniform(-1, 1, (hid_dim, out_dim)).tolist(),
                 'out_b': np.zeros(out_dim).tolist()
             }
-
         return {
-            'version': 13.0,
+            'version': 13.5,
             'sentinel': rand_brain(18, 10, 2),
-            'pilot': rand_brain(18, 10, 3),
+            'bull_expert': rand_brain(18, 10, 3), 
+            'bear_expert': rand_brain(18, 10, 5), 
             'lookbacks': {
                 'sma': 200, 'ema': 50, 'rsi': 14, 'macd_f': 12, 'macd_s': 26,
                 'adx': 14, 'trix': 15, 'slope': 20, 'vol': 20, 'atr': 14,
                 'mfi': 14, 'bb': 20
             },
-            'hysteresis': 0.15,
+            'hysteresis': 0.1,
             'smoothing': 0.4
         }
 
@@ -64,7 +68,7 @@ class GenomeV13Lite(BaseStrategy):
         self.prev_atr = None
         self.indicator_state = {}
         self.current_holdings = {"CASH": 1.0}
-        self.smoothed_regime = 0.5
+        self.smoothed_regime = np.array([0.5, 0.5]) 
 
     def _softmax(self, x):
         e_x = np.exp(x - np.max(x))
@@ -136,29 +140,41 @@ class GenomeV13Lite(BaseStrategy):
         # 4. Neural Inference
         sent_probs = self._forward(inputs, self.w_sent, self.b_sent, self.out_w_sent, self.out_b_sent)
         
-        # Smoothing for regime
         alpha = self.genome.get('smoothing', 0.4)
-        self.smoothed_regime = alpha * sent_probs[1] + (1 - alpha) * self.smoothed_regime
+        self.smoothed_regime = alpha * sent_probs + (1 - alpha) * self.smoothed_regime
+        p_bear, p_bull = self.smoothed_regime
         
-        # 5. Decision Engine
-        hysteresis = self.genome.get('hysteresis', 0.15)
+        # 5. Expert Consultations
+        bull_weights = self._forward(inputs, self.w_bull, self.b_bull, self.out_w_bull, self.out_b_bull)
+        bear_weights = self._forward(inputs, self.w_bear, self.b_bear, self.out_w_bear, self.out_b_bear)
         
-        if self.smoothed_regime < (0.5 - hysteresis):
-            new_holdings = {"CASH": 1.0}
-        elif self.smoothed_regime > (0.5 + hysteresis):
-            # Bullish: Consult the Pilot
-            pilot_probs = self._forward(inputs, self.w_pilot, self.b_pilot, self.out_w_pilot, self.out_b_pilot)
-            winner = np.argmax(pilot_probs)
-            if winner == 0: new_holdings = {"SPY": 1.0}
-            elif winner == 1: new_holdings = {"2xSPY": 1.0}
-            else: new_holdings = {"3xSPY": 1.0}
-        else:
-            new_holdings = self.current_holdings # Stay
-
-        self.current_holdings = new_holdings
+        # 6. Final Allocation (Aggressive Conviction Thresholds)
+        # Asymmetric thresholds: Bull markets climb slowly, Bear markets drop fast.
+        if p_bull >= 0.80:
+            p_bull = 1.0; p_bear = 0.0
+        elif p_bear >= 0.60:
+            p_bear = 1.0; p_bull = 0.0
+        
+        holdings = {}
+        # Bull components
+        holdings["SPY"] = float(p_bull * bull_weights[0])
+        holdings["2xSPY"] = float(p_bull * bull_weights[1])
+        holdings["3xSPY"] = float(p_bull * bull_weights[2])
+        
+        # Bear components
+        holdings["TLT"] = float(p_bear * bear_weights[0])
+        holdings["SHY"] = float(p_bear * bear_weights[1])
+        holdings["GOLD"] = float(p_bear * bear_weights[2])
+        holdings["SHORT_SPY"] = float(p_bear * bear_weights[3])
+        holdings["2xSHORT_SPY"] = float(p_bear * bear_weights[4])
+        
+        self.current_holdings = {k: v for k, v in holdings.items() if v > 0.01}
+        
         telemetry = {
-            "p_bull": float(self.smoothed_regime),
-            "regime": float(self.smoothed_regime)
+            "p_bull": float(p_bull),
+            "regime": float(p_bull),
+            "bull_split": bull_weights.tolist(),
+            "bear_split": bear_weights.tolist()
         }
         
         return self.current_holdings, telemetry

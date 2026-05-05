@@ -98,6 +98,7 @@ class Portfolio:
             "TLT":   tlt_ret - (self.EXPENSE_TLT / 252),
             "SHY":   shy_ret - (self.EXPENSE_SHY / 252),
             "GOLD":  gold_ret - (self.EXPENSE_GOLD / 252),
+            "SHORT_SPY": (spy_ret * -1.0) - (self.EXPENSE_SHORT / 252),
             "2xSHORT_SPY": (spy_ret * -2.0) - (self.EXPENSE_SHORT / 252)
         }
 
@@ -126,7 +127,7 @@ class Portfolio:
                 "total_return": 0.0, "volatility": 0.0,
                 "num_rebalances": 0, "trades_per_year": 0.0,
                 "avg_leverage": 0.0,
-                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "2xSHORT_SPY")},
+                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY")},
             }
 
         equities = np.array([e for _, e in self.equity_curve])
@@ -158,9 +159,9 @@ class Portfolio:
         # Average leverage and per-asset allocation from holdings log
         leverage_map = {
             "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
-            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "2xSHORT_SPY": -2.0
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0
         }
-        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "2xSHORT_SPY")
+        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY")
         asset_weight_sums = {a: 0.0 for a in all_assets}
         leverage_sum = 0.0
         n_days = len(self.holdings_log)
@@ -231,7 +232,7 @@ class Portfolio:
         """Returns time-series history of leverage and asset allocations."""
         leverage_map = {
             "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
-            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "2xSHORT_SPY": -2.0
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0
         }
         history = {
             "leverage": [],
