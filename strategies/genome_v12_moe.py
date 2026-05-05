@@ -179,15 +179,15 @@ class GenomeV12MOE(BaseStrategy):
         bear_factor = 1.0 - bull_factor
         
         # Bullish components
-        weights["SPY"] = float(self.smoothed_bull_alloc[0] * bull_factor)
-        weights["2xSPY"] = float(self.smoothed_bull_alloc[1] * bull_factor)
-        weights["3xSPY"] = float(self.smoothed_bull_alloc[2] * bull_factor)
+        weights["SPY"] = round(float(self.smoothed_bull_alloc[0] * bull_factor), 2)
+        weights["2xSPY"] = round(float(self.smoothed_bull_alloc[1] * bull_factor), 2)
+        weights["3xSPY"] = round(float(self.smoothed_bull_alloc[2] * bull_factor), 2)
         
         # Bearish components
-        weights["TLT"] = float(self.smoothed_bear_alloc[0] * bear_factor)
-        weights["SHY"] = float(self.smoothed_bear_alloc[1] * bear_factor)
-        weights["GOLD"] = float(self.smoothed_bear_alloc[2] * bear_factor)
-        weights["2xSHORT_SPY"] = float(self.smoothed_bear_alloc[3] * bear_factor)
+        weights["TLT"] = round(float(self.smoothed_bear_alloc[0] * bear_factor), 2)
+        weights["SHY"] = round(float(self.smoothed_bear_alloc[1] * bear_factor), 2)
+        weights["GOLD"] = round(float(self.smoothed_bear_alloc[2] * bear_factor), 2)
+        weights["2xSHORT_SPY"] = round(float(self.smoothed_bear_alloc[3] * bear_factor), 2)
         
         self.current_weights = weights
         

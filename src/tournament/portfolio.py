@@ -76,10 +76,8 @@ class Portfolio:
             self.equity *= (1.0 - friction_cost)
             self.holdings = normalized
             self.rebalance_log.append((date, dict(normalized)))
-        else:
-            # Update internal holdings reference but don't count as a trade/apply friction
-            # This keeps the strategy state synced without burning cash
-            self.holdings = normalized
+        # If turnover is below threshold, we keep the OLD holdings in self.holdings
+        # so that tomorrow's turnover calculation includes today's drift.
 
     def apply_daily_return(self, date: str, returns_dict: dict):
         """

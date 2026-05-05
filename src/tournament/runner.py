@@ -49,6 +49,8 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
             
             # Mid-to-Mid returns for all assets
             def get_ret(col):
+                if col not in row or col not in prev_row:
+                    return 0.0
                 curr = float(row[col])
                 prev = float(prev_row[col])
                 return (curr - prev) / prev if prev != 0 else 0.0

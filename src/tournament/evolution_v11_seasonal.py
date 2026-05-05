@@ -17,8 +17,9 @@ def _init_worker(cache_file):
     import pandas as pd
     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
     _worker_dates = df.index
-    # Include credit_spread in the records
-    _worker_price_data = df[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread']].to_dict('records')
+    # Include all macro and defensive columns for cross-version compatibility
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 'tlt_proxy', 'shy_proxy', 'gold']
+    _worker_price_data = df[cols].to_dict('records')
 
 def _evaluate_v11_seasonal_worker(genome):
     from contextlib import redirect_stdout
