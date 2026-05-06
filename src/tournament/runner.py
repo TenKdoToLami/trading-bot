@@ -21,7 +21,7 @@ from src.tournament.portfolio import Portfolio
 from src.helpers.dashboard_exporter import export_to_dashboard
 from strategies.base import BaseStrategy
 
-def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None, slippage_bps=0.0005, commission_bps=0.0001):
+def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=None, slippage_bps=0.0005, commission_bps=0.0001, early_exit_dd=None, warmup_days=0):
     """Standalone simulation function for parallel execution."""
     kwargs = strategy_kwargs or {}
     strategy = strategy_type(**kwargs)
@@ -29,10 +29,17 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
     
     portfolio = Portfolio(slippage_bps=slippage_bps, commission_bps=commission_bps)
     pending_holdings = None
+    is_pruned = False
     
     for i in range(len(price_data_list)):
         date_str = str(dates[i].date()) if hasattr(dates[i], 'date') else str(dates[i])
         row = price_data_list[i]
+        
+        # Periodic Early Exit Check (e.g. once a month)
+        if early_exit_dd is not None and i > 252 * 5 and i % 21 == 0:
+            if portfolio.current_max_dd < early_exit_dd:
+                is_pruned = True
+                break
         
         # EXECUTION PRICE: Mid-point (Avg of Open and Close)
         exec_price = (float(row['open']) + float(row['close'])) / 2
@@ -128,8 +135,11 @@ def _execute_simulation(strategy_type, price_data_list, dates, strategy_kwargs=N
         if hasattr(strategy, 'update_history'):
             strategy.update_history(row)
             
+    metrics = portfolio.get_metrics(skip_days=warmup_days)
+    metrics['pruned'] = is_pruned
+    
     return {
-        "metrics": portfolio.get_metrics(),
+        "metrics": metrics,
         "history": portfolio.get_history(),
         "telemetry": getattr(portfolio, 'telemetry', {}),
         "portfolio": portfolio

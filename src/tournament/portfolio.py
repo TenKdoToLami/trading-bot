@@ -47,6 +47,8 @@ class Portfolio:
         self.equity = self.initial_equity
         self.holdings = {"CASH": 1.0}
         self.is_liquidated = False
+        self.peak_equity = self.initial_equity
+        self.current_max_dd = 0.0
 
         self.equity_curve = []     # [(date_str, equity), ...]
         self.holdings_log = []     # [(date_str, holdings_dict), ...]
@@ -99,7 +101,8 @@ class Portfolio:
             "SHY":   shy_ret - (self.EXPENSE_SHY / 252),
             "GOLD":  gold_ret - (self.EXPENSE_GOLD / 252),
             "SHORT_SPY": (spy_ret * -1.0) - (self.EXPENSE_SHORT / 252),
-            "2xSHORT_SPY": (spy_ret * -2.0) - (self.EXPENSE_SHORT / 252)
+            "2xSHORT_SPY": (spy_ret * -2.0) - (self.EXPENSE_SHORT / 252),
+            "3xSHORT_SPY": (spy_ret * -3.0) - (self.EXPENSE_SHORT / 252)
         }
 
         if self.is_liquidated:
@@ -113,6 +116,14 @@ class Portfolio:
 
         self.equity *= (1.0 + portfolio_return)
         
+        # Track Max DD for early pruning
+        if self.equity > self.peak_equity:
+            self.peak_equity = self.equity
+        else:
+            dd = (self.equity - self.peak_equity) / self.peak_equity
+            if dd < self.current_max_dd:
+                self.current_max_dd = dd
+
         if self.equity <= 0:
             self.equity = 0.0
             self.is_liquidated = True
@@ -120,17 +131,25 @@ class Portfolio:
         self.equity_curve.append((date, self.equity))
         self.holdings_log.append((date, dict(self.holdings)))
 
-    def get_metrics(self) -> dict:
-        if len(self.equity_curve) < 2:
+    def get_metrics(self, skip_days=0) -> dict:
+        if len(self.equity_curve) < 2 + skip_days:
             return {
                 "cagr": 0.0, "sharpe": 0.0, "max_dd": 0.0,
                 "total_return": 0.0, "volatility": 0.0,
                 "num_rebalances": 0, "trades_per_year": 0.0,
                 "avg_leverage": 0.0,
-                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY")},
+                "allocation_pct": {a: 0.0 for a in ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY", "3xSHORT_SPY")},
             }
 
-        equities = np.array([e for _, e in self.equity_curve])
+        # Original curve
+        all_equities = np.array([e for _, e in self.equity_curve])
+        
+        # Trim for warmup
+        if skip_days > 0:
+            warmup_val = all_equities[skip_days]
+            equities = all_equities[skip_days:] / warmup_val
+        else:
+            equities = all_equities
         
         # 1. CAGR
         years = len(equities) / 252.0
@@ -159,9 +178,9 @@ class Portfolio:
         # Average leverage and per-asset allocation from holdings log
         leverage_map = {
             "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
-            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0, "3xSHORT_SPY": -3.0
         }
-        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY")
+        all_assets = ("SPY", "2xSPY", "3xSPY", "CASH", "TLT", "SHY", "GOLD", "SHORT_SPY", "2xSHORT_SPY", "3xSHORT_SPY")
         asset_weight_sums = {a: 0.0 for a in all_assets}
         leverage_sum = 0.0
         n_days = len(self.holdings_log)
@@ -232,7 +251,7 @@ class Portfolio:
         """Returns time-series history of leverage and asset allocations."""
         leverage_map = {
             "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
-            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0
+            "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0, "3xSHORT_SPY": -3.0
         }
         history = {
             "leverage": [],

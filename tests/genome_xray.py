@@ -17,12 +17,15 @@ from utils import resolve_strategy
 from src.tournament.runner import _execute_simulation
 from src.helpers.data_provider import load_spy_data
 
-LEVERAGE_MAP = {"SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0}
-TIER_ORDER = ["3xSPY", "2xSPY", "SPY", "CASH"]
+LEVERAGE_MAP = {
+    "SPY": 1.0, "2xSPY": 2.0, "3xSPY": 3.0, "CASH": 0.0,
+    "TLT": 1.0, "SHY": 1.0, "GOLD": 1.0, "SHORT_SPY": -1.0, "2xSHORT_SPY": -2.0, "3xSHORT_SPY": -3.0
+}
+TIER_ORDER = ["3xSPY", "2xSPY", "SPY", "CASH", "GOLD", "TLT", "SHY", "SHORT_SPY", "2xSHORT_SPY", "3xSHORT_SPY"]
 
 def dominant_holding(holdings: dict) -> str:
     # Prioritize higher leverage tiers if weights are equal
-    return max(holdings, key=lambda k: (holdings[k], LEVERAGE_MAP.get(k, 0.0)))
+    return max(holdings, key=lambda k: (holdings[k], abs(LEVERAGE_MAP.get(k, 0.0))))
 
 def run_xray(identifier: str):
     try:
@@ -33,7 +36,11 @@ def run_xray(identifier: str):
 
     print("Loading market data...")
     data = load_spy_data("1993-01-01")
-    price_data_list = data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 
+            'credit_spread', 'month_sin', 'month_cos', 'is_tom', 
+            'tlt_proxy', 'shy_proxy', 'gold']
+    existing_cols = [c for c in cols if c in data.columns]
+    price_data_list = data[existing_cols].to_dict('records')
     dates = data.index
 
     print(f"Running simulation using {strategy.NAME}...")
@@ -54,6 +61,7 @@ def run_xray(identifier: str):
 
     # ── 1. Tier Residency ──
     tier_days = Counter()
+    tier_exposure = Counter()
     daily_leverages = []
 
     for _, holdings in holdings_log:
@@ -61,6 +69,8 @@ def run_xray(identifier: str):
         tier_days[dom] += 1
         day_leverage = sum(holdings.get(asset, 0.0) * LEVERAGE_MAP.get(asset, 0.0) for asset in LEVERAGE_MAP)
         daily_leverages.append(day_leverage)
+        for asset, weight in holdings.items():
+            tier_exposure[asset] += weight
 
     # ── 2. Switching Analysis ──
     num_switches = len(rebalance_log)
@@ -114,15 +124,18 @@ def run_xray(identifier: str):
 
     # Tier Residency
     print(f"\n  {'TIER RESIDENCY':-<{W-4}}")
-    print(f"  {'Tier':<15} {'Days':>8} {'% of Time':>10} {'Avg Streak':>12} {'Max Streak':>12}")
+    print(f"  {'Tier':<15} {'Days':>8} {'% Time':>8} {'Avg Exp':>10} {'Avg Streak':>12} {'Max Streak':>12}")
     print(f"  {'-' * (W - 4)}")
     for tier in TIER_ORDER:
         days = tier_days.get(tier, 0)
         pct = days / total_days * 100 if total_days > 0 else 0
+        exp = tier_exposure.get(tier, 0.0) / total_days * 100 if total_days > 0 else 0
+        if days == 0 and exp < 0.1: continue
+        
         tier_streaks = streaks.get(tier, [])
         avg_streak = np.mean(tier_streaks) if tier_streaks else 0
         max_streak = max(tier_streaks) if tier_streaks else 0
-        print(f"  {tier:<15} {days:>8,} {pct:>9.1f}% {avg_streak:>11.1f}d {max_streak:>11,}d")
+        print(f"  {tier:<15} {days:>8,} {pct:>7.1f}% {exp:>9.1f}% {avg_streak:>11.1f}d {max_streak:>11,}d")
 
     # Leverage Distribution
     print(f"\n  {'LEVERAGE DISTRIBUTION':-<{W-4}}")
@@ -173,7 +186,17 @@ def run_xray(identifier: str):
         try:
             v_num = float(version) if isinstance(version, (int, float, str)) and str(version).replace('.','',1).isdigit() else 0.0
 
-            if v_num >= 7.0: # Neural (V7, V9)
+            if v_num >= 13.0: # V13 MOE Pro
+                for brain_key in ['sentinel', 'bull_expert', 'bear_expert']:
+                    if brain_key in genome:
+                        w = np.array(genome[brain_key]['w'])
+                        # Aggregate importance from all 3 brains
+                        scores = np.sum(np.abs(w), axis=1)
+                        for i, score in enumerate(scores):
+                            name = V9_FEATURES[i] if i < len(V9_FEATURES) else f"Input_{i}"
+                            importance[name] = importance.get(name, 0) + score
+
+            elif v_num >= 7.0: # Neural (V7, V9)
                 w1 = np.array(genome['layers'][0]['w'])
                 # Sum absolute weights connecting each input to all hidden neurons
                 scores = np.sum(np.abs(w1), axis=1)

@@ -7,8 +7,8 @@ Genome V13 MOE (Mixture of Experts) Pro is an institutional-grade tactical alloc
 ### 🧬 Evolution (Training)
 | Goal | Command |
 | :--- | :--- |
-| **New Evolution** | `python tests/run_evolution_universal.py --version v13_moe --pop 200 --gen 100` |
-| **Seeded Run** | `python tests/run_evolution_universal.py --version v13_moe --pop 150 --gen 50 --vault champions/v13_moe/vault` |
+| **New Evolution** | `python tests/run_evolution_universal.py --version v13_moe --pop 100 --gen 100` |
+| **Seeded Run** | `python tests/run_evolution_universal.py --version v13_moe --pop 500 --gen 50 --vault champions/v13_moe/vault` |
 
 ### 🔬 Diagnostics
 | Goal | Command |

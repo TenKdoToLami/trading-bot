@@ -36,34 +36,27 @@ def evaluate_genome_on_slice(genome, price_data_slice, dates_slice, warmup_days=
     if not strat_type:
         strat_type = get_strategy_class("v1_classic") # Final fallback
     
-    # Run simulation on the full slice (warmup + audit)
+    # Run simulation with engine-level warmup trimming
     res = _execute_simulation(
         strategy_type=strat_type,
         price_data_list=price_data_slice,
         dates=dates_slice,
-        strategy_kwargs={'genome': genome}
+        strategy_kwargs={'genome': genome},
+        warmup_days=warmup_days
     )
     
-    # TRIMMING LOGIC: Only calculate metrics on the audit portion (post-warmup)
-    # The simulation results are indexed by date. We skip the first 'warmup_days'.
-    metrics = res.get('metrics', {})
-    
-    # If the simulation was too short to cover warmup, just return original
-    if len(dates_slice) <= warmup_days:
-        return metrics
-
-    # Re-calculate metrics for the sub-period if necessary (handled by runner usually, 
-    # but here we ensure we only return the 'audit' performance)
-    # For now, we return the metrics as-is but we have ensured the 'data' passed to the simulation 
-    # included the 200-day buffer in the calling function.
-    return metrics
+    return res.get('metrics', {})
 
 # ──────────────────────────────────────────────────────
 # Main Logic
 # ──────────────────────────────────────────────────────
 
 def run_sweep(genomes, data, samples_per_bucket=10):
-    price_data_list = data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
+    # Include all relevant columns for V13+ architectures
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 
+            'month_sin', 'month_cos', 'is_tom', 'tlt_proxy', 'shy_proxy', 'gold']
+    existing_cols = [c for c in cols if c in data.columns]
+    price_data_list = data[existing_cols].to_dict('records')
     dates = data.index
     total_days = len(data)
 
