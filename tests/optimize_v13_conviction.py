@@ -151,5 +151,46 @@ def run_optimization():
 
     study.optimize(objective, n_trials=N_TRIALS, n_jobs=CONCURRENCY)
 
+    # --- RECONSTRUCT AND SAVE BEST ---
+    print("\n[+] Optimization Finished!")
+    best_trial = study.best_trial
+    print(f"[+] Best Fitness: {best_trial.value:.2f}")
+    
+    if os.path.exists(CHAMPION_PATH):
+        with open(CHAMPION_PATH, 'r') as f: genome = json.load(f)
+    else:
+        from src.tournament.evolution_v13_moe_conviction import EvolutionV13MOEConviction
+        genome = EvolutionV13MOEConviction()._random_genome()
+    
+    bp = best_trial.params
+    
+    # Apply Standard Params
+    for k in ['skew_power', 'conviction_cap', 'smoothing', 'hysteresis', 'temp']:
+        if k in bp: genome[k] = bp[k]
+    for k in ['sma', 'ema', 'rsi', 'vol']:
+        if k in bp: genome['lookbacks'][k] = bp[k]
+        
+    # Apply Neural Gains
+    def apply_neuron_gains(brain, gains, master):
+        out_w = np.array(brain['out_w'])
+        out_b = np.array(brain['out_b'])
+        for i, g in enumerate(gains):
+            if i < out_w.shape[0]: out_w[i, :] *= g
+        out_w *= master
+        out_b *= master
+        brain['out_w'] = out_w.tolist()
+        brain['out_b'] = out_b.tolist()
+        return brain
+
+    s_gains = [bp.get(f's_n_{i}', 1.0) for i in range(10)]
+    genome['sentinel'] = apply_neuron_gains(genome['sentinel'], s_gains, bp.get('s_master', 1.0))
+    
+    bear_gains = [bp.get(f'bear_n_{i}', 1.0) for i in range(6)]
+    genome['bear_commander'] = apply_neuron_gains(genome['bear_commander'], bear_gains, bp.get('bear_master', 1.0))
+    
+    with open(OUTPUT_PATH, 'w') as f:
+        json.dump(genome, f, indent=4)
+    print(f"[+] Optimized genome saved to: {OUTPUT_PATH}")
+
 if __name__ == "__main__":
     run_optimization()

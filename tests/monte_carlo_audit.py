@@ -40,7 +40,11 @@ def perturb_data(df: pd.DataFrame, jitter_std=0.0005, vol_scale_range=(0.9, 1.1)
     return df_alt
 
 def run_single_simulation(strategy_type, strategy_kwargs, df_perturbed):
-    price_data_list = df_perturbed[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 
+            'month_sin', 'month_cos', 'is_tom', 'tlt_proxy', 'shy_proxy', 'gold']
+    # Ensure columns exist before converting
+    existing_cols = [c for c in cols if c in df_perturbed.columns]
+    price_data_list = df_perturbed[existing_cols].to_dict('records')
     dates = df_perturbed.index
     res = _execute_simulation(
         strategy_type=strategy_type,

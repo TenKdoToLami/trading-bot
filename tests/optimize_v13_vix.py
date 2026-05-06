@@ -79,5 +79,32 @@ def run():
 
     study.optimize(objective, n_trials=N_TRIALS, n_jobs=CONCURRENCY)
 
+    # --- SAVE BEST GENOME ---
+    print("\n[+] Optimization Finished!")
+    best_params = study.best_params
+    print(f"[+] Best Fitness: {study.best_value:.2f}")
+    
+    # Rebuild the final genome
+    if os.path.exists(CHAMPION_PATH):
+        with open(CHAMPION_PATH, 'r') as f: genome = json.load(f)
+    elif os.path.exists("champions/v13_moe_conviction/genome.json"):
+        with open("champions/v13_moe_conviction/genome.json", "r") as f: genome = json.load(f)
+    else:
+        from src.tournament.evolution_v13_moe_vix import EvolutionV13MOEVIX
+        genome = EvolutionV13MOEVIX()._random_genome()
+    
+    genome['version'] = 13.11
+    # Apply Best Params
+    for k, v in best_params.items():
+        if k in ['sma', 'ema', 'rsi']:
+            genome['lookbacks'][k] = v
+        else:
+            genome[k] = v
+            
+    output_path = f"champions/{TARGET_VERSION}/genome_optuna.json"
+    with open(output_path, "w") as f:
+        json.dump(genome, f, indent=4)
+    print(f"[+] Champion saved to: {output_path}")
+
 if __name__ == "__main__":
     run()

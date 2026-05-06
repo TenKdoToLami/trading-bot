@@ -70,35 +70,55 @@ class BaseEvolutionEngine(ABC):
         self.population = self.population[:self.pop_size]
 
     def _load_seeds(self):
-        """Standard seed loading logic."""
-        # 1. Try parent genome
-        parent_genome = os.path.join(os.path.dirname(self.seed_vault), "genome.json")
-        if os.path.exists(parent_genome):
+        """Robust seed loading logic for directories, specific files, and vaults."""
+        if not self.seed_vault: return
+        
+        # 1. Direct File Check
+        if os.path.isfile(self.seed_vault):
             try:
-                with open(parent_genome, "r") as f:
+                with open(self.seed_vault, "r") as f:
+                    self.population.append(json.load(f))
+            except: pass
+            
+        # 2. Check for genome.json in the provided dir
+        p_genome = os.path.join(self.seed_vault, "genome.json")
+        if os.path.exists(p_genome):
+            try:
+                with open(p_genome, "r") as f:
                     self.population.append(json.load(f))
             except: pass
 
-        # 2. Load vault seeds sorted by CAGR
-        seeds = []
-        for f in os.listdir(self.seed_vault):
-            if f.endswith(".json"):
-                try:
-                    # Expecting format like ...cagr_25.1_dd_12.2.json
-                    parts = f.split("cagr_")
-                    if len(parts) > 1:
-                        cagr = float(parts[1].split("_")[0])
-                        seeds.append((cagr, f))
-                    else:
-                        seeds.append((0, f))
-                except:
-                    seeds.append((0, f))
+        # 3. Check for parent-level genome (legacy support)
+        parent_p = os.path.join(os.path.dirname(self.seed_vault), "genome.json")
+        if os.path.exists(parent_p) and parent_p != p_genome:
+            try:
+                with open(parent_p, "r") as f:
+                    self.population.append(json.load(f))
+            except: pass
+
+        # 4. Load from Vault (either self or sub-dir)
+        vault_dirs = [self.seed_vault]
+        sub_vault = os.path.join(self.seed_vault, "vault")
+        if os.path.exists(sub_vault): vault_dirs.append(sub_vault)
         
+        seeds = []
+        for v_dir in vault_dirs:
+            if not os.path.isdir(v_dir): continue
+            for f in os.listdir(v_dir):
+                if f.endswith(".json") and f != "genome.json":
+                    try:
+                        # Extract CAGR from filename for sorting
+                        parts = f.split("cagr_")
+                        cagr = float(parts[1].split("_")[0]) if len(parts) > 1 else 0
+                        seeds.append((cagr, os.path.join(v_dir, f)))
+                    except: pass
+        
+        # Inject top seeds by performance
         seeds.sort(key=lambda x: x[0], reverse=True)
-        for _, f in seeds:
+        for _, full_path in seeds:
             if len(self.population) >= self.pop_size: break
             try:
-                with open(os.path.join(self.seed_vault, f), "r") as jf:
+                with open(full_path, "r") as jf:
                     self.population.append(json.load(jf))
             except: pass
         
@@ -188,15 +208,27 @@ class BaseEvolutionEngine(ABC):
 
     def _print_header(self):
         """Prints the summary table header."""
-        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5}")
-        print("-" * 60)
+        print(f"{'Gen':<4} | {'Fit':<7} | {'CAGR':<8} | {'DD':<7} | {'Trades':<6} | {'Time':<5} | {'Extra'}")
+        print("-" * 75)
 
     def _print_generation_summary(self, gen, fit, stats, genome, elapsed):
         """Prints the summary for a single generation."""
         cagr = stats.get('cagr', 0) * 100
         dd = abs(stats.get('max_dd', 0)) * 100
         trades = stats.get('num_rebalances', 0)
-        print(f"{gen:02d}  | {fit:7.1f} | {cagr:7.2f}% | {dd:6.1f}% | {trades:6.0f} | {elapsed:4.1f}s")
+        
+        extra = ""
+        # Check if this is a NAS variant
+        if 'sentinel_dim' in genome:
+            # Winner dimensions
+            win_s = genome.get('sentinel_dim', 10)
+            win_c = genome.get('commander_dim', 6)
+            # Population averages
+            avg_s = sum(g.get('sentinel_dim', 10) for g in self.population) / len(self.population)
+            avg_c = sum(g.get('commander_dim', 6) for g in self.population) / len(self.population)
+            extra = f"[WIN: {win_s}/{win_c} (avg {avg_s:.1f}/{avg_c:.1f})]"
+            
+        print(f"{gen:02d}  | {fit:7.1f} | {cagr:7.2f}% | {dd:6.1f}% | {trades:6.0f} | {elapsed:4.1f}s | {extra}")
 
     def _save_champion(self, stats, genome):
         """Saves the genome to the vault if it outperforms historical bests."""

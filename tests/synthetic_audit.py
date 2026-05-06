@@ -22,39 +22,40 @@ from src.helpers.data_provider import load_spy_data
 def generate_synthetic_series(df, chunk_size=252):
     """
     Creates a synthetic series by stitching together random blocks of historical data.
-    Ensures relative returns are preserved.
+    Ensures returns within blocks are preserved while removing boundary spikes.
     """
     total_len = len(df)
-    num_chunks = total_len // chunk_size
+    num_chunks = (total_len // chunk_size) + 1
     
-    indices = []
-    for _ in range(num_chunks + 1):
+    # Pre-calculate returns to avoid boundary glitches
+    df_copy = df.copy()
+    df_copy['orig_ret'] = df_copy['close'].pct_change().fillna(0)
+    
+    chunks = []
+    for _ in range(num_chunks):
         start = random.randint(0, total_len - chunk_size)
-        indices.extend(range(start, start + chunk_size))
+        chunk = df_copy.iloc[start : start + chunk_size].copy()
+        # The first return of a chunk is unreliable if it was calculated against the previous day
+        # so we recalculate the first return to be 0 or small jitter to avoid 'jumps'
+        chunk.iloc[0, chunk.columns.get_loc('orig_ret')] = 0
+        chunks.append(chunk)
         
-    # Trim to match original length
-    indices = indices[:total_len]
+    synthetic = pd.concat(chunks).iloc[:total_len].reset_index(drop=True)
     
-    synthetic = df.iloc[indices].copy()
-    # Regenerate continuous price from stitched returns to avoid massive price gaps
-    returns = synthetic['close'].pct_change().fillna(0)
-    
-    # We need to preserve the relationship between open/high/low/close
-    # Calculate daily ratios relative to previous close
-    synthetic['ret_close'] = df['close'] / df['close'].shift(1)
-    synthetic['ratio_open'] = df['open'] / df['close'].shift(1)
-    synthetic['ratio_high'] = df['high'] / df['close'].shift(1)
-    synthetic['ratio_low'] = df['low'] / df['close'].shift(1)
-    
-    # Reconstruct
+    # Reconstruct continuous price from the clean returns
     new_close = [df['close'].iloc[0]]
-    for r in returns[1:]:
+    rets = synthetic['orig_ret'].values
+    for r in rets[1:]:
         new_close.append(new_close[-1] * (1 + r))
     
     synthetic['close'] = new_close
-    # Note: Open/High/Low reconstruction is complex for synthetic data, 
-    # but for these strategies mostly 'close' and indicators are used.
-    # We'll use a simplified reconstruction for indicators.
+    
+    # Sync Open/High/Low to maintain daily ratios
+    # We calculate the scale factor for each day relative to the original close
+    scale_factor = synthetic['close'] / df_copy.iloc[synthetic.index]['close'].values
+    synthetic['open'] *= scale_factor
+    synthetic['high'] *= scale_factor
+    synthetic['low'] *= scale_factor
     
     return synthetic
 
@@ -84,13 +85,18 @@ def run_synthetic_audit(identifier: str, iterations=50, chunk_size=252):
     
     results = []
     
-    # Use ProcessPoolExecutor for parallel simulations
+    # Run evaluation on synthetic data
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = []
+        # All required columns for V11+ strategies
+        cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 
+                'month_sin', 'month_cos', 'is_tom', 'tlt_proxy', 'shy_proxy', 'gold']
+        
         for i in range(iterations):
             # Create synthetic data
             synth_df = generate_synthetic_series(data, chunk_size=chunk_size)
-            data_list = synth_df[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records')
+            # Ensure all columns are present
+            data_list = synth_df[[c for c in cols if c in synth_df.columns]].to_dict('records')
             dates = data.index
             
             futures.append(executor.submit(evaluate_on_synthetic, strat_type, strat_kwargs, data_list, dates))
@@ -112,9 +118,11 @@ def run_synthetic_audit(identifier: str, iterations=50, chunk_size=252):
     
     # Historical performance for comparison
     print("Running original baseline...")
+    cols = ['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve', 'credit_spread', 
+            'month_sin', 'month_cos', 'is_tom', 'tlt_proxy', 'shy_proxy', 'gold']
     orig_res = _execute_simulation(
         strategy_type=strat_type,
-        price_data_list=data[['open', 'high', 'low', 'close', 'volume', 'vix', 'yield_curve']].to_dict('records'),
+        price_data_list=data[[c for c in cols if c in data.columns]].to_dict('records'),
         dates=data.index,
         strategy_kwargs=strat_kwargs
     )

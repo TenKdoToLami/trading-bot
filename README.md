@@ -116,7 +116,7 @@ python tests/run_evolution_universal.py --version v6_balancer --pop 100 --gen 50
 ---
 
 ## 🛠️ Diagnostics & Strategy Audit
-These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect the strategy version (V1–V10).
+These tools help you verify the quality and resilience of your discovered strategies. All tools automatically detect the strategy version (V1–V14). **Tip:** You can always use the direct path to a `genome.json` file as the identifier.
 
 ### 1. Vault Sweep — Cross-Regime Stress Test
 Tests every genome in a vault across rolling windows (5yr to 30yr) to rank them by resilience. 
@@ -154,6 +154,34 @@ Stitches together random blocks of historical data to ensure the strategy isn't 
 ```bash
 python tests/synthetic_audit.py "Champion V6 (Balancer)" --iters 50 --chunk 252
 ```
+
+---
+
+## 🌍 Multi-Asset Benchmarking
+Test how strategies trained on SPX signals perform on other global assets or asset classes.
+
+### 1. World Benchmark — Strategy Portability Test
+Downloads a target ETF (e.g., VT, ACWI) and compares the V14 NAS champion against 1x, 2x, and 3x leveraged B&H for that specific asset. It uses SPX-based macro signals (VIX, Yield Curve, Credit Spread) for decision-making but executes rebalances on the target asset price.
+
+```bash
+# Run World Benchmark for VT (Vanguard Total World)
+python tests/world_benchmark.py VT
+
+# Run for ACWI (iShares MSCI ACWI)
+python tests/world_benchmark.py ACWI
+```
+
+### 2. Multi-Asset Showdown
+Stress tests the strategy across a diverse basket of global assets (World, Europe, Commodities, Emerging Markets, Total US) and produces a comparative summary table.
+
+```bash
+python tests/multi_asset_showdown.py
+```
+
+#### ⚙️ Benchmark Parameters
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `TICKER`  | `VT`    | The Yahoo Finance ticker of the asset to trade. |
 
 ---
 

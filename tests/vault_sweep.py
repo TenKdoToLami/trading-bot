@@ -106,11 +106,18 @@ def run_sweep(genomes, data, samples_per_bucket=10):
     print()
     return results
 
-def print_leaderboard(results, top_n=3):
+def print_leaderboard(results, genomes_dict, top_n=3):
     leaderboard = []
     for filename, metrics in results.items():
         if not metrics: continue
         cagrs = [m['cagr'] * 100 for m in metrics]
+        
+        # Get NAS dimensions if available
+        g = genomes_dict.get(filename, {})
+        s_dim = g.get('sentinel_dim', 0)
+        c_dim = g.get('commander_dim', 0)
+        brain_str = f"{s_dim}/{c_dim}" if s_dim > 0 else "Fixed"
+        
         leaderboard.append({
             'name': filename,
             'avg_cagr': np.mean(cagrs),
@@ -119,17 +126,18 @@ def print_leaderboard(results, top_n=3):
             'avg_dd': np.mean([m['max_dd'] * 100 for m in metrics]),
             'worst_dd': np.min([m['max_dd'] * 100 for m in metrics]),
             'avg_pivots': np.mean([m.get('trades_per_year', 0) for m in metrics]),
+            'brain': brain_str,
             'n': len(metrics)
         })
     leaderboard.sort(key=lambda x: x['avg_cagr'], reverse=True)
     
-    print("\n" + "="*125)
-    print(f"  {'#':<3} {'Genome':<40} | {'AvgCAGR':>8} | {'MedCAGR':>8} | {'AvgShp':>7} | {'AvgDD':>8} | {'WorstDD':>8} | {'Pivots/Y':>8} | {'N':>3}")
-    print("-" * 125)
+    print("\n" + "="*135)
+    print(f"  {'#':<3} {'Genome':<40} | {'Brain':<7} | {'AvgCAGR':>8} | {'MedCAGR':>8} | {'AvgShp':>7} | {'AvgDD':>8} | {'WorstDD':>8} | {'N':>3}")
+    print("-" * 135)
     for i, row in enumerate(leaderboard):
         m = "*" if i < top_n else " "
-        print(f"{m}{i+1:<3} {row['name']:<40} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['avg_pivots']:>8.1f} | {row['n']:>3}")
-    print("="*125)
+        print(f"{m}{i+1:<3} {row['name']:<40} | {row['brain']:<7} | {row['avg_cagr']:>7.2f}% | {row['med_cagr']:>7.2f}% | {row['avg_sharpe']:>7.2f} | {row['avg_dd']:>7.1f}% | {row['worst_dd']:>7.1f}% | {row['n']:>3}")
+    print("="*135)
     return leaderboard
 
 if __name__ == "__main__":
@@ -163,7 +171,7 @@ if __name__ == "__main__":
 
     data = load_spy_data("1993-01-01")
     results = run_sweep(genomes, data, samples_per_bucket=args.samples)
-    leaderboard = print_leaderboard(results)
+    leaderboard = print_leaderboard(results, dict(genomes))
 
     # --- PRUNING LOGIC ---
     if args.top > 0 and leaderboard:
